@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package header
@@ -7,11 +7,13 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -25,7 +27,7 @@ var (
 // header and the timestamp of the new block.
 // Prior to AP4, the returned block gas cost will be nil.
 func BlockGasCost(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) *big.Int {
@@ -46,7 +48,7 @@ func BlockGasCost(
 	}
 	return new(big.Int).SetUint64(BlockGasCostWithStep(
 		config.IsSongbirdCode(),
-		parent.BlockGasCost,
+		customtypes.GetHeaderExtra(parent).BlockGasCost,
 		step,
 		timeElapsed,
 	))
@@ -88,23 +90,24 @@ func BlockGasCostWithStep(
 //
 // This function will return nil for all return values prior to Apricot Phase 4.
 func EstimateRequiredTip(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	header *types.Header,
 ) (*big.Int, error) {
+	extra := customtypes.GetHeaderExtra(header)
 	switch {
 	case !config.IsApricotPhase4(header.Time):
 		return nil, nil
 	case header.BaseFee == nil:
 		return nil, errBaseFeeNil
-	case header.BlockGasCost == nil:
+	case extra.BlockGasCost == nil:
 		return nil, errBlockGasCostNil
-	case header.ExtDataGasUsed == nil:
+	case extra.ExtDataGasUsed == nil:
 		return nil, errExtDataGasUsedNil
 	}
 
 	// totalGasUsed = GasUsed + ExtDataGasUsed
 	totalGasUsed := new(big.Int).SetUint64(header.GasUsed)
-	totalGasUsed.Add(totalGasUsed, header.ExtDataGasUsed)
+	totalGasUsed.Add(totalGasUsed, extra.ExtDataGasUsed)
 	if totalGasUsed.Sign() == 0 {
 		return nil, errNoGasUsed
 	}
@@ -114,7 +117,7 @@ func EstimateRequiredTip(
 	// We add totalGasUsed - 1 to ensure that the total required tips
 	// calculation rounds up.
 	totalRequiredTips := new(big.Int)
-	totalRequiredTips.Mul(header.BlockGasCost, header.BaseFee)
+	totalRequiredTips.Mul(extra.BlockGasCost, header.BaseFee)
 	totalRequiredTips.Add(totalRequiredTips, totalGasUsed)
 	totalRequiredTips.Sub(totalRequiredTips, common.Big1)
 

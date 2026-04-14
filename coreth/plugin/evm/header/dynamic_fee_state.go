@@ -1,4 +1,4 @@
-// (c) 2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package header
@@ -7,16 +7,18 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // feeStateBeforeBlock takes the previous header and the timestamp of its child
 // block and calculates the fee state before the child block is executed.
 func feeStateBeforeBlock(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (acp176.State, error) {
@@ -48,7 +50,7 @@ func feeStateBeforeBlock(
 // feeStateAfterBlock takes the previous header and returns the fee state after
 // the execution of the provided child.
 func feeStateAfterBlock(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	header *types.Header,
 	desiredTargetExcess *gas.Gas,
@@ -60,7 +62,8 @@ func feeStateAfterBlock(
 	}
 
 	// Consume the gas used by the block
-	if err := state.ConsumeGas(header.GasUsed, header.ExtDataGasUsed); err != nil {
+	extDataGasUsed := customtypes.GetHeaderExtra(header).ExtDataGasUsed
+	if err := state.ConsumeGas(header.GasUsed, extDataGasUsed); err != nil {
 		return acp176.State{}, fmt.Errorf("advancing the fee state: %w", err)
 	}
 

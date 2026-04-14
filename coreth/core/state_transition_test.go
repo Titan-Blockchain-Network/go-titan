@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,21 +33,21 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
+	"github.com/ava-labs/coreth/nativeasset"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	signer     = types.LatestSigner(params.TestFlareChainConfig)
+	signer     = types.LatestSigner(params.TestChainConfig)
 	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
 )
@@ -101,7 +102,7 @@ func executeStateTransitionTest(t *testing.T, st stateTransitionTest) {
 		gspec = &Genesis{
 			Config: st.config,
 			Alloc: types.GenesisAlloc{
-				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.GenesisAccount{
+				common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 					Balance: big.NewInt(2000000000000000000), // 2 ether
 					Nonce:   0,
 				},
@@ -138,7 +139,7 @@ func TestNativeAssetContractCall(t *testing.T) {
 	data, err := hex.DecodeString("608060405234801561001057600080fd5b5061016e806100206000396000f3fe608060405234801561001057600080fd5b50600073010000000000000000000000000000000000000290508073ffffffffffffffffffffffffffffffffffffffff166040516020016040516020818303038152906040526040516100639190610121565b6000604051808303816000865af19150503d80600081146100a0576040519150601f19603f3d011682016040523d82523d6000602084013e6100a5565b606091505b005b600081519050919050565b600081905092915050565b60005b838110156100db5780820151818401526020810190506100c0565b838111156100ea576000848401525b50505050565b60006100fb826100a7565b61010581856100b2565b93506101158185602086016100bd565b80840191505092915050565b600061012d82846100f0565b91508190509291505056fea2646970667358221220a297c3e133143287abef22b1c1d4e45f588efc3db99a84b364560a2079876fc364736f6c634300080d0033")
 	require.NoError(err)
 
-	contractAddr := ethCrypto.CreateAddress(testAddr, 0)
+	contractAddr := crypto.CreateAddress(testAddr, 0)
 	txs := []*types.Transaction{
 		makeContractTx(0, common.Big0, 500_000, big.NewInt(ap0.MinGasPrice), data),
 		makeTx(1, contractAddr, common.Big0, 100_000, big.NewInt(ap0.MinGasPrice), nil), // No input data is necessary, since this will hit the contract's fallback function.
@@ -146,37 +147,37 @@ func TestNativeAssetContractCall(t *testing.T) {
 
 	tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestFlareApricotPhase5Config,
+			config:  params.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 41618},
 			want:    "",
 		},
 		"prePhase6": {
-			config:  params.TestFlareApricotPhasePre6Config,
+			config:  params.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 21618},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestFlareApricotPhase6Config,
+			config:  params.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{132091, 41618},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestFlareBanffChainConfig,
+			config:  params.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132091, 21618},
 			want:    "",
 		},
 		"durango": {
-			config:  params.TestFlareDurangoChainConfig,
+			config:  params.TestDurangoChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132117, 21618},
 			want:    "",
 		},
 		"etna": {
-			config:  params.TestFlareEtnaChainConfig,
+			config:  params.TestEtnaChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{132117, 21618},
 			want:    "",
@@ -202,25 +203,25 @@ func TestNativeAssetContractConstructor(t *testing.T) {
 
 	phase6Tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestFlareApricotPhase5Config,
+			config:  params.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{92046},
 			want:    "",
 		},
 		"prePhase6": {
-			config:  params.TestFlareApricotPhasePre6Config,
+			config:  params.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{72046},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestFlareApricotPhase6Config,
+			config:  params.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{92046},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestFlareBanffChainConfig,
+			config:  params.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{72046},
 			want:    "",
@@ -236,12 +237,12 @@ func TestNativeAssetContractConstructor(t *testing.T) {
 
 func TestNativeAssetDirectEOACall(t *testing.T) {
 	txs := []*types.Transaction{
-		makeTx(0, vm.NativeAssetCallAddr, common.Big0, 100_000, big.NewInt(ap0.MinGasPrice), nil),
+		makeTx(0, nativeasset.NativeAssetCallAddr, common.Big0, 100_000, big.NewInt(ap0.MinGasPrice), nil),
 	}
 
 	phase6Tests := map[string]stateTransitionTest{
 		"phase5": {
-			config:  params.TestFlareApricotPhase5Config,
+			config:  params.TestApricotPhase5Config,
 			txs:     txs,
 			gasUsed: []uint64{41000},
 			want:    "",
@@ -252,19 +253,19 @@ func TestNativeAssetDirectEOACall(t *testing.T) {
 		// Therefore, there is no need for an error to be returned in this test case even though a soft error would have been
 		// returned during PrePhase6.
 		"prePhase6": {
-			config:  params.TestFlareApricotPhasePre6Config,
+			config:  params.TestApricotPhasePre6Config,
 			txs:     txs,
 			gasUsed: []uint64{21000},
 			want:    "",
 		},
 		"phase6": {
-			config:  params.TestFlareApricotPhase6Config,
+			config:  params.TestApricotPhase6Config,
 			txs:     txs,
 			gasUsed: []uint64{41000},
 			want:    "",
 		},
 		"banff": {
-			config:  params.TestFlareBanffChainConfig,
+			config:  params.TestBanffChainConfig,
 			txs:     txs,
 			gasUsed: []uint64{21000},
 			want:    "",

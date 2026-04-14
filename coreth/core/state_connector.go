@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 const (
@@ -274,7 +274,7 @@ func GetLocalAttestors() []common.Address {
 }
 
 func (st *StateTransition) GetAttestation(attestor common.Address, instructions []byte) (string, error) {
-	_, merkleRootHash, _, err := st.evm.DaemonCall(vm.AccountRef(attestor), st.to(), instructions, params.TxGas)
+	_, merkleRootHash, _, err := st.evm.DaemonCall(vm.AccountRef(attestor), st.to(), instructions, ethparams.TxGas)
 	return hex.EncodeToString(merkleRootHash), err
 }
 

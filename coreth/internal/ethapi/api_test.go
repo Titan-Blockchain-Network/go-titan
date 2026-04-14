@@ -1,4 +1,5 @@
-// (c) 2023, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -41,27 +42,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/accounts/keystore"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/bloombits"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/internal/blocktest"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ava-labs/libevm/accounts"
+	"github.com/ava-labs/libevm/accounts/keystore"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/crypto/kzg4844"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/event"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -454,7 +456,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		Pruning:        false, // Archive mode
 	}
 	accman, acc := newTestAccountManager(t)
-	gspec.Alloc[acc.Address] = types.GenesisAccount{Balance: big.NewInt(params.Ether)}
+	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _, _ := core.GenerateChainWithGenesis(gspec, engine, n, 10, generator)
 	chain, err := core.NewBlockChain(db, cacheConfig, gspec, engine, vm.Config{}, gspec.ToBlock().Hash(), false)
@@ -661,7 +663,7 @@ func TestEstimateGas(t *testing.T) {
 	var (
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
@@ -675,7 +677,7 @@ func TestEstimateGas(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: ethparams.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
 		// b.SetPoS()
 	}))
@@ -814,7 +816,7 @@ func TestEstimateGas(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	// Enable BLOBHASH opcode in Cancun
-	cfg := *params.TestFlareChainConfig
+	cfg := *params.TestChainConfig
 	cfg.ShanghaiTime = utils.NewUint64(0)
 	cfg.CancunTime = utils.NewUint64(0)
 	t.Parallel()
@@ -836,7 +838,7 @@ func TestCall(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: ethparams.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
 		// b.SetPoS()
 	}))
@@ -1060,7 +1062,7 @@ func TestSignBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
@@ -1094,7 +1096,7 @@ func TestSendBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
@@ -1127,10 +1129,11 @@ func TestFillBlobTransaction(t *testing.T) {
 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		to      = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
-		emptyBlob                      = kzg4844.Blob{}
+		emptyBlob                      = new(kzg4844.Blob)
+		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
 		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
 		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
 		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
@@ -1213,14 +1216,14 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -1233,14 +1236,14 @@ func TestFillBlobTransaction(t *testing.T) {
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				BlobHashes:  []common.Hash{emptyBlobHash},
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -1253,7 +1256,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				BlobHashes:  []common.Hash{{0x01, 0x22}},
-				Blobs:       []kzg4844.Blob{emptyBlob},
+				Blobs:       emptyBlobs,
 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
 				Proofs:      []kzg4844.Proof{emptyBlobProof},
 			},
@@ -1265,12 +1268,12 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:  &b.acc.Address,
 				To:    &to,
 				Value: (*hexutil.Big)(big.NewInt(1)),
-				Blobs: []kzg4844.Blob{emptyBlob},
+				Blobs: emptyBlobs,
 			},
 			want: &result{
 				Hashes: []common.Hash{emptyBlobHash},
 				Sidecar: &types.BlobTxSidecar{
-					Blobs:       []kzg4844.Blob{emptyBlob},
+					Blobs:       emptyBlobs,
 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
 					Proofs:      []kzg4844.Proof{emptyBlobProof},
 				},
@@ -1562,7 +1565,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 	}
 
 	for i, tc := range testSuite {
-		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.TestFlareChainConfig)
+		resp := RPCMarshalBlock(block, tc.inclTx, tc.fullTx, params.TestChainConfig)
 		out, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("test %d: json marshal error: %v", i, err)
@@ -1582,7 +1585,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
 		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 		genesis    = &core.Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
@@ -1604,7 +1607,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, acc1Key)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: ethparams.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, acc1Key)
 		b.AddTx(tx)
 	})
 	api := NewBlockChainAPI(backend)
@@ -1820,7 +1823,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	config := *params.TestFlareChainConfig
+	config := *params.TestChainConfig
 	config.ShanghaiTime = new(uint64)
 	config.CancunTime = new(uint64)
 	var (
@@ -1849,7 +1852,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
 			},
 		}
-		signer   = types.LatestSignerForChainID(params.TestFlareChainConfig.ChainID)
+		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
 		txHashes = make([]common.Hash, genBlocks)
 	)
 
@@ -1863,7 +1866,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		switch i {
 		case 0:
 			// transfer 1000wei
-			tx, err = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), types.HomesteadSigner{}, acc1Key)
+			tx, err = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &acc2Addr, Value: big.NewInt(1000), Gas: ethparams.TxGas, GasPrice: b.BaseFee(), Data: nil}), types.HomesteadSigner{}, acc1Key)
 		case 1:
 			// create contract
 			tx, err = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: nil, Gas: 53100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040")}), signer, acc1Key)
@@ -1894,7 +1897,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 				Nonce:      uint64(i),
 				GasTipCap:  uint256.NewInt(1),
 				GasFeeCap:  uint256.MustFromBig(fee),
-				Gas:        params.TxGas,
+				Gas:        ethparams.TxGas,
 				To:         acc2Addr,
 				BlobFeeCap: uint256.NewInt(1),
 				BlobHashes: []common.Hash{{1}},

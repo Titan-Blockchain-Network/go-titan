@@ -5,28 +5,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/state/snapshot"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/ethdb"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // Test prioritized contract (Submitter) being partially refunded when fee is high
 func TestStateTransitionPrioritizedContract(t *testing.T) {
 	configs := []*params.ChainConfig{
-		params.GetChainConfig(constants.CostonID, params.CostonChainID),
-		params.GetChainConfig(constants.CostwoID, params.CostwoChainID),
-		params.GetChainConfig(constants.SongbirdID, params.SongbirdChainID),
-		params.GetChainConfig(constants.FlareID, params.FlareChainID),
+		params.TestFlareChainConfig,
 	}
 
 	for _, config := range configs {
@@ -103,7 +99,7 @@ func TestStateTransitionPrioritizedContract(t *testing.T) {
 
 		// max fee (funds above which are returned) depends on the chain used
 		_, limit, _, _, _ := stateTransitionVariants.GetValue(config.ChainID)(st)
-		maxFee := new(uint256.Int).Mul(uint256.NewInt(params.TxGas), uint256.NewInt(limit))
+		maxFee := new(uint256.Int).Mul(uint256.NewInt(ethparams.TxGas), uint256.NewInt(limit))
 		diff := new(uint256.Int).Sub(balanceBefore, balanceAfter)
 
 		if maxFee.Cmp(diff) != 0 {
@@ -115,10 +111,7 @@ func TestStateTransitionPrioritizedContract(t *testing.T) {
 // Test that daemon contract is invoked after a transaction is successfully executed
 func TestStateTransitionDaemon(t *testing.T) {
 	configs := []*params.ChainConfig{
-		params.GetChainConfig(constants.CostonID, params.CostonChainID),
-		params.GetChainConfig(constants.CostwoID, params.CostwoChainID),
-		params.GetChainConfig(constants.SongbirdID, params.SongbirdChainID),
-		params.GetChainConfig(constants.FlareID, params.FlareChainID),
+		params.TestFlareChainConfig,
 	}
 
 	for _, config := range configs {

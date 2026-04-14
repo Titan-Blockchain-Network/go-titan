@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package header
@@ -8,22 +8,24 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/vms/components/gas"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBaseFee(t *testing.T) {
 	tests := []struct {
 		name      string
-		upgrades  params.NetworkUpgrades
+		upgrades  extras.NetworkUpgrades
 		parent    *types.Header
 		timestamp uint64
 		want      *big.Int
@@ -31,13 +33,13 @@ func TestBaseFee(t *testing.T) {
 	}{
 		{
 			name:     "ap2",
-			upgrades: params.TestFlareApricotPhase2Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
 			want:     nil,
 			wantErr:  nil,
 		},
 		{
 			name: "ap3_first_block",
-			upgrades: params.NetworkUpgrades{
+			upgrades: extras.NetworkUpgrades{
 				ApricotPhase3BlockTimestamp: utils.NewUint64(1),
 			},
 			parent: &types.Header{
@@ -48,7 +50,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_genesis_block",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -56,7 +58,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_fee_window",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 			},
@@ -64,7 +66,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_invalid_timestamp",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Time:   1,
@@ -75,7 +77,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_no_change",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: ap3.TargetGas - ap3.IntrinsicBlockGas,
@@ -88,7 +90,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_small_decrease",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   (&ap3.Window{}).Bytes(),
@@ -111,7 +113,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_large_decrease",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   (&ap3.Window{}).Bytes(),
@@ -135,7 +137,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_increase",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: 2 * ap3.TargetGas,
@@ -159,7 +161,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_big_1_not_modified",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				GasUsed: 1,
@@ -171,7 +173,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_genesis_block",
-			upgrades: params.TestFlareApricotPhase4Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -179,13 +181,17 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_decrease",
-			upgrades: params.TestFlareApricotPhase4Config.NetworkUpgrades,
-			parent: &types.Header{
-				Number:       big.NewInt(1),
-				Extra:        (&ap3.Window{}).Bytes(),
-				BaseFee:      big.NewInt(ap4.MaxBaseFee),
-				BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
-			},
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
+			parent: customtypes.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					Extra:   (&ap3.Window{}).Bytes(),
+					BaseFee: big.NewInt(ap4.MaxBaseFee),
+				},
+				&customtypes.HeaderExtra{
+					BlockGasCost: big.NewInt(ap4.MinBlockGasCost),
+				},
+			),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -203,15 +209,19 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap4_increase",
-			upgrades: params.TestFlareApricotPhase4Config.NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap3.TargetGas,
-				Extra:          (&ap3.Window{}).Bytes(),
-				BaseFee:        big.NewInt(ap4.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap3.TargetGas),
-				BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
-			},
+			upgrades: extras.TestApricotPhase4Config.NetworkUpgrades,
+			parent: customtypes.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap3.TargetGas,
+					Extra:   (&ap3.Window{}).Bytes(),
+					BaseFee: big.NewInt(ap4.MinBaseFee),
+				},
+				&customtypes.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap3.TargetGas),
+					BlockGasCost:   big.NewInt(ap4.MinBlockGasCost),
+				},
+			),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -229,7 +239,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_genesis_block",
-			upgrades: params.TestFlareApricotPhase5Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -237,7 +247,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_decrease",
-			upgrades: params.TestFlareApricotPhase5Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   (&ap3.Window{}).Bytes(),
@@ -260,14 +270,18 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap5_increase",
-			upgrades: params.TestFlareApricotPhase5Config.NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap5.TargetGas,
-				Extra:          (&ap3.Window{}).Bytes(),
-				BaseFee:        big.NewInt(ap4.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap5.TargetGas),
-			},
+			upgrades: extras.TestApricotPhase5Config.NetworkUpgrades,
+			parent: customtypes.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap5.TargetGas,
+					Extra:   (&ap3.Window{}).Bytes(),
+					BaseFee: big.NewInt(ap4.MinBaseFee),
+				},
+				&customtypes.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap5.TargetGas),
+				},
+			),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -285,7 +299,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "etna_genesis_block",
-			upgrades: params.TestFlareEtnaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestEtnaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -293,14 +307,18 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "etna_increase",
-			upgrades: params.TestFlareEtnaChainConfig.NetworkUpgrades,
-			parent: &types.Header{
-				Number:         big.NewInt(1),
-				GasUsed:        ap5.TargetGas,
-				Extra:          (&ap3.Window{}).Bytes(),
-				BaseFee:        big.NewInt(etna.MinBaseFee),
-				ExtDataGasUsed: big.NewInt(ap5.TargetGas),
-			},
+			upgrades: extras.TestEtnaChainConfig.NetworkUpgrades,
+			parent: customtypes.WithHeaderExtra(
+				&types.Header{
+					Number:  big.NewInt(1),
+					GasUsed: ap5.TargetGas,
+					Extra:   (&ap3.Window{}).Bytes(),
+					BaseFee: big.NewInt(etna.MinBaseFee),
+				},
+				&customtypes.HeaderExtra{
+					ExtDataGasUsed: big.NewInt(ap5.TargetGas),
+				},
+			),
 			timestamp: 1,
 			want: func() *big.Int {
 				const (
@@ -318,7 +336,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "fortuna_invalid_timestamp",
-			upgrades: params.TestFlareFortunaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Time:   1,
@@ -329,7 +347,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name: "fortuna_first_block",
-			upgrades: params.NetworkUpgrades{
+			upgrades: extras.NetworkUpgrades{
 				FortunaTimestamp: utils.NewUint64(1),
 			},
 			parent: &types.Header{
@@ -340,7 +358,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "fortuna_genesis_block",
-			upgrades: params.TestFlareFortunaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(0),
 			},
@@ -348,7 +366,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "fortuna_invalid_fee_state",
-			upgrades: params.TestFlareFortunaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra:  make([]byte, acp176.StateSize-1),
@@ -357,7 +375,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "fortuna_current",
-			upgrades: params.TestFlareFortunaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra: (&acp176.State{
@@ -371,7 +389,7 @@ func TestBaseFee(t *testing.T) {
 		},
 		{
 			name:     "fortuna_decrease",
-			upgrades: params.TestFlareFortunaChainConfig.NetworkUpgrades,
+			upgrades: extras.TestFortunaChainConfig.NetworkUpgrades,
 			parent: &types.Header{
 				Number: big.NewInt(1),
 				Extra: (&acp176.State{
@@ -389,7 +407,7 @@ func TestBaseFee(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			config := &params.ChainConfig{
+			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := BaseFee(config, test.parent, test.timestamp)
@@ -405,7 +423,7 @@ func TestBaseFee(t *testing.T) {
 func TestEstimateNextBaseFee(t *testing.T) {
 	tests := []struct {
 		name      string
-		upgrades  params.NetworkUpgrades
+		upgrades  extras.NetworkUpgrades
 		parent    *types.Header
 		timestamp uint64
 		want      *big.Int
@@ -413,7 +431,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 	}{
 		{
 			name:     "ap3",
-			upgrades: params.TestFlareApricotPhase3Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase3Config.NetworkUpgrades,
 			parent: &types.Header{
 				Number:  big.NewInt(1),
 				Extra:   (&ap3.Window{}).Bytes(),
@@ -436,7 +454,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		},
 		{
 			name:     "ap3_not_scheduled",
-			upgrades: params.TestFlareApricotPhase2Config.NetworkUpgrades,
+			upgrades: extras.TestApricotPhase2Config.NetworkUpgrades,
 			wantErr:  errEstimateBaseFeeWithoutActivation,
 		},
 	}
@@ -444,7 +462,7 @@ func TestEstimateNextBaseFee(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			require := require.New(t)
 
-			config := &params.ChainConfig{
+			config := &extras.ChainConfig{
 				NetworkUpgrades: test.upgrades,
 			}
 			got, err := EstimateNextBaseFee(config, test.parent, test.timestamp)

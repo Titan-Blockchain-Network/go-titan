@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,11 +33,11 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -50,7 +51,7 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(50000 * 225000000000 * 200)
 		gspec   = &Genesis{
-			Config: params.TestFlareChainConfig,
+			Config: params.TestChainConfig,
 			Alloc:  types.GenesisAlloc{address: {Balance: funds}},
 		}
 	)
@@ -61,7 +62,7 @@ func getBlock(transactions int, uncles int, dataSize int) *types.Block {
 				// Add transactions and stuff on the last block
 				for i := 0; i < transactions; i++ {
 					tx, _ := types.SignTx(types.NewTransaction(uint64(i), aa,
-						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(params.TestFlareChainConfig), key)
+						big.NewInt(0), 50000, b.header.BaseFee, make([]byte, dataSize)), types.LatestSigner(params.TestChainConfig), key)
 					b.AddTx(tx)
 				}
 				for i := 0; i < uncles; i++ {

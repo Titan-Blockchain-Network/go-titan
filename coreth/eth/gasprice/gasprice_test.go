@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -34,19 +35,20 @@ import (
 
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
 	customheader "github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/event"
+	ethparams "github.com/ava-labs/libevm/params"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,7 +157,8 @@ func newTestBackend(t *testing.T, config *params.ChainConfig, numBlocks int, ext
 }
 
 func (b *testBackend) MinRequiredTip(ctx context.Context, header *types.Header) (*big.Int, error) {
-	return customheader.EstimateRequiredTip(b.chain.Config(), header)
+	config := params.GetExtra(b.chain.Config())
+	return customheader.EstimateRequiredTip(config, header)
 }
 
 func (b *testBackend) CurrentHeader() *types.Header {
@@ -226,15 +229,15 @@ func testGenBlock(t *testing.T, tip int64, numTx int) func(int, *core.BlockGen) 
 		b.SetCoinbase(common.Address{1})
 
 		txTip := big.NewInt(tip * params.GWei)
-		signer := types.LatestSigner(params.TestFlareChainConfig)
+		signer := types.LatestSigner(params.TestChainConfig)
 		baseFee := b.BaseFee()
 		feeCap := new(big.Int).Add(baseFee, txTip)
 		for j := 0; j < numTx; j++ {
 			tx := types.NewTx(&types.DynamicFeeTx{
-				ChainID:   params.TestFlareChainConfig.ChainID,
+				ChainID:   params.TestChainConfig.ChainID,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
-				Gas:       params.TxGas,
+				Gas:       ethparams.TxGas,
 				GasFeeCap: feeCap,
 				GasTipCap: txTip,
 				Data:      []byte{},
@@ -248,7 +251,7 @@ func testGenBlock(t *testing.T, tip int64, numTx int) func(int, *core.BlockGen) 
 
 func TestSuggestTipCapEmptyExtDataGasUsage(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
 		extDataGasUsage: nil,
 		genBlock:        testGenBlock(t, 55, 80),
@@ -258,7 +261,7 @@ func TestSuggestTipCapEmptyExtDataGasUsage(t *testing.T) {
 
 func TestSuggestTipCapSimple(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 55, 80),
@@ -268,7 +271,7 @@ func TestSuggestTipCapSimple(t *testing.T) {
 
 func TestSuggestTipCapSimpleFloor(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       1,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 55, 80),
@@ -279,21 +282,21 @@ func TestSuggestTipCapSimpleFloor(t *testing.T) {
 func TestSuggestTipCapSmallTips(t *testing.T) {
 	tip := big.NewInt(550 * params.GWei)
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
 		extDataGasUsage: common.Big0,
 		genBlock: func(i int, b *core.BlockGen) {
 			b.SetCoinbase(common.Address{1})
 
-			signer := types.LatestSigner(params.TestFlareChainConfig)
+			signer := types.LatestSigner(params.TestChainConfig)
 			baseFee := b.BaseFee()
 			feeCap := new(big.Int).Add(baseFee, tip)
 			for j := 0; j < 40; j++ {
 				tx := types.NewTx(&types.DynamicFeeTx{
-					ChainID:   params.TestFlareChainConfig.ChainID,
+					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: tip,
 					Data:      []byte{},
@@ -304,10 +307,10 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 				}
 				b.AddTx(tx)
 				tx = types.NewTx(&types.DynamicFeeTx{
-					ChainID:   params.TestFlareChainConfig.ChainID,
+					ChainID:   params.TestChainConfig.ChainID,
 					Nonce:     b.TxNonce(addr),
 					To:        &common.Address{},
-					Gas:       params.TxGas,
+					Gas:       ethparams.TxGas,
 					GasFeeCap: feeCap,
 					GasTipCap: common.Big1,
 					Data:      []byte{},
@@ -324,7 +327,7 @@ func TestSuggestTipCapSmallTips(t *testing.T) {
 
 func TestSuggestTipCapExtDataUsage(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
 		extDataGasUsage: big.NewInt(10_000),
 		genBlock:        testGenBlock(t, 55, 80),
@@ -334,7 +337,7 @@ func TestSuggestTipCapExtDataUsage(t *testing.T) {
 
 func TestSuggestTipCapMinGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       3,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 500, 50),
@@ -351,16 +354,16 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 		Percentile: 60,
 	}
 
-	backend := newTestBackend(t, params.TestFlareApricotPhase2Config, 3, nil, func(i int, b *core.BlockGen) {
+	backend := newTestBackend(t, params.TestApricotPhase2Config, 3, nil, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
-		signer := types.LatestSigner(params.TestFlareApricotPhase2Config)
+		signer := types.LatestSigner(params.TestApricotPhase2Config)
 		gasPrice := big.NewInt(ap1.MinGasPrice)
 		for j := 0; j < 50; j++ {
 			tx := types.NewTx(&types.LegacyTx{
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
-				Gas:      params.TxGas,
+				Gas:      ethparams.TxGas,
 				GasPrice: gasPrice,
 				Data:     []byte{},
 			})
@@ -380,7 +383,7 @@ func TestSuggestGasPricePreAP3(t *testing.T) {
 
 func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       200,
 		extDataGasUsage: common.Big0,
 		genBlock:        testGenBlock(t, 550, 80),
@@ -390,7 +393,7 @@ func TestSuggestTipCapMaxBlocksLookback(t *testing.T) {
 
 func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       20,
 		extDataGasUsage: big.NewInt(1),
 		genBlock:        testGenBlock(t, 550, 80),
@@ -400,9 +403,9 @@ func TestSuggestTipCapMaxBlocksSecondsLookback(t *testing.T) {
 
 func TestSuggestTipCapIncludesExtraDataGas(t *testing.T) {
 	applyGasPriceTest(t, suggestTipCapTest{
-		chainConfig:     params.TestFlareChainConfig,
+		chainConfig:     params.TestChainConfig,
 		numBlocks:       1000,
-		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(params.TxGas)),
+		extDataGasUsage: big.NewInt(acp176.MinMaxPerSecond - int64(ethparams.TxGas)),
 		// The tip on the transaction is very large to pay the block gas cost.
 		genBlock: testGenBlock(t, 100_000, 1),
 		// The actual tip doesn't matter, we just want to ensure that the tip is

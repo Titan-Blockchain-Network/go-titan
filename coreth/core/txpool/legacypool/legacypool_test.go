@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -40,16 +41,15 @@ import (
 	"time"
 
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/state"
 	"github.com/ava-labs/coreth/core/txpool"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/trie"
-	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 )
 
@@ -63,10 +63,10 @@ var (
 )
 
 func init() {
-	cpy := *params.TestFlareChainConfig
+	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
-	eip1559Config.ApricotPhase2BlockTimestamp = utils.NewUint64(0)
-	eip1559Config.ApricotPhase3BlockTimestamp = utils.NewUint64(0)
+	eip1559Config.BerlinBlock = common.Big0
+	eip1559Config.LondonBlock = common.Big0
 }
 
 type testBlockChain struct {
@@ -138,8 +138,8 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 }
 
 func dynamicFeeTx(nonce uint64, gaslimit uint64, gasFee *big.Int, tip *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.SignNewTx(key, types.LatestSignerForChainID(params.TestFlareChainConfig.ChainID), &types.DynamicFeeTx{
-		ChainID:    params.TestFlareChainConfig.ChainID,
+	tx, _ := types.SignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.DynamicFeeTx{
+		ChainID:    params.TestChainConfig.ChainID,
 		Nonce:      nonce,
 		GasTipCap:  tip,
 		GasFeeCap:  gasFee,
@@ -178,7 +178,7 @@ func makeAddressReserver() txpool.AddressReserver {
 }
 
 func setupPool() (*LegacyPool, *ecdsa.PrivateKey) {
-	return setupPoolWithConfig(params.TestFlareChainConfig)
+	return setupPoolWithConfig(params.TestChainConfig)
 }
 
 func setupPoolWithConfig(config *params.ChainConfig) (*LegacyPool, *ecdsa.PrivateKey) {
@@ -297,7 +297,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 
 	// setup pool with 2 transaction in it
 	statedb.SetBalance(address, new(uint256.Int).SetUint64(params.Ether))
-	blockchain := &testChain{newTestBlockChain(params.TestFlareChainConfig, 1000000000, statedb, new(event.Feed)), address, &trigger}
+	blockchain := &testChain{newTestBlockChain(params.TestChainConfig, 1000000000, statedb, new(event.Feed)), address, &trigger}
 
 	tx0 := transaction(0, 100000, key)
 	tx1 := transaction(1, 100000, key)
@@ -720,7 +720,7 @@ func TestPostponing(t *testing.T) {
 
 	// Create the pool to test the postponing with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
@@ -934,7 +934,7 @@ func testQueueGlobalLimiting(t *testing.T, nolocals bool) {
 
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.NoLocals = nolocals
@@ -1028,7 +1028,7 @@ func testQueueTimeLimiting(t *testing.T, nolocals bool) {
 
 	// Create the pool to test the non-expiration enforcement
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.Lifetime = time.Second
@@ -1214,7 +1214,7 @@ func TestPendingGlobalLimiting(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.GlobalSlots = config.AccountSlots * 10
@@ -1316,7 +1316,7 @@ func TestCapClearsFromAll(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.AccountSlots = 2
@@ -1351,7 +1351,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 
 	// Create the pool to test the limit enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.GlobalSlots = 1
@@ -1400,7 +1400,7 @@ func TestRepricing(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
@@ -1767,7 +1767,7 @@ func TestUnderpricing(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.GlobalSlots = 2
@@ -1882,7 +1882,7 @@ func TestStableUnderpricing(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.GlobalSlots = 128
@@ -2117,7 +2117,7 @@ func TestDeduplication(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
@@ -2184,7 +2184,7 @@ func TestReplacement(t *testing.T) {
 
 	// Create the pool to test the pricing enforcement with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
@@ -2390,7 +2390,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 
 	// Create the original pool to inject transaction into the journal
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	config := testTxPoolConfig
 	config.NoLocals = nolocals
@@ -2433,7 +2433,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	// Terminate the old pool, bump the local nonce, create a new pool and ensure relevant transaction survive
 	pool.Close()
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
-	blockchain = newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain = newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool = New(config, blockchain)
 	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
@@ -2461,7 +2461,7 @@ func testJournaling(t *testing.T, nolocals bool) {
 	pool.Close()
 
 	statedb.SetNonce(crypto.PubkeyToAddress(local.PublicKey), 1)
-	blockchain = newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain = newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 	pool = New(config, blockchain)
 	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
 
@@ -2491,7 +2491,7 @@ func TestStatusCheck(t *testing.T) {
 
 	// Create the pool to test the status retrievals with
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
-	blockchain := newTestBlockChain(params.TestFlareChainConfig, 1000000, statedb, new(event.Feed))
+	blockchain := newTestBlockChain(params.TestChainConfig, 1000000, statedb, new(event.Feed))
 
 	pool := New(testTxPoolConfig, blockchain)
 	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())

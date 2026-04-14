@@ -1,4 +1,4 @@
-// (c) 2019-2025, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package header
@@ -8,14 +8,16 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/types"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/etna"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 )
 
 var (
@@ -36,7 +38,7 @@ var (
 )
 
 // baseFeeFromWindow should only be called if `timestamp` >= `config.ApricotPhase3Timestamp`
-func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
+func baseFeeFromWindow(config *extras.ChainConfig, parent *types.Header, timestamp uint64) (*big.Int, error) {
 	// If the current block is the first EIP-1559 block, or it is the genesis block
 	// return the initial slice and initial base fee.
 	if !config.IsApricotPhase3(parent.Time) || parent.Number.Cmp(common.Big0) == 0 {
@@ -149,7 +151,7 @@ func baseFeeFromWindow(config *params.ChainConfig, parent *types.Header, timesta
 //
 // feeWindow should only be called if timestamp >= config.ApricotPhase3Timestamp
 func feeWindow(
-	config *params.ChainConfig,
+	config *extras.ChainConfig,
 	parent *types.Header,
 	timestamp uint64,
 ) (ap3.Window, error) {
@@ -182,8 +184,8 @@ func feeWindow(
 
 		// At the start of a new network, the parent may not have a populated
 		// ExtDataGasUsed.
-		if parent.ExtDataGasUsed != nil {
-			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
+		if used := customtypes.GetHeaderExtra(parent).ExtDataGasUsed; used != nil {
+			parentExtraStateGasUsed = used.Uint64()
 		}
 	case config.IsApricotPhase4(parent.Time):
 		// The blockGasCost is paid by the effective tips in the block using
@@ -193,17 +195,18 @@ func feeWindow(
 		// still calculated using the AP4 step. This is different than the
 		// actual BlockGasCost calculation used for the child block. This
 		// behavior is kept to preserve the original behavior of this function.
+		parentExtra := customtypes.GetHeaderExtra(parent)
 		blockGasCost = BlockGasCostWithStep(
 			config.IsSongbirdCode(),
-			parent.BlockGasCost,
+			parentExtra.BlockGasCost,
 			ap4.BlockGasCostStep,
 			timeElapsed,
 		)
 
 		// On the boundary of AP3 and AP4 or at the start of a new network, the
 		// parent may not have a populated ExtDataGasUsed.
-		if parent.ExtDataGasUsed != nil {
-			parentExtraStateGasUsed = parent.ExtDataGasUsed.Uint64()
+		if parentExtra.ExtDataGasUsed != nil {
+			parentExtraStateGasUsed = parentExtra.ExtDataGasUsed.Uint64()
 		}
 	default:
 		blockGasCost = ap3.IntrinsicBlockGas

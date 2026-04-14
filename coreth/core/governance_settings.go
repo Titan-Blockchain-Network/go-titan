@@ -8,9 +8,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
 )
 
 var (

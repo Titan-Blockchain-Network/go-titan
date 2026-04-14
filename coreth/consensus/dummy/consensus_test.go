@@ -1,4 +1,4 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package dummy
@@ -8,10 +8,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
+
 	"github.com/ava-labs/coreth/plugin/evm/header"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap4"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestVerifyBlockFee(t *testing.T) {
