@@ -83,7 +83,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 func (st *StateTransition) DaemonCall(caller vm.ContractRef, addr common.Address, input []byte, gas uint64) (snapshot int, ret []byte, leftOverGas uint64, err error) {
-	return st.evm.DaemonCall(caller, addr, input, gas)
+	return DaemonCall(st.evm, caller, addr, input, gas)
 }
 
 func (st *StateTransition) DaemonRevertToSnapshot(snapshot int) {

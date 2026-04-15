@@ -274,7 +274,7 @@ func GetLocalAttestors() []common.Address {
 }
 
 func (st *StateTransition) GetAttestation(attestor common.Address, instructions []byte) (string, error) {
-	_, merkleRootHash, _, err := st.evm.DaemonCall(vm.AccountRef(attestor), st.to(), instructions, ethparams.TxGas)
+	_, merkleRootHash, _, err := DaemonCall(st.evm, vm.AccountRef(attestor), st.to(), instructions, ethparams.TxGas)
 	return hex.EncodeToString(merkleRootHash), err
 }
 
@@ -354,7 +354,7 @@ func (st *StateTransition) FinalisePreviousRound(chainID *big.Int, timestamp uin
 		//				by this check: burnAddress == common.HexToAddress("0x0100000000000000000000000000000000000000") on line 373, which occurs
 		//				right before st.FinalisePreviousRound(chainID, timestamp, st.data[4:36]) is called.
 		//		2) Know the private key to the address 0x00000000000000000000000000000000000DEaD1 in order to become msg.sender.
-		_, _, _, err = st.evm.DaemonCall(vm.AccountRef(coinbaseSignal), st.to(), finalisedData, st.evm.Context.GasLimit)
+		_, _, _, err = DaemonCall(st.evm, vm.AccountRef(coinbaseSignal), st.to(), finalisedData, st.evm.Context.GasLimit)
 		if err != nil {
 			return err
 		}
