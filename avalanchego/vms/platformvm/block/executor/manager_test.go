@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package executor
@@ -13,6 +13,8 @@ import (
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
 	"github.com/ava-labs/avalanchego/vms/platformvm/state"
+
+	snowmanblock "github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 )
 
 func TestGetBlock(t *testing.T) {
@@ -79,10 +81,28 @@ func TestManagerSetPreference(t *testing.T) {
 	manager := &manager{
 		preferred: initialPreference,
 	}
-	require.False(manager.SetPreference(initialPreference))
+	require.Equal(initialPreference, manager.Preferred())
 
 	newPreference := ids.GenerateTestID()
-	require.True(manager.SetPreference(newPreference))
-	require.False(manager.SetPreference(newPreference))
-	require.True(manager.SetPreference(initialPreference))
+	manager.SetPreference(newPreference, nil)
+	require.Equal(newPreference, manager.Preferred())
+}
+
+func TestManagerSetPreferenceWithContext(t *testing.T) {
+	require := require.New(t)
+
+	initialPreference := ids.GenerateTestID()
+	manager := &manager{
+		preferred: initialPreference,
+	}
+	require.Equal(initialPreference, manager.Preferred())
+	require.Nil(manager.preferredCtx)
+
+	newPreference := ids.GenerateTestID()
+	newContext := &snowmanblock.Context{
+		PChainHeight: 100,
+	}
+	manager.SetPreference(newPreference, newContext)
+	require.Equal(newPreference, manager.Preferred())
+	require.Equal(newContext, manager.preferredCtx)
 }

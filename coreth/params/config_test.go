@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -33,7 +34,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ava-labs/coreth/params/extras"
 	"github.com/ava-labs/coreth/utils"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -41,12 +44,12 @@ func TestCheckCompatible(t *testing.T) {
 		stored, new   *ChainConfig
 		headBlock     uint64
 		headTimestamp uint64
-		wantErr       *ConfigCompatError
+		wantErr       *ethparams.ConfigCompatError
 	}
 	tests := []test{
-		{stored: TestFlareChainConfig, new: TestFlareChainConfig, headBlock: 0, headTimestamp: 0, wantErr: nil},
-		{stored: TestFlareChainConfig, new: TestFlareChainConfig, headBlock: 0, headTimestamp: uint64(time.Now().Unix()), wantErr: nil},
-		{stored: TestFlareChainConfig, new: TestFlareChainConfig, headBlock: 100, wantErr: nil},
+		{stored: TestChainConfig, new: TestChainConfig, headBlock: 0, headTimestamp: 0, wantErr: nil},
+		{stored: TestChainConfig, new: TestChainConfig, headBlock: 0, headTimestamp: uint64(time.Now().Unix()), wantErr: nil},
+		{stored: TestChainConfig, new: TestChainConfig, headBlock: 100, wantErr: nil},
 		{
 			stored:        &ChainConfig{EIP150Block: big.NewInt(10)},
 			new:           &ChainConfig{EIP150Block: big.NewInt(20)},
@@ -55,11 +58,11 @@ func TestCheckCompatible(t *testing.T) {
 			wantErr:       nil,
 		},
 		{
-			stored:        TestFlareChainConfig,
+			stored:        TestChainConfig,
 			new:           &ChainConfig{HomesteadBlock: nil},
 			headBlock:     3,
 			headTimestamp: 30,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:          "Homestead fork block",
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      nil,
@@ -67,11 +70,11 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        TestFlareChainConfig,
+			stored:        TestChainConfig,
 			new:           &ChainConfig{HomesteadBlock: big.NewInt(1)},
 			headBlock:     3,
 			headTimestamp: 30,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:          "Homestead fork block",
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      big.NewInt(1),
@@ -83,7 +86,7 @@ func TestCheckCompatible(t *testing.T) {
 			new:           &ChainConfig{HomesteadBlock: big.NewInt(25), EIP150Block: big.NewInt(20)},
 			headBlock:     25,
 			headTimestamp: 250,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:          "EIP150 fork block",
 				StoredBlock:   big.NewInt(10),
 				NewBlock:      big.NewInt(20),
@@ -102,7 +105,7 @@ func TestCheckCompatible(t *testing.T) {
 			new:           &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(31)},
 			headBlock:     40,
 			headTimestamp: 400,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:          "Petersburg fork block",
 				StoredBlock:   nil,
 				NewBlock:      big.NewInt(31),
@@ -110,11 +113,11 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        TestFlareChainConfig,
-			new:           TestFlareApricotPhase4Config,
+			stored:        TestApricotPhase5Config,
+			new:           TestApricotPhase4Config,
 			headBlock:     0,
 			headTimestamp: 0,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:         "ApricotPhase5 fork block timestamp",
 				StoredTime:   utils.NewUint64(0),
 				NewTime:      nil,
@@ -122,11 +125,11 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:        TestFlareChainConfig,
-			new:           TestFlareApricotPhase4Config,
+			stored:        TestApricotPhase5Config,
+			new:           TestApricotPhase4Config,
 			headBlock:     10,
 			headTimestamp: 100,
-			wantErr: &ConfigCompatError{
+			wantErr: &ethparams.ConfigCompatError{
 				What:         "ApricotPhase5 fork block timestamp",
 				StoredTime:   utils.NewUint64(0),
 				NewTime:      nil,
@@ -144,21 +147,24 @@ func TestCheckCompatible(t *testing.T) {
 }
 
 func TestConfigRules(t *testing.T) {
-	c := &ChainConfig{
-		NetworkUpgrades: NetworkUpgrades{
-			CortinaBlockTimestamp: utils.NewUint64(500),
+	c := WithExtra(
+		&ChainConfig{},
+		&extras.ChainConfig{
+			NetworkUpgrades: extras.NetworkUpgrades{
+				CortinaBlockTimestamp: utils.NewUint64(500),
+			},
 		},
-	}
+	)
 	var stamp uint64
-	if r := c.Rules(big.NewInt(0), stamp); r.IsCortina {
+	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to not be cortina", stamp)
 	}
 	stamp = 500
-	if r := c.Rules(big.NewInt(0), stamp); !r.IsCortina {
+	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to be cortina", stamp)
 	}
 	stamp = math.MaxInt64
-	if r := c.Rules(big.NewInt(0), stamp); !r.IsCortina {
+	if r := c.Rules(big.NewInt(0), IsMergeTODO, stamp); !GetRulesExtra(r).IsCortina {
 		t.Errorf("expected %v to be cortina", stamp)
 	}
 }

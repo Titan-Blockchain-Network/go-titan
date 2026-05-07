@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package main
@@ -10,22 +10,29 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 
 	"github.com/ava-labs/avalanchego/tests"
+	"github.com/ava-labs/avalanchego/tests/fixture/stacktrace"
 	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet"
+	"github.com/ava-labs/avalanchego/tests/fixture/tmpnet/flags"
 	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/version"
 )
 
-const cliVersion = "0.0.1"
+const (
+	cliVersion = "0.0.1"
+
+	// Need a longer timeout to account for time required to deploy nginx ingress controller and chaos mesh
+	startKindClusterTimeout = 5 * time.Minute
+)
 
 var (
-	errAvalancheGoRequired = fmt.Errorf("--avalanchego-path or %s are required", tmpnet.AvalancheGoPathEnvName)
-	errNetworkDirRequired  = fmt.Errorf("--network-dir or %s are required", tmpnet.NetworkDirEnvName)
+	errNetworkDirRequired = fmt.Errorf("--network-dir or %s is required", tmpnet.NetworkDirEnvName)
+	errKubeconfigRequired = errors.New("--kubeconfig is required")
 )
 
 func main() {
@@ -54,45 +61,50 @@ func main() {
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	var (
-		rootDir         string
-		networkOwner    string
-		avalancheGoPath string
-		pluginDir       string
-		nodeCount       uint8
-	)
+	var startNetworkVars *flags.StartNetworkVars
 	startNetworkCmd := &cobra.Command{
 		Use:   "start-network",
 		Short: "Start a new temporary network",
 		RunE: func(*cobra.Command, []string) error {
-			if len(avalancheGoPath) == 0 {
-				return errAvalancheGoRequired
-			}
-
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
 
-			// Root dir will be defaulted on start if not provided
+			nodeCount, err := startNetworkVars.GetNodeCount()
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
+
+			nodeRuntimeConfig, err := startNetworkVars.GetNodeRuntimeConfig()
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
 
 			network := &tmpnet.Network{
-				Owner: networkOwner,
-				Nodes: tmpnet.NewNodesOrPanic(int(nodeCount)),
+				Owner:                startNetworkVars.NetworkOwner,
+				Nodes:                tmpnet.NewNodesOrPanic(nodeCount),
+				DefaultRuntimeConfig: *nodeRuntimeConfig,
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
+			timeout, err := nodeRuntimeConfig.GetNetworkStartTimeout(nodeCount)
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
+			log.Info("waiting for network to start",
+				zap.Float64("timeoutSeconds", timeout.Seconds()),
+			)
+
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			if err := tmpnet.BootstrapNewNetwork(
 				ctx,
 				log,
 				network,
-				rootDir,
-				avalancheGoPath,
-				pluginDir,
+				startNetworkVars.RootNetworkDir,
 			); err != nil {
 				log.Error("failed to bootstrap network", zap.Error(err))
-				return err
+				return stacktrace.Wrap(err)
 			}
 
 			// Symlink the new network to the 'latest' network to simplify usage
@@ -100,10 +112,10 @@ func main() {
 			networkDirName := filepath.Base(network.Dir)
 			latestSymlinkPath := filepath.Join(networkRootDir, "latest")
 			if err := os.Remove(latestSymlinkPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				return err
+				return stacktrace.Wrap(err)
 			}
 			if err := os.Symlink(networkDirName, latestSymlinkPath); err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
 
 			fmt.Fprintln(os.Stdout, "\nConfigure tmpnetctl to target this network by default with one of the following statements:")
@@ -114,17 +126,11 @@ func main() {
 			return nil
 		},
 	}
-	// TODO(marun) Enable reuse of flags across tmpnetctl and e2e
-	startNetworkCmd.PersistentFlags().StringVar(&rootDir, "root-dir", os.Getenv(tmpnet.RootDirEnvName), "The path to the root directory for temporary networks")
-	startNetworkCmd.PersistentFlags().StringVar(&avalancheGoPath, "avalanchego-path", os.Getenv(tmpnet.AvalancheGoPathEnvName), "The path to an avalanchego binary")
-	startNetworkCmd.PersistentFlags().StringVar(
-		&pluginDir,
-		"plugin-dir",
-		tmpnet.GetEnvWithDefault(tmpnet.AvalancheGoPluginDirEnvName, os.ExpandEnv("$HOME/.avalanchego/plugins")),
-		"[optional] the dir containing VM plugins",
+	startNetworkVars = flags.NewStartNetworkFlagSetVars(
+		startNetworkCmd.PersistentFlags(),
+		"", /* defaultNetworkOwner */
+		tmpnet.DefaultNodeCount,
 	)
-	startNetworkCmd.PersistentFlags().Uint8Var(&nodeCount, "node-count", tmpnet.DefaultNodeCount, "Number of nodes the network should initially consist of")
-	startNetworkCmd.PersistentFlags().StringVar(&networkOwner, "network-owner", "", "The string identifying the intended owner of the network")
 	rootCmd.AddCommand(startNetworkCmd)
 
 	stopNetworkCmd := &cobra.Command{
@@ -132,12 +138,16 @@ func main() {
 		Short: "Stop a temporary network",
 		RunE: func(*cobra.Command, []string) error {
 			if len(networkDir) == 0 {
-				return errNetworkDirRequired
+				return stacktrace.Wrap(errNetworkDirRequired)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
 			defer cancel()
-			if err := tmpnet.StopNetwork(ctx, networkDir); err != nil {
-				return err
+			log, err := tests.LoggerForFormat("", rawLogFormat)
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
+			if err := tmpnet.StopNetwork(ctx, log, networkDir); err != nil {
+				return stacktrace.Wrap(err)
 			}
 			fmt.Fprintf(os.Stdout, "Stopped network configured at: %s\n", networkDir)
 			return nil
@@ -150,11 +160,11 @@ func main() {
 		Short: "Restart a temporary network",
 		RunE: func(*cobra.Command, []string) error {
 			if len(networkDir) == 0 {
-				return errNetworkDirRequired
+				return stacktrace.Wrap(errNetworkDirRequired)
 			}
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
 			defer cancel()
@@ -163,35 +173,65 @@ func main() {
 	}
 	rootCmd.AddCommand(restartNetworkCmd)
 
-	startCollectorsCmd := &cobra.Command{
-		Use:   "start-collectors",
-		Short: "Start log and metric collectors for local process-based nodes",
+	startMetricsCollectorCmd := &cobra.Command{
+		Use:   "start-metrics-collector",
+		Short: "Start metrics collector for local process-based nodes",
 		RunE: func(*cobra.Command, []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
 			defer cancel()
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
-			return tmpnet.StartCollectors(ctx, log)
+			return tmpnet.StartPrometheus(ctx, log)
 		},
 	}
-	rootCmd.AddCommand(startCollectorsCmd)
+	rootCmd.AddCommand(startMetricsCollectorCmd)
 
-	stopCollectorsCmd := &cobra.Command{
-		Use:   "stop-collectors",
-		Short: "Stop log and metric collectors for local process-based nodes",
+	startLogsCollectorCmd := &cobra.Command{
+		Use:   "start-logs-collector",
+		Short: "Start logs collector for local process-based nodes",
 		RunE: func(*cobra.Command, []string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
 			defer cancel()
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
-			return tmpnet.StopCollectors(ctx, log)
+			return tmpnet.StartPromtail(ctx, log)
 		},
 	}
-	rootCmd.AddCommand(stopCollectorsCmd)
+	rootCmd.AddCommand(startLogsCollectorCmd)
+
+	stopMetricsCollectorCmd := &cobra.Command{
+		Use:   "stop-metrics-collector",
+		Short: "Stop metrics collector for local process-based nodes",
+		RunE: func(*cobra.Command, []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
+			defer cancel()
+			log, err := tests.LoggerForFormat("", rawLogFormat)
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
+			return tmpnet.StopMetricsCollector(ctx, log)
+		},
+	}
+	rootCmd.AddCommand(stopMetricsCollectorCmd)
+
+	stopLogsCollectorCmd := &cobra.Command{
+		Use:   "stop-logs-collector",
+		Short: "Stop logs collector for local process-based nodes",
+		RunE: func(*cobra.Command, []string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
+			defer cancel()
+			log, err := tests.LoggerForFormat("", rawLogFormat)
+			if err != nil {
+				return stacktrace.Wrap(err)
+			}
+			return tmpnet.StopLogsCollector(ctx, log)
+		},
+	}
+	rootCmd.AddCommand(stopLogsCollectorCmd)
 
 	var networkUUID string
 
@@ -203,7 +243,7 @@ func main() {
 			defer cancel()
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
 			return tmpnet.CheckMetricsExist(ctx, log, networkUUID)
 		},
@@ -224,7 +264,7 @@ func main() {
 			defer cancel()
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
 			return tmpnet.CheckLogsExist(ctx, log, networkUUID)
 		},
@@ -238,23 +278,45 @@ func main() {
 	rootCmd.AddCommand(checkLogsCmd)
 
 	var (
-		kubeConfigPath    string
-		kubeConfigContext string
+		kubeconfigVars   *flags.KubeconfigVars
+		collectorVars    *flags.CollectorVars
+		installChaosMesh bool
 	)
 	startKindClusterCmd := &cobra.Command{
 		Use:   "start-kind-cluster",
 		Short: "Starts a local kind cluster with an integrated registry",
 		RunE: func(*cobra.Command, []string) error {
-			ctx, cancel := context.WithTimeout(context.Background(), tmpnet.DefaultNetworkTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), startKindClusterTimeout)
 			defer cancel()
 			log, err := tests.LoggerForFormat("", rawLogFormat)
 			if err != nil {
-				return err
+				return stacktrace.Wrap(err)
 			}
-			return tmpnet.StartKindCluster(ctx, log, kubeConfigPath, kubeConfigContext)
+			// A valid kubeconfig is required for local kind usage but this is not validated by KubeconfigVars
+			// since unlike kind, tmpnet usage may involve an implicit in-cluster config.
+			if len(kubeconfigVars.Path) == 0 {
+				return stacktrace.Wrap(errKubeconfigRequired)
+			}
+			// TODO(marun) Consider supporting other contexts. Will require modifying the kind cluster start script.
+			if len(kubeconfigVars.Context) > 0 && kubeconfigVars.Context != tmpnet.KindKubeconfigContext {
+				log.Warn("ignoring kubeconfig context for kind cluster",
+					zap.String("providedContext", kubeconfigVars.Context),
+					zap.String("requiredContext", tmpnet.KindKubeconfigContext),
+				)
+			}
+			return tmpnet.StartKindCluster(
+				ctx,
+				log,
+				kubeconfigVars.Path,
+				collectorVars.StartMetricsCollector,
+				collectorVars.StartLogsCollector,
+				installChaosMesh,
+			)
 		},
 	}
-	SetKubeConfigFlags(startKindClusterCmd.PersistentFlags(), &kubeConfigPath, &kubeConfigContext)
+	kubeconfigVars = flags.NewKubeconfigFlagSetVars(startKindClusterCmd.PersistentFlags())
+	collectorVars = flags.NewCollectorFlagSetVars(startKindClusterCmd.PersistentFlags())
+	startKindClusterCmd.PersistentFlags().BoolVar(&installChaosMesh, "install-chaos-mesh", false, "Install Chaos Mesh in the kind cluster")
 	rootCmd.AddCommand(startKindClusterCmd)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -262,19 +324,4 @@ func main() {
 		os.Exit(1)
 	}
 	os.Exit(0)
-}
-
-func SetKubeConfigFlags(flagSet *pflag.FlagSet, kubeConfigPath *string, kubeConfigContext *string) {
-	flagSet.StringVar(
-		kubeConfigPath,
-		"kubeconfig",
-		os.Getenv("KUBECONFIG"),
-		"The path to a kubernetes configuration file for the target cluster",
-	)
-	flagSet.StringVar(
-		kubeConfigContext,
-		"kubeconfig-context",
-		"",
-		"The path to a kubernetes configuration file for the target cluster",
-	)
 }

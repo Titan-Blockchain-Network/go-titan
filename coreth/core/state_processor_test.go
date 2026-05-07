@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,22 +33,25 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/upgrade"
+	"github.com/ava-labs/avalanchego/vms/evm/acp176"
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/consensus/misc/eip4844"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	customheader "github.com/ava-labs/coreth/plugin/evm/header"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/acp176"
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/customheader"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap1"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap3"
 	"github.com/ava-labs/coreth/plugin/evm/upgrade/cortina"
-	"github.com/ava-labs/coreth/trie"
 	"github.com/ava-labs/coreth/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/consensus/misc/eip4844"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	ethparams "github.com/ava-labs/libevm/params"
+	"github.com/ava-labs/libevm/trie"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -118,7 +122,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				Config:    config,
 				Timestamp: uint64(upgrade.InitiallyActiveTime.Unix()),
 				Alloc: types.GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.GenesisAccount{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 						Balance: big.NewInt(4000000000000000000), // 4 ether
 						Nonce:   0,
 					},
@@ -127,7 +131,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			}
 			// FullFaker used to skip header verification that enforces no blobs.
 			blockchain, _  = NewBlockChain(db, DefaultCacheConfig, gspec, dummy.NewFullFaker(), vm.Config{}, common.Hash{}, false)
-			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
+			tooBigInitCode = [ethparams.MaxInitCodeSize + 1]byte{}
 		)
 
 		defer blockchain.Stop()
@@ -140,14 +144,14 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrNonceTooLow
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(225000000000), nil),
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(225000000000), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(0), ethparams.TxGas, big.NewInt(225000000000), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(0), ethparams.TxGas, big.NewInt(225000000000), nil),
 				},
 				want: "could not apply tx 1 [0x84dcd5b9ff418ff4315244798ce5b4ffcba8dc0a03107f6b0d30843b31cc7606]: nonce too low: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 0 state: 1",
 			},
 			{ // ErrNonceTooHigh
 				txs: []*types.Transaction{
-					makeTx(key1, 100, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(225000000000), nil),
+					makeTx(key1, 100, common.Address{}, big.NewInt(0), ethparams.TxGas, big.NewInt(225000000000), nil),
 				},
 				want: "could not apply tx 0 [0x3ed69842ce7bf7b3988757886f71a51dd23aa10ae1743c3ede4e8eebeb8e0608]: nonce too high: address 0x71562b71999873DB5b286dF957af199Ec94617F7, tx: 100 state: 0",
 			},
@@ -160,13 +164,13 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrInsufficientFundsForTransfer
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(4000000000000000000), params.TxGas, big.NewInt(225000000000), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(4000000000000000000), ethparams.TxGas, big.NewInt(225000000000), nil),
 				},
 				want: "could not apply tx 0 [0xb9309ec88ef557acec3c256eb562e46f8cd85fbf2542e04ea028120808d4152d]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 4004725000000000000",
 			},
 			{ // ErrInsufficientFunds
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas, big.NewInt(900000000000000000), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(0), ethparams.TxGas, big.NewInt(900000000000000000), nil),
 				},
 				want: "could not apply tx 0 [0xf6f412e0712d31f350ff2288ddd5a5108d28f8fa284e74088cdf3f6f7601f893]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 18900000000000000000000",
 			},
@@ -176,38 +180,38 @@ func TestStateProcessorErrors(t *testing.T) {
 			// multiplication len(data) +gas_per_byte overflows uint64. Not testable at the moment
 			{ // ErrIntrinsicGas
 				txs: []*types.Transaction{
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas-1000, big.NewInt(225000000000), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(0), ethparams.TxGas-1000, big.NewInt(225000000000), nil),
 				},
 				want: "could not apply tx 0 [0x24d88b89e5ac53f2755cbd7eae08e697a68f865682722ba27c8f8ea7e5d74218]: intrinsic gas too low: have 20000, want 21000",
 			},
 			{ // ErrGasLimitReached
 				txs: []*types.Transaction{
 					// This test was modified to account for ACP-176 gas limits
-					makeTx(key1, 0, common.Address{}, big.NewInt(0), params.TxGas*953, big.NewInt(acp176.MinGasPrice), nil),
+					makeTx(key1, 0, common.Address{}, big.NewInt(0), ethparams.TxGas*953, big.NewInt(acp176.MinGasPrice), nil),
 				},
 				want: "could not apply tx 0 [0xaf3a1738ef4efe25d0236805edb7407af32224c4bdd6efec2f0f38d0b9408972]: gas limit reached",
 			},
 			{ // ErrFeeCapTooLow
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
 				want: "could not apply tx 0 [0xeee01b14adff8c5c12770572f3f88a63005cf0188bbcce5e9398a927bf08b8ef]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0, baseFee: 1",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, tooBigNumber, big.NewInt(1)),
 				},
 				want: "could not apply tx 0 [0x7711bf41c8e13c75e2d4ca1a0baa057a0abbb17b048d19a758a55562f11b5a6e]: max priority fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas bit length: 257",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, big.NewInt(1), tooBigNumber),
 				},
 				want: "could not apply tx 0 [0xeb526d9d4869820e545377d3feb2245305fee1574571b1b7289d6598ad890e31]: max fee per gas higher than 2^256-1: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas bit length: 257",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, big.NewInt(2), big.NewInt(1)),
 				},
 				want: "could not apply tx 0 [0x6f10cdd0f07172546d57de0438f252d601fe7f84ced20f735200280a243569b7]: max priority fee per gas higher than max fee per gas: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas: 2, maxFeePerGas: 1",
 			},
@@ -218,13 +222,13 @@ func TestStateProcessorErrors(t *testing.T) {
 				// This test is designed to have the effective cost be covered by the balance, but
 				// the extended requirement on FeeCap*gas < balance to fail
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(200000000000000)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, big.NewInt(1), big.NewInt(200000000000000)),
 				},
 				want: "could not apply tx 0 [0x578f87daf68f51d2ce247a67d4867303bc332615af345bfe48cb33b812686356]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 have 4000000000000000000 want 4200000000000000000",
 			},
 			{ // Another ErrInsufficientFunds, this one to ensure that feecap/tip of max u256 is allowed
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas, bigNumber, bigNumber),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas, bigNumber, bigNumber),
 				},
 				want: "could not apply tx 0 [0xc97aa5e0d64080137a1010fb8c71da327746511f071fd3b28dd0af89db45c375]: insufficient funds for gas * price + value: address 0x71562b71999873DB5b286dF957af199Ec94617F7 required balance exceeds 256 bits",
 			},
@@ -242,7 +246,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrBlobFeeCapTooLow
 				txs: []*types.Transaction{
-					mkBlobTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1), big.NewInt(0), []common.Hash{(common.Hash{1})}),
+					mkBlobTx(0, common.Address{}, ethparams.TxGas, big.NewInt(1), big.NewInt(1), big.NewInt(0), []common.Hash{(common.Hash{1})}),
 				},
 				want: "could not apply tx 0 [0x4ff3729a66567a60cd0ca62ba5a20c923fa485476f47dde48b115e15229b4b5d]: max fee per blob gas less than block blob gas fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7 blobGasFeeCap: 0, blobBaseFee: 1",
 			},
@@ -264,24 +268,28 @@ func TestStateProcessorErrors(t *testing.T) {
 		var (
 			db    = rawdb.NewMemoryDatabase()
 			gspec = &Genesis{
-				Config: &params.ChainConfig{
-					ChainID:             big.NewInt(1),
-					HomesteadBlock:      big.NewInt(0),
-					EIP150Block:         big.NewInt(0),
-					EIP155Block:         big.NewInt(0),
-					EIP158Block:         big.NewInt(0),
-					ByzantiumBlock:      big.NewInt(0),
-					ConstantinopleBlock: big.NewInt(0),
-					PetersburgBlock:     big.NewInt(0),
-					IstanbulBlock:       big.NewInt(0),
-					MuirGlacierBlock:    big.NewInt(0),
-					NetworkUpgrades: params.NetworkUpgrades{
-						ApricotPhase1BlockTimestamp: utils.NewUint64(0),
-						ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+				Config: params.WithExtra(
+					&params.ChainConfig{
+						ChainID:             big.NewInt(1),
+						HomesteadBlock:      big.NewInt(0),
+						EIP150Block:         big.NewInt(0),
+						EIP155Block:         big.NewInt(0),
+						EIP158Block:         big.NewInt(0),
+						ByzantiumBlock:      big.NewInt(0),
+						ConstantinopleBlock: big.NewInt(0),
+						PetersburgBlock:     big.NewInt(0),
+						IstanbulBlock:       big.NewInt(0),
+						MuirGlacierBlock:    big.NewInt(0),
 					},
-				},
+					&extras.ChainConfig{
+						NetworkUpgrades: extras.NetworkUpgrades{
+							ApricotPhase1BlockTimestamp: utils.NewUint64(0),
+							ApricotPhase2BlockTimestamp: utils.NewUint64(0),
+						},
+					},
+				),
 				Alloc: types.GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.GenesisAccount{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 						Balance: big.NewInt(1000000000000000000), // 1 ether
 						Nonce:   0,
 					},
@@ -297,7 +305,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrTxTypeNotSupported
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
 				want: "could not apply tx 0 [0x4050f4881dfe4ec106ee93bc17b0d2e541a7537efeb1d1c2a8d166069836e58f]: transaction type not supported",
 			},
@@ -320,7 +328,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			gspec = &Genesis{
 				Config: config,
 				Alloc: types.GenesisAlloc{
-					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.GenesisAccount{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
 						Balance: big.NewInt(1000000000000000000), // 1 ether
 						Nonce:   0,
 						Code:    common.FromHex("0xB0B0FACE"),
@@ -337,7 +345,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}{
 			{ // ErrSenderNoEOA
 				txs: []*types.Transaction{
-					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
+					mkDynamicTx(0, common.Address{}, ethparams.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
 				want: "could not apply tx 0 [0x4050f4881dfe4ec106ee93bc17b0d2e541a7537efeb1d1c2a8d166069836e58f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
 			},
@@ -360,9 +368,12 @@ func TestStateProcessorErrors(t *testing.T) {
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	fakeChainReader := newChainMaker(nil, config, engine)
-	time := parent.Time() + 10
-	gasLimit, _ := customheader.GasLimit(config, parent.Header(), time)
-	baseFee, _ := customheader.BaseFee(config, parent.Header(), time)
+	configExtra := params.GetExtra(config)
+	gap := uint64(10) // 10 seconds
+	time := parent.Time() + gap
+	timeMS := customtypes.HeaderTimeMilliseconds(parent.Header()) + gap*1000
+	gasLimit, _ := customheader.GasLimit(configExtra, parent.Header(), timeMS)
+	baseFee, _ := customheader.BaseFee(configExtra, parent.Header(), timeMS)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
@@ -378,9 +389,14 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		UncleHash: types.EmptyUncleHash,
 		BaseFee:   baseFee,
 	}
-	if config.IsApricotPhase4(header.Time) {
-		header.BlockGasCost = big.NewInt(0)
-		header.ExtDataGasUsed = big.NewInt(0)
+	if configExtra.IsGranite(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.TimeMilliseconds = utils.NewUint64(timeMS)
+	}
+	if configExtra.IsApricotPhase4(header.Time) {
+		headerExtra := customtypes.GetHeaderExtra(header)
+		headerExtra.BlockGasCost = big.NewInt(0)
+		headerExtra.ExtDataGasUsed = big.NewInt(0)
 	}
 	var receipts []*types.Receipt
 	// The post-state result doesn't need to be correct (this is a bad block), but we do need something there
@@ -399,7 +415,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		cumulativeGas += tx.Gas()
 		nBlobs += len(tx.BlobHashes())
 	}
-	header.Extra, _ = customheader.ExtraPrefix(config, parent.Header(), header, nil)
+	header.Extra, _ = customheader.ExtraPrefix(configExtra, parent.Header(), header, nil)
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
 		pExcess, pUsed := uint64(0), uint64(0)
@@ -408,12 +424,13 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 			pUsed = *parent.BlobGasUsed()
 		}
 		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
-		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
+		used := uint64(nBlobs * ethparams.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
 
 		header.ParentBeaconRoot = new(common.Hash)
 	}
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

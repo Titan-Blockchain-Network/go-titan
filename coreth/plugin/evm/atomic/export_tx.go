@@ -1,49 +1,48 @@
-// (c) 2019-2020, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 
-	"github.com/ava-labs/coreth/accounts"
-	"github.com/ava-labs/coreth/params"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
-	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
-	"github.com/holiman/uint256"
-
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/snow"
-	avalancheutils "github.com/ava-labs/avalanchego/utils"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/utils/math"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/wrappers"
 	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/log"
+	"github.com/holiman/uint256"
+
+	"github.com/ava-labs/coreth/params/extras"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap0"
+	"github.com/ava-labs/coreth/plugin/evm/upgrade/ap5"
+
+	avalancheutils "github.com/ava-labs/avalanchego/utils"
 )
 
 var (
-	_                             UnsignedAtomicTx       = &UnsignedExportTx{}
-	_                             secp256k1fx.UnsignedTx = &UnsignedExportTx{}
-	ErrExportNonAVAXInputBanff                           = errors.New("export input cannot contain non-AVAX in Banff")
-	ErrExportNonAVAXOutputBanff                          = errors.New("export output cannot contain non-AVAX in Banff")
-	ErrNoExportOutputs                                   = errors.New("tx has no export outputs")
-	errPublicKeySignatureMismatch                        = errors.New("signature doesn't match public key")
-	errOverflowExport                                    = errors.New("overflow when computing export amount + txFee")
-	errInsufficientFunds                                 = errors.New("insufficient funds")
-	errInvalidNonce                                      = errors.New("invalid nonce")
-	errExportTxsDisabled                                 = errors.New("export transactions are disabled")
+	_                           UnsignedAtomicTx       = (*UnsignedExportTx)(nil)
+	_                           secp256k1fx.UnsignedTx = (*UnsignedExportTx)(nil)
+	ErrExportNonAVAXInputBanff                         = errors.New("export input cannot contain non-AVAX in Banff")
+	ErrExportNonAVAXOutputBanff                        = errors.New("export output cannot contain non-AVAX in Banff")
+	ErrInsufficientFunds                               = errors.New("insufficient funds")
+	ErrInvalidNonce                                    = errors.New("invalid nonce")
+	ErrNoExportOutputs                                 = errors.New("tx has no export outputs")
+	errOverflowExport                                  = errors.New("overflow when computing export amount + txFee")
+	errInsufficientFunds                               = errors.New("insufficient funds")
+	errInvalidNonce                                    = errors.New("invalid nonce")
+	errExportTxsDisabled                               = errors.New("export transactions are disabled")
 )
 
 // UnsignedExportTx is an unsigned ExportTx
@@ -79,7 +78,7 @@ func (utx *UnsignedExportTx) InputUTXOs() set.Set[ids.ID] {
 // Verify this transaction is well-formed
 func (utx *UnsignedExportTx) Verify(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 ) error {
 	switch {
 	case utx == nil:
@@ -143,16 +142,16 @@ func (utx *UnsignedExportTx) Verify(
 func (utx *UnsignedExportTx) GasUsed(fixedFee bool) (uint64, error) {
 	byteCost := calcBytesCost(len(utx.Bytes()))
 	numSigs := uint64(len(utx.Ins))
-	sigCost, err := math.Mul64(numSigs, secp256k1fx.CostPerSignature)
+	sigCost, err := math.Mul(numSigs, secp256k1fx.CostPerSignature)
 	if err != nil {
 		return 0, err
 	}
-	cost, err := math.Add64(byteCost, sigCost)
+	cost, err := math.Add(byteCost, sigCost)
 	if err != nil {
 		return 0, err
 	}
 	if fixedFee {
-		cost, err = math.Add64(cost, ap5.AtomicTxIntrinsicGas)
+		cost, err = math.Add(cost, ap5.AtomicTxIntrinsicGas)
 		if err != nil {
 			return 0, err
 		}
@@ -170,7 +169,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	)
 	for _, out := range utx.ExportedOutputs {
 		if out.AssetID() == assetID {
-			spent, err = math.Add64(spent, out.Output().Amount())
+			spent, err = math.Add(spent, out.Output().Amount())
 			if err != nil {
 				return 0, err
 			}
@@ -178,7 +177,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	}
 	for _, in := range utx.Ins {
 		if in.AssetID == assetID {
-			input, err = math.Add64(input, in.Amount)
+			input, err = math.Add(input, in.Amount)
 			if err != nil {
 				return 0, err
 			}
@@ -188,97 +187,7 @@ func (utx *UnsignedExportTx) Burned(assetID ids.ID) (uint64, error) {
 	return math.Sub(input, spent)
 }
 
-// SemanticVerify this transaction is valid.
-func (utx *UnsignedExportTx) SemanticVerify(
-	backend *Backend,
-	stx *Tx,
-	parent AtomicBlockContext,
-	baseFee *big.Int,
-) error {
-	ctx := backend.Ctx
-	rules := backend.Rules
-	if err := utx.Verify(ctx, rules); err != nil {
-		return err
-	}
-
-	// Check the transaction consumes and produces the right amounts
-	fc := avax.NewFlowChecker()
-	switch {
-	// Apply dynamic fees to export transactions as of Apricot Phase 3
-	case rules.IsApricotPhase3:
-		gasUsed, err := stx.GasUsed(rules.IsApricotPhase5)
-		if err != nil {
-			return err
-		}
-		txFee, err := CalculateDynamicFee(gasUsed, baseFee)
-		if err != nil {
-			return err
-		}
-		fc.Produce(ctx.AVAXAssetID, txFee)
-	// Apply fees to export transactions before Apricot Phase 3
-	default:
-		fc.Produce(ctx.AVAXAssetID, ap0.AtomicTxFee)
-	}
-	for _, out := range utx.ExportedOutputs {
-		fc.Produce(out.AssetID(), out.Output().Amount())
-	}
-	for _, in := range utx.Ins {
-		fc.Consume(in.AssetID, in.Amount)
-	}
-
-	if err := fc.Verify(); err != nil {
-		return fmt.Errorf("export tx flow check failed due to: %w", err)
-	}
-
-	if len(utx.Ins) != len(stx.Creds) {
-		return fmt.Errorf("export tx contained mismatched number of inputs/credentials (%d vs. %d)", len(utx.Ins), len(stx.Creds))
-	}
-
-	txHash := hashing.ComputeHash256(utx.Bytes())
-	txHashStr := hex.EncodeToString(txHash)
-	txHashEth := accounts.TextHash([]byte(txHashStr))
-	for i, input := range utx.Ins {
-		cred, ok := stx.Creds[i].(*secp256k1fx.Credential)
-		if !ok {
-			return fmt.Errorf("expected *secp256k1fx.Credential but got %T", cred)
-		}
-		if err := cred.Verify(); err != nil {
-			return err
-		}
-
-		if len(cred.Sigs) != 1 {
-			return fmt.Errorf("expected one signature for EVM Input Credential, but found: %d", len(cred.Sigs))
-		}
-
-		sig := cred.Sigs[0][:]
-		pubKey, err := backend.SecpCache.RecoverPublicKeyFromHash(txHash, sig)
-		if err != nil {
-			return err
-		}
-
-		// Verify the address recovered from the signature of the transaction hash without a prefix
-		// (Standard Avalanche approach, but unsupported/deprecated by most signing tools)
-		if input.Address == pubKey.EthAddress() {
-			continue
-		}
-
-		// Verify the address recovered from the signature of the transaction hash with the
-		// standard Ethereum prefix (see accounts.TextHash)
-		if rules.IsBanff {
-			pubKey, err := backend.SecpCache.RecoverPublicKeyFromHash(txHashEth, sig)
-			if err != nil {
-				return err
-			}
-			if input.Address == pubKey.EthAddress() {
-				continue
-			}
-		}
-
-		return errPublicKeySignatureMismatch
-	}
-
-	return nil
-}
+func (utx *UnsignedExportTx) Visit(v Visitor) error { return v.ExportTx(utx) }
 
 // AtomicOps returns the atomic operations for this transaction.
 func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
@@ -317,7 +226,7 @@ func (utx *UnsignedExportTx) AtomicOps() (ids.ID, *atomic.Requests, error) {
 // NewExportTx returns a new ExportTx
 func NewExportTx(
 	ctx *snow.Context,
-	rules params.Rules,
+	rules extras.Rules,
 	state StateDB,
 	assetID ids.ID, // AssetID of the tokens to export
 	amount uint64, // Amount of tokens to export
@@ -347,7 +256,7 @@ func NewExportTx(
 
 	// consume non-AVAX
 	if assetID != ctx.AVAXAssetID {
-		ins, signers, err = GetSpendableFunds(ctx, state, keys, assetID, amount)
+		ins, signers, err = getSpendableFunds(ctx, state, keys, assetID, amount)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
 		}
@@ -375,14 +284,14 @@ func NewExportTx(
 			return nil, err
 		}
 
-		avaxIns, avaxSigners, err = GetSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
+		avaxIns, avaxSigners, err = getSpendableAVAXWithFee(ctx, state, keys, avaxNeeded, cost, baseFee)
 	default:
 		var newAvaxNeeded uint64
-		newAvaxNeeded, err = math.Add64(avaxNeeded, ap0.AtomicTxFee)
+		newAvaxNeeded, err = math.Add(avaxNeeded, ap0.AtomicTxFee)
 		if err != nil {
 			return nil, errOverflowExport
 		}
-		avaxIns, avaxSigners, err = GetSpendableFunds(ctx, state, keys, ctx.AVAXAssetID, newAvaxNeeded)
+		avaxIns, avaxSigners, err = getSpendableFunds(ctx, state, keys, ctx.AVAXAssetID, newAvaxNeeded)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("couldn't generate tx inputs/signers: %w", err)
@@ -421,19 +330,19 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 				uint256.NewInt(X2CRate.Uint64()),
 			)
 			if state.GetBalance(from.Address).Cmp(amount) < 0 {
-				return errInsufficientFunds
+				return ErrInsufficientFunds
 			}
 			state.SubBalance(from.Address, amount)
 		} else {
 			log.Debug("export_tx", "dest", utx.DestinationChain, "addr", from.Address, "amount", from.Amount, "assetID", from.AssetID)
 			amount := new(big.Int).SetUint64(from.Amount)
 			if state.GetBalanceMultiCoin(from.Address, common.Hash(from.AssetID)).Cmp(amount) < 0 {
-				return errInsufficientFunds
+				return ErrInsufficientFunds
 			}
 			state.SubBalanceMultiCoin(from.Address, common.Hash(from.AssetID), amount)
 		}
 		if state.GetNonce(from.Address) != from.Nonce {
-			return errInvalidNonce
+			return ErrInvalidNonce
 		}
 		addrs[from.Address] = from.Nonce
 	}
@@ -443,12 +352,12 @@ func (utx *UnsignedExportTx) EVMStateTransfer(ctx *snow.Context, state StateDB) 
 	return nil
 }
 
-// GetSpendableFunds returns a list of EVMInputs and keys (in corresponding
+// getSpendableFunds returns a list of EVMInputs and keys (in corresponding
 // order) to total [amount] of [assetID] owned by [keys].
 // Note: we return [][]*secp256k1.PrivateKey even though each input
 // corresponds to a single key, so that the signers can be passed in to
 // [tx.Sign] which supports multiple keys on a single input.
-func GetSpendableFunds(
+func getSpendableFunds(
 	ctx *snow.Context,
 	state StateDB,
 	keys []*secp256k1.PrivateKey,
@@ -491,13 +400,13 @@ func GetSpendableFunds(
 	}
 
 	if amount > 0 {
-		return nil, nil, errInsufficientFunds
+		return nil, nil, ErrInsufficientFunds
 	}
 
 	return inputs, signers, nil
 }
 
-// GetSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
+// getSpendableAVAXWithFee returns a list of EVMInputs and keys (in corresponding
 // order) to total [amount] + [fee] of [AVAX] owned by [keys].
 // This function accounts for the added cost of the additional inputs needed to
 // create the transaction and makes sure to skip any keys with a balance that is
@@ -505,7 +414,7 @@ func GetSpendableFunds(
 // Note: we return [][]*secp256k1.PrivateKey even though each input
 // corresponds to a single key, so that the signers can be passed in to
 // [tx.Sign] which supports multiple keys on a single input.
-func GetSpendableAVAXWithFee(
+func getSpendableAVAXWithFee(
 	ctx *snow.Context,
 	state StateDB,
 	keys []*secp256k1.PrivateKey,
@@ -518,7 +427,7 @@ func GetSpendableAVAXWithFee(
 		return nil, nil, err
 	}
 
-	newAmount, err := math.Add64(amount, initialFee)
+	newAmount, err := math.Add(amount, initialFee)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -559,7 +468,7 @@ func GetSpendableAVAXWithFee(
 		// Update the cost for the next iteration
 		cost = newCost
 
-		newAmount, err := math.Add64(amount, additionalFee)
+		newAmount, err := math.Add(amount, additionalFee)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -585,7 +494,7 @@ func GetSpendableAVAXWithFee(
 	}
 
 	if amount > 0 {
-		return nil, nil, errInsufficientFunds
+		return nil, nil, ErrInsufficientFunds
 	}
 
 	return inputs, signers, nil

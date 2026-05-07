@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // Implements X-chain transfer tests.
@@ -47,9 +47,13 @@ var _ = e2e.DescribeXChainSerial("[Virtuous Transfer Tx AVAX]", func() {
 
 	ginkgo.It("can issue a virtuous transfer tx for AVAX asset",
 		func() {
-			env := e2e.GetEnv(tc)
-			rpcEps := make([]string, len(env.URIs))
-			for i, nodeURI := range env.URIs {
+			var (
+				env     = e2e.GetEnv(tc)
+				network = env.GetNetwork()
+				uris    = network.GetNodeURIs()
+				rpcEps  = make([]string, len(uris))
+			)
+			for i, nodeURI := range uris {
 				rpcEps[i] = nodeURI.URI
 			}
 
@@ -122,7 +126,6 @@ var _ = e2e.DescribeXChainSerial("[Virtuous Transfer Tx AVAX]", func() {
 
 				needPermute := round > 3
 				if needPermute {
-					rand.Seed(time.Now().UnixNano())
 					rand.Shuffle(len(testKeys), func(i, j int) {
 						testKeys[i], testKeys[j] = testKeys[j], testKeys[i]
 					})
@@ -163,13 +166,13 @@ var _ = e2e.DescribeXChainSerial("[Virtuous Transfer Tx AVAX]", func() {
 					}
 				}
 
-				testBalances := make([]uint64, 0)
+				testBalances := make([]uint64, len(wallets))
 				for i, w := range wallets {
 					balances, err := w.X().Builder().GetFTBalance()
 					require.NoError(err)
 
 					bal := balances[avaxAssetID]
-					testBalances = append(testBalances, bal)
+					testBalances[i] = bal
 
 					tc.Log().Info("balance in AVAX",
 						zap.Uint64("balance", bal),
@@ -301,6 +304,6 @@ var _ = e2e.DescribeXChainSerial("[Virtuous Transfer Tx AVAX]", func() {
 				runFunc(i)
 			}
 
-			_ = e2e.CheckBootstrapIsPossible(tc, env.GetNetwork())
+			_ = e2e.CheckBootstrapIsPossible(tc, network)
 		})
 })

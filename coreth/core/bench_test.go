@@ -1,4 +1,5 @@
-// (c) 2019-2021, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,14 +33,15 @@ import (
 	"testing"
 
 	"github.com/ava-labs/coreth/consensus/dummy"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/ethdb"
+	ethparams "github.com/ava-labs/libevm/params"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {
@@ -133,26 +135,26 @@ func init() {
 // and fills the blocks with many small transactions.
 func genTxRing(naccounts int) func(int, *BlockGen) {
 	from := 0
-	fee := big.NewInt(0).SetUint64(params.TxGas * 225000000000)
+	fee := big.NewInt(0).SetUint64(ethparams.TxGas * 225000000000)
 	amount := big.NewInt(0).Set(benchRootFunds)
 	return func(i int, gen *BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
 		signer := gen.Signer()
 		for {
-			gas -= params.TxGas
-			if gas < params.TxGas {
+			gas -= ethparams.TxGas
+			if gas < ethparams.TxGas {
 				break
 			}
 			to := (from + 1) % naccounts
-			burn := new(big.Int).SetUint64(params.TxGas)
+			burn := new(big.Int).SetUint64(ethparams.TxGas)
 			burn.Mul(burn, gen.header.BaseFee)
 			tx, err := types.SignNewTx(ringKeys[from], signer,
 				&types.LegacyTx{
 					Nonce:    gen.TxNonce(ringAddrs[from]),
 					To:       &ringAddrs[to],
 					Value:    amount.Sub(amount, fee),
-					Gas:      params.TxGas,
+					Gas:      ethparams.TxGas,
 					GasPrice: big.NewInt(225000000000),
 				})
 			if err != nil {
@@ -182,7 +184,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
 	gspec := &Genesis{
-		Config: params.TestFlareChainConfig,
+		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
 	}
 	_, chain, _, _ := GenerateChainWithGenesis(gspec, dummy.NewCoinbaseFaker(), b.N, 10, gen)
@@ -282,7 +284,7 @@ func makeChainForBench(db ethdb.Database, genesis *Genesis, full bool, count uin
 }
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
-	genesis := &Genesis{Config: params.TestFlareChainConfig}
+	genesis := &Genesis{Config: params.TestChainConfig}
 	for i := 0; i < b.N; i++ {
 		dir := b.TempDir()
 		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
@@ -301,7 +303,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
-	genesis := &Genesis{Config: params.TestFlareChainConfig}
+	genesis := &Genesis{Config: params.TestChainConfig}
 	makeChainForBench(db, genesis, full, count)
 	db.Close()
 

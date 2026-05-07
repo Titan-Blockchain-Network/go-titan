@@ -6,7 +6,7 @@ package core
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 // TestCountAttestationsEmpty checks that the CountAttestations function in state_connector.go

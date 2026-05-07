@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package p
@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/config"
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/network/peer"
@@ -29,14 +30,15 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
-	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/utils/set"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/components/avax"
 	"github.com/ava-labs/avalanchego/vms/example/xsvm/genesis"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp"
 	"github.com/ava-labs/avalanchego/vms/platformvm/warp/payload"
+	"github.com/ava-labs/avalanchego/vms/proposervm"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 
 	p2pmessage "github.com/ava-labs/avalanchego/message"
@@ -60,6 +62,8 @@ const (
 	expiryDelay = 5 * time.Minute
 	// P2P message requests timeout after 10 seconds
 	p2pTimeout = 10 * time.Second
+
+	timeToAdvancePChainWindow = 5 * platformvmvalidators.RecentlyAcceptedWindowTTL / 4
 )
 
 var _ = e2e.DescribePChain("[L1]", func() {
@@ -72,11 +76,13 @@ var _ = e2e.DescribePChain("[L1]", func() {
 
 		tc.By("loading the wallet")
 		var (
-			keychain   = env.NewKeychain()
-			baseWallet = e2e.NewWallet(tc, keychain, nodeURI)
-			pWallet    = baseWallet.P()
-			pClient    = platformvm.NewClient(nodeURI.URI)
-			owner      = &secp256k1fx.OutputOwners{
+			keychain       = env.NewKeychain()
+			baseWallet     = e2e.NewWallet(tc, keychain, nodeURI)
+			pWallet        = baseWallet.P()
+			pClient        = platformvm.NewClient(nodeURI.URI)
+			proposerClient = proposervm.NewJSONRPCClient(nodeURI.URI, "P")
+			infoClient     = info.NewClient(nodeURI.URI)
+			owner          = &secp256k1fx.OutputOwners{
 				Threshold: 1,
 				Addrs: []ids.ShortID{
 					keychain.Keys[0].Address(),
@@ -149,6 +155,20 @@ var _ = e2e.DescribePChain("[L1]", func() {
 			subnetValidators, err := pClient.GetValidatorsAt(tc.DefaultContext(), subnetID, platformapi.Height(height))
 			require.NoError(err)
 			require.Equal(expectedValidators, subnetValidators)
+
+			// Test GetAllValidatorsAt too, for coverage
+			flattenedExpectedValidators, err := snowvalidators.FlattenValidatorSet(expectedValidators) // for coverage
+			require.NoError(err)
+
+			// require.Equal will complain if one has a nil slice and the other
+			// has an empty slice. This avoids that issue.
+			if len(flattenedExpectedValidators.Validators) == 0 {
+				flattenedExpectedValidators.Validators = nil
+			}
+
+			allValidators, err := pClient.GetAllValidatorsAt(tc.DefaultContext(), platformapi.Height(height))
+			require.NoError(err)
+			require.Equal(flattenedExpectedValidators, allValidators[subnetID])
 		}
 		tc.By("verifying the Permissioned Subnet is configured as expected", func() {
 			tc.By("verifying the subnet reports as permissioned", func() {
@@ -172,9 +192,9 @@ var _ = e2e.DescribePChain("[L1]", func() {
 		})
 
 		tc.By("creating the genesis validator")
-		subnetGenesisNode := e2e.AddEphemeralNode(tc, env.GetNetwork(), tmpnet.FlagsMap{
+		subnetGenesisNode := e2e.AddEphemeralNode(tc, env.GetNetwork(), tmpnet.NewEphemeralNode(tmpnet.FlagsMap{
 			config.TrackSubnetsKey: subnetID.String(),
-		})
+		}))
 
 		genesisNodePoP, err := subnetGenesisNode.GetProofOfPossession()
 		require.NoError(err)
@@ -186,8 +206,10 @@ var _ = e2e.DescribePChain("[L1]", func() {
 		var (
 			networkID           = env.GetNetwork().GetNetworkID()
 			genesisPeerMessages = buffer.NewUnboundedBlockingDeque[p2pmessage.InboundMessage](1)
-			stakingAddress      = e2e.GetLocalStakingAddress(tc, subnetGenesisNode)
 		)
+		stakingAddress, cancel, err := subnetGenesisNode.GetAccessibleStakingAddress(tc.DefaultContext())
+		require.NoError(err)
+		tc.DeferCleanup(cancel)
 		genesisPeer, err := peer.StartTestPeer(
 			tc.DefaultContext(),
 			stakingAddress,
@@ -203,7 +225,7 @@ var _ = e2e.DescribePChain("[L1]", func() {
 		)
 		require.NoError(err)
 
-		subnetGenesisNodeURI := e2e.GetLocalURI(tc, subnetGenesisNode)
+		subnetGenesisNodeURI := subnetGenesisNode.GetAccessibleURI()
 
 		address := []byte{}
 		tc.By("issuing a ConvertSubnetToL1Tx", func() {
@@ -341,16 +363,71 @@ var _ = e2e.DescribePChain("[L1]", func() {
 		})
 
 		advanceProposerVMPChainHeight := func() {
-			// We must wait at least [RecentlyAcceptedWindowTTL] to ensure the
-			// next block will reference the last accepted P-chain height.
-			time.Sleep((5 * platformvmvalidators.RecentlyAcceptedWindowTTL) / 4)
+			upgrades, err := infoClient.Upgrades(tc.DefaultContext())
+			require.NoError(err)
+
+			if !upgrades.IsGraniteActivated(time.Now()) {
+				// Wait to ensure the next block will reference the last
+				// accepted P-chain height.
+				time.Sleep(timeToAdvancePChainWindow)
+				return
+			}
+
+			epochBefore, err := proposerClient.GetCurrentEpoch(tc.DefaultContext())
+			require.NoError(err)
+
+			tc.By("waiting", func() {
+				timeToAdvanceEpoch := max(timeToAdvancePChainWindow, upgrades.GraniteEpochDuration)
+				time.Sleep(timeToAdvanceEpoch)
+			})
+
+			tc.By("issuing a dummy tx to advance the epoch", func() {
+				tx, err := pWallet.IssueBaseTx(
+					[]*avax.TransferableOutput{
+						{
+							Asset: avax.Asset{ID: pWallet.Builder().Context().AVAXAssetID},
+							Out: &secp256k1fx.TransferOutput{
+								Amt: 100 * units.MicroAvax,
+								OutputOwners: secp256k1fx.OutputOwners{
+									Threshold: 1,
+									Addrs: []ids.ShortID{
+										ids.GenerateTestShortID(),
+									},
+								},
+							},
+						},
+					},
+					tc.WithDefaultContext(),
+				)
+				require.NoError(err)
+
+				tc.By("ensuring the genesis peer has accepted the tx at "+subnetGenesisNodeURI, func() {
+					var (
+						client = platformvm.NewClient(subnetGenesisNodeURI)
+						txID   = tx.ID()
+					)
+					tc.Eventually(
+						func() bool {
+							_, err := client.GetTx(tc.DefaultContext(), txID)
+							return err == nil
+						},
+						tests.DefaultTimeout,
+						e2e.DefaultPollingInterval,
+						"transaction not accepted",
+					)
+				})
+			})
+
+			epochAfter, err := proposerClient.GetCurrentEpoch(tc.DefaultContext())
+			require.NoError(err)
+			require.Greater(epochAfter.PChainHeight, epochBefore.PChainHeight)
 		}
 		tc.By("advancing the proposervm P-chain height", advanceProposerVMPChainHeight)
 
 		tc.By("creating the validator to register")
-		subnetRegisterNode := e2e.AddEphemeralNode(tc, env.GetNetwork(), tmpnet.FlagsMap{
+		subnetRegisterNode := e2e.AddEphemeralNode(tc, env.GetNetwork(), tmpnet.NewEphemeralNode(tmpnet.FlagsMap{
 			config.TrackSubnetsKey: subnetID.String(),
-		})
+		}))
 
 		registerNodePoP, err := subnetRegisterNode.GetProofOfPossession()
 		require.NoError(err)
@@ -771,7 +848,6 @@ func wrapWarpSignatureRequest(
 	justification []byte,
 ) (p2pmessage.OutboundMessage, error) {
 	p2pMessageFactory, err := p2pmessage.NewCreator(
-		logging.NoLog{},
 		prometheus.NewRegistry(),
 		constants.DefaultNetworkCompressionType,
 		p2pTimeout,

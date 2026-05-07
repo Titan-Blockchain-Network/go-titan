@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package proposervm
@@ -7,13 +7,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"connectrpc.com/grpcreflect"
+	"github.com/gorilla/rpc/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
+	"github.com/ava-labs/avalanchego/api/server"
 	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/cache/metercacher"
+	"github.com/ava-labs/avalanchego/connectproto/pb/proposervm/proposervmconnect"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
 	"github.com/ava-labs/avalanchego/database/versiondb"
@@ -23,18 +29,23 @@ import (
 	"github.com/ava-labs/avalanchego/snow/engine/common"
 	"github.com/ava-labs/avalanchego/snow/engine/snowman/block"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/avalanchego/utils/math"
+	"github.com/ava-labs/avalanchego/utils/metric"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
+	"github.com/ava-labs/avalanchego/utils/tree"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/proposervm/acp181"
 	"github.com/ava-labs/avalanchego/vms/proposervm/proposer"
-	"github.com/ava-labs/avalanchego/vms/proposervm/scheduler"
 	"github.com/ava-labs/avalanchego/vms/proposervm/state"
-	"github.com/ava-labs/avalanchego/vms/proposervm/tree"
 
 	statelessblock "github.com/ava-labs/avalanchego/vms/proposervm/block"
 )
 
 const (
+	httpPathEndpoint = "/proposervm"
+	HTTPHeaderRoute  = "proposervm"
+
 	// DefaultMinBlockDelay should be kept as whole seconds because block
 	// timestamps are only specific to the second.
 	DefaultMinBlockDelay = time.Second
@@ -42,8 +53,7 @@ const (
 	// blocks.
 	DefaultNumHistoricalBlocks uint64 = 0
 
-	checkIndexedFrequency = 10 * time.Second
-	innerBlkCacheSize     = 64 * units.MiB
+	innerBlkCacheSize = 64 * units.MiB
 )
 
 var (
@@ -61,20 +71,19 @@ func cachedBlockSize(_ ids.ID, blk snowman.Block) int {
 type VM struct {
 	block.ChainVM
 	Config
-	blockBuilderVM block.BuildBlockWithContextChainVM
-	batchedVM      block.BatchedChainVM
-	ssVM           block.StateSyncableVM
+	blockBuilderVM  block.BuildBlockWithContextChainVM
+	setPreferenceVM block.SetPreferenceWithContextChainVM
+	batchedVM       block.BatchedChainVM
+	ssVM            block.StateSyncableVM
 
 	state.State
 
 	proposer.Windower
 	tree.Tree
-	scheduler.Scheduler
 	mockable.Clock
 
-	ctx         *snow.Context
-	db          *versiondb.Database
-	toScheduler chan<- common.Message
+	ctx *snow.Context
+	db  *versiondb.Database
 
 	// Block ID --> Block
 	// Each element is a block that passed verification but
@@ -87,8 +96,6 @@ type VM struct {
 	innerBlkCache  cache.Cacher[ids.ID, snowman.Block]
 	preferred      ids.ID
 	consensusState snow.State
-	context        context.Context
-	onShutdown     func()
 
 	// lastAcceptedTime is set to the last accepted PostForkBlock's timestamp
 	// if the last accepted block has been a PostForkOption block since having
@@ -118,14 +125,16 @@ func New(
 	config Config,
 ) *VM {
 	blockBuilderVM, _ := vm.(block.BuildBlockWithContextChainVM)
+	setPreferenceVM, _ := vm.(block.SetPreferenceWithContextChainVM)
 	batchedVM, _ := vm.(block.BatchedChainVM)
 	ssVM, _ := vm.(block.StateSyncableVM)
 	return &VM{
-		ChainVM:        vm,
-		Config:         config,
-		blockBuilderVM: blockBuilderVM,
-		batchedVM:      batchedVM,
-		ssVM:           ssVM,
+		ChainVM:         vm,
+		Config:          config,
+		blockBuilderVM:  blockBuilderVM,
+		setPreferenceVM: setPreferenceVM,
+		batchedVM:       batchedVM,
+		ssVM:            ssVM,
 	}
 }
 
@@ -136,7 +145,6 @@ func (vm *VM) Initialize(
 	genesisBytes []byte,
 	upgradeBytes []byte,
 	configBytes []byte,
-	toEngine chan<- common.Message,
 	fxs []*common.Fx,
 	appSender common.AppSender,
 ) error {
@@ -152,29 +160,14 @@ func (vm *VM) Initialize(
 	innerBlkCache, err := metercacher.New(
 		"inner_block_cache",
 		vm.Config.Registerer,
-		cache.NewSizedLRU(
-			innerBlkCacheSize,
-			cachedBlockSize,
-		),
+		lru.NewSizedCache(innerBlkCacheSize, cachedBlockSize),
 	)
 	if err != nil {
 		return err
 	}
 	vm.innerBlkCache = innerBlkCache
 
-	scheduler, vmToEngine := scheduler.New(vm.ctx.Log, toEngine)
-	vm.Scheduler = scheduler
-	vm.toScheduler = vmToEngine
-
-	go chainCtx.Log.RecoverAndPanic(func() {
-		scheduler.Dispatch(time.Now())
-	})
-
 	vm.verifiedBlocks = make(map[ids.ID]PostForkBlock)
-	detachedCtx := context.WithoutCancel(ctx)
-	context, cancel := context.WithCancel(detachedCtx)
-	vm.context = context
-	vm.onShutdown = cancel
 
 	err = vm.ChainVM.Initialize(
 		ctx,
@@ -183,7 +176,6 @@ func (vm *VM) Initialize(
 		genesisBytes,
 		upgradeBytes,
 		configBytes,
-		vmToEngine,
 		fxs,
 		appSender,
 	)
@@ -192,15 +184,15 @@ func (vm *VM) Initialize(
 	}
 
 	if err := vm.repairAcceptedChainByHeight(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to repair accepted chain by height: %w", err)
 	}
 
 	if err := vm.setLastAcceptedMetadata(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to set last accepted metadata: %w", err)
 	}
 
 	if err := vm.pruneOldBlocks(); err != nil {
-		return err
+		return fmt.Errorf("failed to prune old blocks: %w", err)
 	}
 
 	forkHeight, err := vm.GetForkHeight()
@@ -216,7 +208,7 @@ func (vm *VM) Initialize(
 			zap.String("state", "before fork"),
 		)
 	default:
-		return err
+		return fmt.Errorf("failed to get fork height: %w", err)
 	}
 
 	vm.proposerBuildSlotGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -250,16 +242,72 @@ func (vm *VM) Initialize(
 	)
 }
 
-// shutdown ops then propagate shutdown to innerVM
+// Shutdown ops then propagate shutdown to innerVM
 func (vm *VM) Shutdown(ctx context.Context) error {
-	vm.onShutdown()
-
-	vm.Scheduler.Close()
-
 	if err := vm.db.Commit(); err != nil {
 		return err
 	}
 	return vm.ChainVM.Shutdown(ctx)
+}
+
+func (vm *VM) CreateHandlers(ctx context.Context) (map[string]http.Handler, error) {
+	handlers, err := vm.ChainVM.CreateHandlers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create inner VM handlers: %w", err)
+	}
+
+	metrics, err := metric.NewAPIInterceptor(vm.Config.Registerer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize metrics: %w", err)
+	}
+
+	server := rpc.NewServer()
+	server.RegisterCodec(json.NewCodec(), "application/json")
+	server.RegisterCodec(json.NewCodec(), "application/json;charset=UTF-8")
+	server.RegisterInterceptFunc(metrics.InterceptRequest)
+	server.RegisterAfterFunc(metrics.AfterRequest)
+	err = server.RegisterService(&jsonrpcService{vm: vm}, "proposervm")
+	if err != nil {
+		return nil, fmt.Errorf("failed to register proposervm service: %w", err)
+	}
+
+	if handlers == nil {
+		handlers = make(map[string]http.Handler)
+	}
+	handlers[httpPathEndpoint] = server
+	return handlers, nil
+}
+
+func (vm *VM) NewHTTPHandler(ctx context.Context) (http.Handler, error) {
+	innerHandler, err := vm.ChainVM.NewHTTPHandler(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	proposerMux := http.NewServeMux()
+	proposerMux.Handle(proposervmconnect.NewProposerVMHandler(
+		&connectrpcService{vm: vm},
+	))
+	proposerMux.Handle(grpcreflect.NewHandlerV1(
+		grpcreflect.NewStaticReflector(proposervmconnect.ProposerVMName),
+	))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		route := r.Header[server.HTTPHeaderRoute]
+		vm.ctx.Log.Debug("routing request",
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Strings("header", route),
+		)
+		switch {
+		case len(route) < 2 && innerHandler != nil:
+			innerHandler.ServeHTTP(w, r)
+		case len(route) == 2 && route[1] == HTTPHeaderRoute:
+			proposerMux.ServeHTTP(w, r)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}), nil
 }
 
 func (vm *VM) SetState(ctx context.Context, newState snow.State) error {
@@ -278,7 +326,7 @@ func (vm *VM) SetState(ctx context.Context, newState snow.State) error {
 	// accepted block. If state sync has completed successfully, this call is a
 	// no-op.
 	if err := vm.repairAcceptedChainByHeight(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to repair accepted chain height: %w", err)
 	}
 	return vm.setLastAcceptedMetadata(ctx)
 }
@@ -326,13 +374,127 @@ func (vm *VM) SetPreference(ctx context.Context, preferred ids.ID) error {
 		return vm.ChainVM.SetPreference(ctx, preferred)
 	}
 
-	if err := vm.ChainVM.SetPreference(ctx, blk.getInnerBlk().ID()); err != nil {
+	preferredEpoch, err := blk.pChainEpoch(ctx)
+	if err != nil {
 		return err
+	}
+
+	innerBlkID := blk.getInnerBlk().ID()
+
+	// If the inner VM implements SetPreferenceWithContext, use it to set the
+	// preference with the P-Chain height to be used to verify a child of the
+	// preferred block.
+	if vm.setPreferenceVM != nil && preferredEpoch != (statelessblock.Epoch{}) {
+		// The P-Chain height used to verify a child of the preferred block will
+		// potentially be different than the P-Chain height used to verify the
+		// preferred block if the preferred block seals the current epoch.
+		preferredPChainHeight, err := blk.pChainHeight(ctx)
+		if err != nil {
+			return err
+		}
+
+		// The exact child timestamp doesn't matter here because we know Granite
+		// is already activated.
+		timestamp := blk.Timestamp()
+		nextEpoch := acp181.NewEpoch(
+			vm.Upgrades,
+			preferredPChainHeight,
+			preferredEpoch,
+			timestamp,
+			timestamp,
+		)
+		nextPChainHeight := nextEpoch.PChainHeight
+
+		if err := vm.setPreferenceVM.SetPreferenceWithContext(ctx, innerBlkID, &block.Context{
+			PChainHeight: nextPChainHeight,
+		}); err != nil {
+			return err
+		}
+
+		vm.ctx.Log.Debug("set preference with context",
+			zap.Stringer("blkID", preferred),
+			zap.Stringer("innerBlkID", innerBlkID),
+			zap.Uint64("pChainHeight", nextPChainHeight),
+		)
+		return nil
+	}
+
+	if err := vm.ChainVM.SetPreference(ctx, innerBlkID); err != nil {
+		return err
+	}
+
+	vm.ctx.Log.Debug("set preference",
+		zap.Stringer("blkID", preferred),
+		zap.Stringer("innerBlkID", innerBlkID),
+	)
+	return nil
+}
+
+func (vm *VM) WaitForEvent(ctx context.Context) (common.Message, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			vm.ctx.Log.Debug("Aborting WaitForEvent, context is done", zap.Error(err))
+			return 0, err
+		}
+
+		timeToBuild, shouldWait, err := vm.timeToBuild(ctx)
+		if err != nil {
+			vm.ctx.Log.Debug("Aborting WaitForEvent", zap.Error(err))
+			return 0, err
+		}
+
+		// If we are pre-fork or haven't finished bootstrapping yet, we should
+		// directly forward the inner VM's events.
+		if !shouldWait {
+			vm.ctx.Log.Debug("Waiting for inner VM event (pre-fork or before normal operation)")
+			return vm.ChainVM.WaitForEvent(ctx)
+		}
+
+		duration := time.Until(timeToBuild)
+		if duration <= 0 {
+			vm.ctx.Log.Debug("Can build a block without waiting")
+			return vm.ChainVM.WaitForEvent(ctx)
+		}
+
+		vm.ctx.Log.Debug("Waiting until we should build a block", zap.Duration("duration", duration))
+
+		// Wait until it is our turn to build a block.
+		select {
+		case <-ctx.Done():
+		case <-time.After(duration):
+			// We should not call ChainVM.WaitForEvent here as it is possible
+			// that timeToBuild was capped less than the actual time for us to
+			// build a block. If it is actually our turn to build, timeToBuild
+			// will be <= 0 in the next iteration.
+		}
+	}
+}
+
+func (vm *VM) timeToBuild(ctx context.Context) (time.Time, bool, error) {
+	vm.ctx.Lock.Lock()
+	defer vm.ctx.Lock.Unlock()
+
+	// Block building is only supported if the consensus state is normal
+	// operations and the vm is not state syncing.
+	//
+	// TODO: Correctly handle dynamic state sync here. When the innerVM is
+	// dynamically state syncing, we should return here as well.
+	if vm.consensusState != snow.NormalOp {
+		return time.Time{}, false, nil
+	}
+
+	// Because the VM in marked as being in the [snow.NormalOp] state, we know
+	// that [VM.SetPreference] must have already been called.
+	blk, err := vm.getPostForkBlock(ctx, vm.preferred)
+	// If the preferred block is pre-fork, we should wait for events on the
+	// innerVM.
+	if err != nil {
+		return time.Time{}, false, nil
 	}
 
 	pChainHeight, err := blk.pChainHeight(ctx)
 	if err != nil {
-		return err
+		return time.Time{}, false, err
 	}
 
 	var (
@@ -368,16 +530,10 @@ func (vm *VM) SetPreference(ctx context.Context, preferred ids.ID) error {
 		// bootstrapping caused the last accepted block to move past the latest
 		// P-chain height. This will cause building blocks to return an error
 		// until the P-chain's height has advanced.
-		return nil
+		return time.Time{}, false, nil
 	}
-	vm.Scheduler.SetBuildBlockTime(nextStartTime)
 
-	vm.ctx.Log.Debug("set preference",
-		zap.Stringer("blkID", blk.ID()),
-		zap.Time("blockTimestamp", parentTimestamp),
-		zap.Time("nextStartTime", nextStartTime),
-	)
-	return nil
+	return nextStartTime, true, nil
 }
 
 func (vm *VM) getPreDurangoSlotTime(
@@ -443,11 +599,11 @@ func (vm *VM) LastAccepted(ctx context.Context) (ids.ID, error) {
 func (vm *VM) repairAcceptedChainByHeight(ctx context.Context) error {
 	innerLastAcceptedID, err := vm.ChainVM.LastAccepted(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get inner last accepted: %w", err)
 	}
 	innerLastAccepted, err := vm.ChainVM.GetBlock(ctx, innerLastAcceptedID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get inner last accepted block: %w", err)
 	}
 	proLastAcceptedID, err := vm.State.GetLastAccepted()
 	if err == database.ErrNotFound {
@@ -456,11 +612,11 @@ func (vm *VM) repairAcceptedChainByHeight(ctx context.Context) error {
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get last accepted: %w", err)
 	}
 	proLastAccepted, err := vm.getPostForkBlock(ctx, proLastAcceptedID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get last accepted block: %w", err)
 	}
 
 	proLastAcceptedHeight := proLastAccepted.Height()
@@ -482,14 +638,14 @@ func (vm *VM) repairAcceptedChainByHeight(ctx context.Context) error {
 	// proposervm back.
 	forkHeight, err := vm.State.GetForkHeight()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get fork height: %w", err)
 	}
 
 	if forkHeight > innerLastAcceptedHeight {
 		// We are rolling back past the fork, so we should just forget about all
 		// of our proposervm indices.
 		if err := vm.State.DeleteLastAccepted(); err != nil {
-			return err
+			return fmt.Errorf("failed to delete last accepted: %w", err)
 		}
 		return vm.db.Commit()
 	}
@@ -503,9 +659,14 @@ func (vm *VM) repairAcceptedChainByHeight(ctx context.Context) error {
 	}
 
 	if err := vm.State.SetLastAccepted(newProLastAcceptedID); err != nil {
-		return err
+		return fmt.Errorf("failed to set last accepted: %w", err)
 	}
-	return vm.db.Commit()
+
+	if err := vm.db.Commit(); err != nil {
+		return fmt.Errorf("failed to commit db: %w", err)
+	}
+
+	return nil
 }
 
 func (vm *VM) setLastAcceptedMetadata(ctx context.Context) error {
@@ -713,16 +874,6 @@ func (vm *VM) verifyAndRecordInnerBlk(ctx context.Context, blockCtx *block.Conte
 	}
 	vm.verifiedBlocks[postForkID] = postFork
 	return nil
-}
-
-// notifyInnerBlockReady tells the scheduler that the inner VM is ready to build
-// a new block
-func (vm *VM) notifyInnerBlockReady() {
-	select {
-	case vm.toScheduler <- common.PendingTxs:
-	default:
-		vm.ctx.Log.Debug("dropping message to consensus engine")
-	}
 }
 
 // fujiOverridePChainHeightUntilHeight is the P-chain height at which the

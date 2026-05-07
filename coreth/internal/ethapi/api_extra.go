@@ -1,4 +1,4 @@
-// (c) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package ethapi
@@ -8,24 +8,25 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/rlp"
+
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/rlp"
 )
-
-// GetChainConfig returns the chain config.
-func (api *BlockChainAPI) GetChainConfig(ctx context.Context) *params.ChainConfig {
-	return api.b.ChainConfig()
-}
 
 type DetailedExecutionResult struct {
 	UsedGas    uint64        `json:"gas"`        // Total used gas but include the refunded gas
 	ErrCode    int           `json:"errCode"`    // EVM error code
 	Err        string        `json:"err"`        // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData hexutil.Bytes `json:"returnData"` // Data from evm(function result or data supplied with revert opcode)
+}
+
+// GetChainConfig returns the chain config.
+func (api *BlockChainAPI) GetChainConfig(context.Context) *params.ChainConfig {
+	return api.b.ChainConfig()
 }
 
 // CallDetailed performs the same call as Call, but returns the full context
@@ -68,7 +69,7 @@ type BadBlockArgs struct {
 
 // GetBadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block hashes.
-func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, error) {
+func (s *BlockChainAPI) GetBadBlocks(context.Context) ([]*BadBlockArgs, error) {
 	var (
 		badBlocks, reasons = s.b.BadBlocks()
 		results            = make([]*BadBlockArgs, 0, len(badBlocks))
@@ -101,12 +102,9 @@ func (s *BlockChainAPI) GetBadBlocks(ctx context.Context) ([]*BadBlockArgs, erro
 //
 // Otherwise, it returns a non-nil error containing block number information.
 func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNumberOrHash) (err error) {
-	queryWindow := uint64(core.TipBufferSize)
-	if s.b.IsArchive() {
-		queryWindow = s.b.HistoricalProofQueryWindow()
-		if queryWindow == 0 {
-			return nil
-		}
+	queryWindow := s.b.HistoricalProofQueryWindow()
+	if s.b.IsArchive() && queryWindow == 0 {
+		return nil
 	}
 
 	lastAcceptedNumber := s.b.LastAcceptedBlock().NumberU64()
@@ -117,7 +115,7 @@ func (s *BlockChainAPI) stateQueryBlockNumberAllowed(blockNumOrHash rpc.BlockNum
 	} else if blockHash, ok := blockNumOrHash.Hash(); ok {
 		block, err := s.b.BlockByHash(context.Background(), blockHash)
 		if err != nil {
-			return fmt.Errorf("failed to get block from hash: %s", err)
+			return fmt.Errorf("failed to get block from hash: %w", err)
 		} else if block == nil {
 			return fmt.Errorf("block from hash %s doesn't exist", blockHash)
 		}

@@ -1,4 +1,4 @@
-// (c) 2021-2022, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package handlers
@@ -6,23 +6,34 @@ package handlers
 import (
 	"context"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/rlp"
+	"github.com/ava-labs/libevm/triedb"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ava-labs/coreth/consensus/dummy"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/params"
+	"github.com/ava-labs/coreth/plugin/evm/customtypes"
 	"github.com/ava-labs/coreth/plugin/evm/message"
 	"github.com/ava-labs/coreth/sync/handlers/stats"
-	"github.com/ava-labs/coreth/triedb"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/assert"
+	"github.com/ava-labs/coreth/sync/handlers/stats/statstest"
 )
+
+func TestMain(m *testing.M) {
+	customtypes.Register()
+	params.RegisterExtras()
+	os.Exit(m.Run())
+}
 
 type blockRequestTest struct {
 	name string
@@ -35,11 +46,11 @@ type blockRequestTest struct {
 	requestedParents  uint16
 	expectedBlocks    int
 	expectNilResponse bool
-	assertResponse    func(t testing.TB, stats *stats.MockHandlerStats, b []byte)
+	assertResponse    func(t testing.TB, stats *statstest.TestHandlerStats, b []byte)
 }
 
 func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*types.Block) {
-	mockHandlerStats := &stats.MockHandlerStats{}
+	testHandlerStats := &statstest.TestHandlerStats{}
 
 	// convert into map
 	blocksDB := make(map[common.Hash]*types.Block, len(blocks))
@@ -55,7 +66,7 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 			return blk
 		},
 	}
-	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, mockHandlerStats)
+	blockRequestHandler := NewBlockRequestHandler(blockProvider, message.Codec, testHandlerStats)
 
 	var blockRequest message.BlockRequest
 	if test.startBlockHash != (common.Hash{}) {
@@ -68,12 +79,10 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 	}
 	blockRequest.Parents = test.requestedParents
 
-	responseBytes, err := blockRequestHandler.OnBlockRequest(context.Background(), ids.GenerateTestNodeID(), 1, blockRequest)
-	if err != nil {
-		t.Fatal("unexpected error during block request", err)
-	}
+	responseBytes, err := blockRequestHandler.OnBlockRequest(t.Context(), ids.GenerateTestNodeID(), 1, blockRequest)
+	require.NoError(t, err)
 	if test.assertResponse != nil {
-		test.assertResponse(t, mockHandlerStats, responseBytes)
+		test.assertResponse(t, testHandlerStats, responseBytes)
 	}
 
 	if test.expectNilResponse {
@@ -84,35 +93,30 @@ func executeBlockRequestTest(t testing.TB, test blockRequestTest, blocks []*type
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
-		t.Fatal("error unmarshalling", err)
-	}
+	_, err = message.Codec.Unmarshal(responseBytes, &response)
+	require.NoError(t, err)
 	assert.Len(t, response.Blocks, test.expectedBlocks)
 
 	for _, blockBytes := range response.Blocks {
 		block := new(types.Block)
-		if err := rlp.DecodeBytes(blockBytes, block); err != nil {
-			t.Fatal("could not parse block", err)
-		}
+		require.NoError(t, rlp.DecodeBytes(blockBytes, block))
 		assert.GreaterOrEqual(t, test.startBlockIndex, 0)
 		assert.Equal(t, blocks[test.startBlockIndex].Hash(), block.Hash())
 		test.startBlockIndex--
 	}
-	mockHandlerStats.Reset()
+	testHandlerStats.Reset()
 }
 
 func TestBlockRequestHandler(t *testing.T) {
 	gspec := &core.Genesis{
-		Config: params.TestFlareChainConfig,
+		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestFlareChainConfig, genesis, engine, memdb, 96, 0, func(i int, b *core.BlockGen) {})
-	if err != nil {
-		t.Fatal("unexpected error when generating test blockchain", err)
-	}
+	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 96, 0, func(_ int, _ *core.BlockGen) {})
+	require.NoError(t, err)
 	assert.Len(t, blocks, 96)
 
 	tests := []blockRequestTest{
@@ -140,13 +144,14 @@ func TestBlockRequestHandler(t *testing.T) {
 			startBlockHeight:  1_000_000,
 			requestedParents:  64,
 			expectNilResponse: true,
-			assertResponse: func(t testing.TB, mockHandlerStats *stats.MockHandlerStats, _ []byte) {
-				assert.Equal(t, uint32(1), mockHandlerStats.MissingBlockHashCount)
+			assertResponse: func(t testing.TB, testHandlerStats *statstest.TestHandlerStats, _ []byte) {
+				assert.Equal(t, uint32(1), testHandlerStats.MissingBlockHashCount)
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			executeBlockRequestTest(t, test, blocks)
 		})
 	}
@@ -176,14 +181,10 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 			data = make([]byte, units.MiB/16)
 		}
 		tx, err := types.SignTx(types.NewTransaction(b.TxNonce(addr1), addr1, big.NewInt(10000), 4_215_304, nil, data), signer, key1)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		b.AddTx(tx)
 	})
-	if err != nil {
-		t.Fatal("unexpected error when generating test blockchain", err)
-	}
+	require.NoError(t, err)
 	assert.Len(t, blocks, 96)
 
 	tests := []blockRequestTest{
@@ -208,23 +209,23 @@ func TestBlockRequestHandlerLargeBlocks(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			executeBlockRequestTest(t, test, blocks)
 		})
 	}
 }
 
 func TestBlockRequestHandlerCtxExpires(t *testing.T) {
+	t.Parallel()
 	gspec := &core.Genesis{
-		Config: params.TestFlareChainConfig,
+		Config: params.TestChainConfig,
 	}
 	memdb := rawdb.NewMemoryDatabase()
 	tdb := triedb.NewDatabase(memdb, nil)
 	genesis := gspec.MustCommit(memdb, tdb)
 	engine := dummy.NewETHFaker()
-	blocks, _, err := core.GenerateChain(params.TestFlareChainConfig, genesis, engine, memdb, 11, 0, func(i int, b *core.BlockGen) {})
-	if err != nil {
-		t.Fatal("unexpected error when generating test blockchain", err)
-	}
+	blocks, _, err := core.GenerateChain(params.TestChainConfig, genesis, engine, memdb, 11, 0, func(_ int, _ *core.BlockGen) {})
+	require.NoError(t, err)
 
 	assert.Len(t, blocks, 11)
 
@@ -235,7 +236,7 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 	}
 
 	cancelAfterNumRequests := 2
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	blockRequestCallCount := 0
 	blockProvider := &TestBlockProvider{
@@ -259,23 +260,18 @@ func TestBlockRequestHandlerCtxExpires(t *testing.T) {
 		Height:  blocks[10].NumberU64(),
 		Parents: uint16(8),
 	})
-	if err != nil {
-		t.Fatal("unexpected error from BlockRequestHandler", err)
-	}
+	require.NoError(t, err)
 	assert.NotEmpty(t, responseBytes)
 
 	var response message.BlockResponse
-	if _, err = message.Codec.Unmarshal(responseBytes, &response); err != nil {
-		t.Fatal("error unmarshalling", err)
-	}
+	_, err = message.Codec.Unmarshal(responseBytes, &response)
+	require.NoError(t, err)
 	// requested 8 blocks, received cancelAfterNumRequests because of timeout
 	assert.Len(t, response.Blocks, cancelAfterNumRequests)
 
 	for i, blockBytes := range response.Blocks {
 		block := new(types.Block)
-		if err := rlp.DecodeBytes(blockBytes, block); err != nil {
-			t.Fatal("could not parse block", err)
-		}
+		require.NoError(t, rlp.DecodeBytes(blockBytes, block))
 		assert.Equal(t, blocks[len(blocks)-i-1].Hash(), block.Hash())
 	}
 }

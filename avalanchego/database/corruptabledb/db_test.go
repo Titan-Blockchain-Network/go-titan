@@ -1,10 +1,9 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package corruptabledb
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -15,13 +14,14 @@ import (
 	"github.com/ava-labs/avalanchego/database/databasemock"
 	"github.com/ava-labs/avalanchego/database/dbtest"
 	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/utils/logging"
 )
 
 var errTest = errors.New("non-nil error")
 
 func newDB() *Database {
 	baseDB := memdb.New()
-	return New(baseDB)
+	return New(baseDB, logging.NoLog{})
 }
 
 func TestInterface(t *testing.T) {
@@ -72,7 +72,7 @@ func TestCorruption(t *testing.T) {
 			return corruptableBatch.Write()
 		},
 		"corrupted healthcheck": func(db database.Database) error {
-			_, err := db.HealthCheck(context.Background())
+			_, err := db.HealthCheck(t.Context())
 			return err
 		},
 	}

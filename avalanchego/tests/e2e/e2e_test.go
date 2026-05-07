@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package e2e_test
@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/ava-labs/coreth/plugin/evm"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -28,13 +30,14 @@ import (
 )
 
 func TestE2E(t *testing.T) {
+	evm.RegisterAllLibEVMExtras()
 	ginkgo.RunSpecs(t, "e2e test suites")
 }
 
 var flagVars *e2e.FlagVars
 
 func init() {
-	flagVars = e2e.RegisterFlags()
+	flagVars = e2e.RegisterFlags(e2e.WithDefaultOwner("avalanchego-e2e"))
 }
 
 var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
@@ -42,14 +45,17 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 
 	tc := e2e.NewEventHandlerTestContext()
 
-	nodes := tmpnet.NewNodesOrPanic(flagVars.NodeCount())
+	nodeCount, err := flagVars.NodeCount()
+	require.NoError(tc, err)
+	nodes := tmpnet.NewNodesOrPanic(nodeCount)
 	subnets := vms.XSVMSubnetsOrPanic(nodes...)
 
 	upgrades := upgrade.Default
-	if flagVars.ActivateFortuna() {
-		upgrades.FortunaTime = upgrade.InitiallyActiveTime
+	if flagVars.ActivateGranite() {
+		upgrades.GraniteTime = upgrade.InitiallyActiveTime
+		upgrades.GraniteEpochDuration = 4 * time.Second
 	} else {
-		upgrades.FortunaTime = upgrade.UnscheduledActivationTime
+		upgrades.GraniteTime = upgrade.UnscheduledActivationTime
 	}
 	tc.Log().Info("setting upgrades",
 		zap.Reflect("upgrades", upgrades),
@@ -59,21 +65,27 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	require.NoError(tc, err)
 
 	upgradeBase64 := base64.StdEncoding.EncodeToString(upgradeJSON)
+
+	defaultFlags := tmpnet.FlagsMap{
+		config.UpgradeFileContentKey: upgradeBase64,
+		// Ensure a min stake duration compatible with testing staking logic
+		config.MinStakeDurationKey: "1s",
+	}
+	defaultFlags.SetDefaults(tmpnet.DefaultE2EFlags())
+
 	return e2e.NewTestEnvironment(
 		tc,
 		flagVars,
 		&tmpnet.Network{
-			Owner: "avalanchego-e2e",
-			DefaultFlags: tmpnet.FlagsMap{
-				config.UpgradeFileContentKey: upgradeBase64,
-			},
-			Nodes:   nodes,
-			Subnets: subnets,
+			Owner:        flagVars.NetworkOwner(),
+			DefaultFlags: defaultFlags,
+			Nodes:        nodes,
+			Subnets:      subnets,
 		},
 	).Marshal()
 }, func(envBytes []byte) {
 	// Run in every ginkgo process
 
 	// Initialize the local test environment from the global state
-	e2e.InitSharedTestEnvironment(ginkgo.GinkgoT(), envBytes)
+	e2e.InitSharedTestEnvironment(e2e.NewTestContext(), envBytes)
 })

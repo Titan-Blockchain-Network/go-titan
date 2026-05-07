@@ -1,10 +1,9 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package platformvm
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,7 +18,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/ava-labs/avalanchego/api"
-	"github.com/ava-labs/avalanchego/cache"
+	"github.com/ava-labs/avalanchego/cache/lru"
 	"github.com/ava-labs/avalanchego/chains/atomic"
 	"github.com/ava-labs/avalanchego/database"
 	"github.com/ava-labs/avalanchego/database/prefixdb"
@@ -66,11 +65,9 @@ var encodings = []formatting.Encoding{
 func defaultService(t *testing.T) (*Service, *mutableSharedMemory) {
 	vm, _, mutableSharedMemory := defaultVM(t, upgradetest.Latest)
 	return &Service{
-		vm:          vm,
-		addrManager: avax.NewAddressManager(vm.ctx),
-		stakerAttributesCache: &cache.LRU[ids.ID, *stakerAttributes]{
-			Size: stakerAttributesCacheSize,
-		},
+		vm:                    vm,
+		addrManager:           avax.NewAddressManager(vm.ctx),
+		stakerAttributesCache: lru.NewCache[ids.ID, *stakerAttributes](stakerAttributesCacheSize),
 	}, mutableSharedMemory
 }
 
@@ -81,7 +78,7 @@ func TestGetProposedHeight(t *testing.T) {
 	reply := api.GetHeightResponse{}
 	require.NoError(service.GetProposedHeight(&http.Request{}, nil, &reply))
 
-	minHeight, err := service.vm.GetMinimumHeight(context.Background())
+	minHeight, err := service.vm.GetMinimumHeight(t.Context())
 	require.NoError(err)
 	require.Equal(minHeight, uint64(reply.Height))
 
@@ -111,13 +108,13 @@ func TestGetProposedHeight(t *testing.T) {
 	require.NoError(service.vm.Network.IssueTxFromRPC(tx))
 	service.vm.ctx.Lock.Lock()
 
-	block, err := service.vm.BuildBlock(context.Background())
+	block, err := service.vm.BuildBlock(t.Context())
 	require.NoError(err)
 
 	blk := block.(*blockexecutor.Block)
-	require.NoError(blk.Verify(context.Background()))
+	require.NoError(blk.Verify(t.Context()))
 
-	require.NoError(blk.Accept(context.Background()))
+	require.NoError(blk.Accept(t.Context()))
 
 	service.vm.ctx.Lock.Unlock()
 
@@ -209,26 +206,26 @@ func TestGetTxStatus(t *testing.T) {
 	)
 	require.NoError(service.GetTxStatus(nil, arg, &resp))
 	require.Equal(status.Unknown, resp.Status)
-	require.Zero(resp.Reason)
+	require.Empty(resp.Reason)
 
 	// put the chain in existing chain list
 	require.NoError(service.vm.Network.IssueTxFromRPC(tx))
 	service.vm.ctx.Lock.Lock()
 
-	block, err := service.vm.BuildBlock(context.Background())
+	block, err := service.vm.BuildBlock(t.Context())
 	require.NoError(err)
 
 	blk := block.(*blockexecutor.Block)
-	require.NoError(blk.Verify(context.Background()))
+	require.NoError(blk.Verify(t.Context()))
 
-	require.NoError(blk.Accept(context.Background()))
+	require.NoError(blk.Accept(t.Context()))
 
 	service.vm.ctx.Lock.Unlock()
 
 	resp = GetTxStatusResponse{} // reset
 	require.NoError(service.GetTxStatus(nil, arg, &resp))
 	require.Equal(status.Committed, resp.Status)
-	require.Zero(resp.Reason)
+	require.Empty(resp.Reason)
 }
 
 // Test issuing and then retrieving a transaction
@@ -345,22 +342,22 @@ func TestGetTx(t *testing.T) {
 				require.NoError(service.vm.Network.IssueTxFromRPC(tx))
 				service.vm.ctx.Lock.Lock()
 
-				blk, err := service.vm.BuildBlock(context.Background())
+				blk, err := service.vm.BuildBlock(t.Context())
 				require.NoError(err)
 
-				require.NoError(blk.Verify(context.Background()))
+				require.NoError(blk.Verify(t.Context()))
 
-				require.NoError(blk.Accept(context.Background()))
+				require.NoError(blk.Accept(t.Context()))
 
 				if blk, ok := blk.(snowman.OracleBlock); ok { // For proposal blocks, commit them
-					options, err := blk.Options(context.Background())
+					options, err := blk.Options(t.Context())
 					if !errors.Is(err, snowman.ErrNotOracle) {
 						require.NoError(err)
 
 						commit := options[0].(*blockexecutor.Block)
 						require.IsType(&block.BanffCommitBlock{}, commit.Block)
-						require.NoError(commit.Verify(context.Background()))
-						require.NoError(commit.Accept(context.Background()))
+						require.NoError(commit.Verify(t.Context()))
+						require.NoError(commit.Accept(t.Context()))
 					}
 				}
 
@@ -642,7 +639,7 @@ func TestGetCurrentValidators(t *testing.T) {
 	for _, validatorTx := range genesis.Validators[:len(genesis.Validators)-1] {
 		validator := validatorTx.Unsigned.(*txs.AddValidatorTx)
 		connectedIDs.Add(validator.NodeID())
-		require.NoError(service.vm.Connected(context.Background(), validator.NodeID(), version.CurrentApp))
+		require.NoError(service.vm.Connected(t.Context(), validator.NodeID(), version.CurrentApp))
 	}
 
 	require.NoError(service.GetCurrentValidators(nil, &args, &response))
@@ -662,7 +659,7 @@ func TestGetCurrentValidators(t *testing.T) {
 			require.Equal(validator.EndTime().Unix(), int64(gotVdr.EndTime))
 			require.Equal(validator.StartTime().Unix(), int64(gotVdr.StartTime))
 			require.Equal(connectedIDs.Contains(validator.NodeID()), *gotVdr.Connected)
-			require.Equal(avajson.Float32(100), *gotVdr.Uptime)
+			require.Equal(float32(avajson.Float32(100)), float32(*gotVdr.Uptime))
 			found = true
 			break
 		}
@@ -831,13 +828,13 @@ func TestGetValidatorsAt(t *testing.T) {
 	require.NoError(service.vm.Network.IssueTxFromRPC(tx))
 	service.vm.ctx.Lock.Lock()
 
-	block, err := service.vm.BuildBlock(context.Background())
+	block, err := service.vm.BuildBlock(t.Context())
 	require.NoError(err)
 
 	blk := block.(*blockexecutor.Block)
-	require.NoError(blk.Verify(context.Background()))
+	require.NoError(blk.Verify(t.Context()))
 
-	require.NoError(blk.Accept(context.Background()))
+	require.NoError(blk.Accept(t.Context()))
 	service.vm.ctx.Lock.Unlock()
 
 	newLastAccepted := service.vm.manager.LastAccepted()
@@ -980,8 +977,8 @@ func TestGetBlock(t *testing.T) {
 
 			blk := service.vm.manager.NewBlock(statelessBlock)
 
-			require.NoError(blk.Verify(context.Background()))
-			require.NoError(blk.Accept(context.Background()))
+			require.NoError(blk.Verify(t.Context()))
+			require.NoError(blk.Accept(t.Context()))
 
 			service.vm.ctx.Lock.Unlock()
 
@@ -992,8 +989,8 @@ func TestGetBlock(t *testing.T) {
 			response := api.GetBlockResponse{}
 			require.NoError(service.GetBlock(nil, &args, &response))
 
-			switch {
-			case test.encoding == formatting.JSON:
+			switch test.encoding {
+			case formatting.JSON:
 				statelessBlock.InitCtx(service.vm.ctx)
 				expectedBlockJSON, err := json.Marshal(statelessBlock)
 				require.NoError(err)
@@ -1526,18 +1523,18 @@ func TestGetCurrentValidatorsForL1(t *testing.T) {
 					require.Equal(avajson.Uint64(staker.Weight), v.Weight)
 					require.Equal(staker.StartTime.Unix(), int64(v.StartTime))
 					return v.NodeID
-				case APIL1Validator:
-					validator, exists := l1ValidatorsByVID[v.ValidationID]
+				case pchainapi.APIL1Validator:
+					validator, exists := l1ValidatorsByVID[*v.ValidationID]
 					require.True(exists, "unexpected validator: %s", vdr)
 					require.Equal(validator.NodeID, v.NodeID)
 					require.Equal(avajson.Uint64(validator.Weight), v.Weight)
 					require.Equal(validator.StartTime, uint64(v.StartTime))
 					accruedFees := service.vm.state.GetAccruedFees()
-					require.Equal(avajson.Uint64(validator.EndAccumulatedFee-accruedFees), v.Balance)
-					require.Equal(avajson.Uint64(validator.MinNonce), v.MinNonce)
+					require.Equal(avajson.Uint64(validator.EndAccumulatedFee-accruedFees), *v.Balance)
+					require.Equal(avajson.Uint64(validator.MinNonce), *v.MinNonce)
 					require.Equal(
 						types.JSONByteSlice(bls.PublicKeyToCompressedBytes(bls.PublicKeyFromValidUncompressedBytes(validator.PublicKey))),
-						v.PublicKey)
+						*v.PublicKey)
 					var expectedRemainingBalanceOwner message.PChainOwner
 					_, err := txs.Codec.Unmarshal(validator.RemainingBalanceOwner, &expectedRemainingBalanceOwner)
 					require.NoError(err)
@@ -1554,7 +1551,7 @@ func TestGetCurrentValidatorsForL1(t *testing.T) {
 					require.Equal(avajson.Uint32(expectedDeactivationOwner.Threshold), v.DeactivationOwner.Threshold)
 					return v.NodeID
 				default:
-					require.Fail("unexpected validator type: %T", vdr)
+					require.Failf("unexpected validator type", "got: %T", vdr)
 					return ids.NodeID{}
 				}
 			}

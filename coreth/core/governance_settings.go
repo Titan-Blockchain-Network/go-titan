@@ -8,9 +8,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ava-labs/coreth/core/vm"
 	"github.com/ava-labs/coreth/params"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/vm"
 )
 
 var (
@@ -266,7 +266,7 @@ func (st *StateTransition) SetGovernanceAddress(chainID *big.Int, timestamp uint
 			st.evm.Context.Coinbase = originalCoinbase
 		}()
 		st.evm.Context.Coinbase = coinbaseSignal
-		_, _, _, err := st.evm.DaemonCall(vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
+		_, _, _, err := DaemonCall(st.evm, vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
 		if err != nil {
 			return err
 		}
@@ -282,7 +282,7 @@ func (st *StateTransition) SetTimelock(chainID *big.Int, timestamp uint64, newTi
 			st.evm.Context.Coinbase = originalCoinbase
 		}()
 		st.evm.Context.Coinbase = coinbaseSignal
-		_, _, _, err := st.evm.DaemonCall(vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
+		_, _, _, err := DaemonCall(st.evm, vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
 		if err != nil {
 			return err
 		}
@@ -297,7 +297,7 @@ func (st *StateTransition) UpdateInitialAirdropAddress(chainID *big.Int, timesta
 		st.evm.Context.Coinbase = originalCoinbase
 	}()
 	st.evm.Context.Coinbase = coinbaseSignal
-	_, _, _, err := st.evm.DaemonCall(vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
+	_, _, _, err := DaemonCall(st.evm, vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,7 @@ func (st *StateTransition) UpdateDistributionAddress(chainID *big.Int, timestamp
 		st.evm.Context.Coinbase = originalCoinbase
 	}()
 	st.evm.Context.Coinbase = coinbaseSignal
-	_, _, _, err := st.evm.DaemonCall(vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
+	_, _, _, err := DaemonCall(st.evm, vm.AccountRef(coinbaseSignal), st.to(), st.msg.Data, st.evm.Context.GasLimit)
 	if err != nil {
 		return err
 	}

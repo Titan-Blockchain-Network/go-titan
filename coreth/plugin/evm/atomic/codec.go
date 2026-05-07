@@ -1,4 +1,4 @@
-// (c) 2019-2021, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package atomic
@@ -36,9 +36,13 @@ func init() {
 	lc.SkipRegistrations(3)
 	errs.Add(
 		lc.RegisterType(&secp256k1fx.TransferInput{}),
-		lc.RegisterType(&secp256k1fx.MintOutput{}),
+	)
+	lc.SkipRegistrations(1)
+	errs.Add(
 		lc.RegisterType(&secp256k1fx.TransferOutput{}),
-		lc.RegisterType(&secp256k1fx.MintOperation{}),
+	)
+	lc.SkipRegistrations(1)
+	errs.Add(
 		lc.RegisterType(&secp256k1fx.Credential{}),
 		lc.RegisterType(&secp256k1fx.Input{}),
 		lc.RegisterType(&secp256k1fx.OutputOwners{}),

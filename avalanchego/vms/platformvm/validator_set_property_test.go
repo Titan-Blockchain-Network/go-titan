@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package platformvm
@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,7 +32,6 @@ import (
 	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/upgrade/upgradetest"
 	"github.com/ava-labs/avalanchego/utils/constants"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
 	"github.com/ava-labs/avalanchego/utils/timer/mockable"
 	"github.com/ava-labs/avalanchego/vms/platformvm/block"
@@ -79,7 +78,7 @@ func TestGetValidatorsSetProperty(t *testing.T) {
 			}
 			vm.ctx.Lock.Lock()
 			defer func() {
-				_ = vm.Shutdown(context.Background())
+				_ = vm.Shutdown(t.Context())
 				vm.ctx.Lock.Unlock()
 			}()
 			nodeID := ids.GenerateTestNodeID()
@@ -154,9 +153,9 @@ func TestGetValidatorsSetProperty(t *testing.T) {
 			// Checks: let's look back at validator sets at previous heights and
 			// make sure they match the snapshots already taken
 			snapshotHeights := maps.Keys(validatorSetByHeightAndSubnet)
-			sort.Slice(snapshotHeights, func(i, j int) bool { return snapshotHeights[i] < snapshotHeights[j] })
+			slices.Sort(snapshotHeights)
 			for idx, snapShotHeight := range snapshotHeights {
-				lastAcceptedHeight, err := vm.GetCurrentHeight(context.Background())
+				lastAcceptedHeight, err := vm.GetCurrentHeight(t.Context())
 				if err != nil {
 					return err.Error()
 				}
@@ -170,7 +169,7 @@ func TestGetValidatorsSetProperty(t *testing.T) {
 				// does not change and must be equal to snapshot at [snapShotHeight]
 				for height := snapShotHeight; height < nextSnapShotHeight; height++ {
 					for subnetID, validatorsSet := range validatorSetByHeightAndSubnet[snapShotHeight] {
-						res, err := vm.GetValidatorSet(context.Background(), height, subnetID)
+						res, err := vm.GetValidatorSet(t.Context(), height, subnetID)
 						if err != nil {
 							return fmt.Sprintf("failed GetValidatorSet at height %v: %v", height, err)
 						}
@@ -405,7 +404,6 @@ type validatorInputData struct {
 	startTime time.Time
 	endTime   time.Time
 	nodeID    ids.NodeID
-	publicKey *bls.PublicKey
 }
 
 // buildTimestampsList creates validators start and end time, given the event list.
@@ -416,17 +414,11 @@ func buildTimestampsList(events []uint8, currentTime time.Time, nodeID ids.NodeI
 	currentTime = currentTime.Add(txexecutor.SyncBound)
 	switch endTime := currentTime.Add(defaultMinStakingDuration); events[0] {
 	case startPrimaryWithBLS:
-		sk, err := localsigner.New()
-		if err != nil {
-			return nil, fmt.Errorf("could not make private key: %w", err)
-		}
-
 		res = append(res, &validatorInputData{
 			eventType: startPrimaryWithBLS,
 			startTime: currentTime,
 			endTime:   endTime,
 			nodeID:    nodeID,
-			publicKey: sk.PublicKey(),
 		})
 	default:
 		return nil, fmt.Errorf("unexpected initial event %d", events[0])
@@ -446,7 +438,6 @@ func buildTimestampsList(events []uint8, currentTime time.Time, nodeID ids.NodeI
 				startTime: currentTime,
 				endTime:   endTime,
 				nodeID:    nodeID,
-				publicKey: nil,
 			})
 
 			currentPrimaryVal.endTime = endTime.Add(time.Second)
@@ -454,18 +445,12 @@ func buildTimestampsList(events []uint8, currentTime time.Time, nodeID ids.NodeI
 
 		case startPrimaryWithBLS:
 			currentTime = currentPrimaryVal.endTime.Add(txexecutor.SyncBound)
-			sk, err := localsigner.New()
-			if err != nil {
-				return nil, fmt.Errorf("could not make private key: %w", err)
-			}
-
 			endTime := currentTime.Add(defaultMinStakingDuration)
 			val := &validatorInputData{
 				eventType: startPrimaryWithBLS,
 				startTime: currentTime,
 				endTime:   endTime,
 				nodeID:    nodeID,
-				publicKey: sk.PublicKey(),
 			}
 			res = append(res, val)
 			currentPrimaryVal = val
@@ -491,7 +476,7 @@ func TestTimestampListGenerator(t *testing.T) {
 			}
 
 			// nil out non subnet validators
-			subnetIndexes := make([]int, 0)
+			subnetIndexes := make([]int, 0, len(validatorsTimes))
 			for idx, ev := range validatorsTimes {
 				if ev.eventType == startSubnetValidator {
 					subnetIndexes = append(subnetIndexes, idx)
@@ -542,7 +527,7 @@ func TestTimestampListGenerator(t *testing.T) {
 			}
 
 			// nil out non subnet validators
-			nonSubnetIndexes := make([]int, 0)
+			nonSubnetIndexes := make([]int, 0, len(validatorsTimes))
 			for idx, ev := range validatorsTimes {
 				if ev.eventType != startSubnetValidator {
 					nonSubnetIndexes = append(nonSubnetIndexes, idx)
@@ -641,7 +626,6 @@ func buildVM(t *testing.T) (*VM, ids.ID, error) {
 	chainDB := prefixdb.New([]byte{0}, baseDB)
 	atomicDB := prefixdb.New([]byte{1}, baseDB)
 
-	msgChan := make(chan common.Message, 1)
 	ctx := snowtest.Context(t, snowtest.PChainID)
 
 	m := atomic.NewMemory(atomicDB)
@@ -656,7 +640,7 @@ func buildVM(t *testing.T) (*VM, ids.ID, error) {
 	}
 
 	err := vm.Initialize(
-		context.Background(),
+		t.Context(),
 		ctx,
 		chainDB,
 		genesistest.NewBytes(t, genesistest.Config{
@@ -667,7 +651,6 @@ func buildVM(t *testing.T) (*VM, ids.ID, error) {
 		}),
 		nil,
 		nil,
-		msgChan,
 		nil,
 		appSender,
 	)
@@ -675,7 +658,7 @@ func buildVM(t *testing.T) (*VM, ids.ID, error) {
 		return nil, ids.Empty, err
 	}
 
-	err = vm.SetState(context.Background(), snow.NormalOp)
+	err = vm.SetState(t.Context(), snow.NormalOp)
 	if err != nil {
 		return nil, ids.Empty, err
 	}
@@ -703,17 +686,17 @@ func buildVM(t *testing.T) (*VM, ids.ID, error) {
 		return nil, ids.Empty, err
 	}
 
-	blk, err := vm.Builder.BuildBlock(context.Background())
+	blk, err := vm.Builder.BuildBlock(t.Context())
 	if err != nil {
 		return nil, ids.Empty, err
 	}
-	if err := blk.Verify(context.Background()); err != nil {
+	if err := blk.Verify(t.Context()); err != nil {
 		return nil, ids.Empty, err
 	}
-	if err := blk.Accept(context.Background()); err != nil {
+	if err := blk.Accept(t.Context()); err != nil {
 		return nil, ids.Empty, err
 	}
-	if err := vm.SetPreference(context.Background(), vm.manager.LastAccepted()); err != nil {
+	if err := vm.SetPreference(t.Context(), vm.manager.LastAccepted()); err != nil {
 		return nil, ids.Empty, err
 	}
 
