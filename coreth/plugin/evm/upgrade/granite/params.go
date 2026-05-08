@@ -28,14 +28,32 @@ const (
 	// TargetConversion (D) is the conversion constant used in the Target()
 	// formula.
 	// Equal to the default acp176 value (MaxTargetChangeRate * MaxTargetExcessDiff = 1024 * 32768).
+	// MaxTargetChangeRate is implicit as D / Q.
 	TargetConversion gas.Gas = 1024 * 32768
+
+	// TimeToFillCapacity is the seconds it takes to refill the gas capacity
+	// from zero to its maximum (C = R * TimeToFillCapacity).
+	// Equal to the default acp176 value
+	TimeToFillCapacity gas.Gas = 5
+	// TargetToMax is the multiplier applied to the target rate to obtain the
+	// maximum gas rate per second (R = T * TargetToMax).
+	// Equal to the default acp176 value
+	TargetToMax gas.Gas = 2
+	// TargetToPriceUpdateConversion controls how fast the dynamic base fee
+	// reacts to excess gas: K = T * TargetToPriceUpdateConversion appears as
+	// the denominator in MinGasPrice * e^(Excess / K).
+	// Equal to the default acp176 value
+	TargetToPriceUpdateConversion gas.Gas = 87
 )
 
-// Params returns the ACP-176 parameter set to use on Flare-family chains
+// DefaultParams is the ACP-176 parameter set to use on Flare-family chains
 // after the Granite upgrade.
 var DefaultParams = &acp176.Params{
-	MinTargetPerSecond:  MinTargetPerSecond,
-	TargetConversion:    TargetConversion,
-	MaxTargetExcessDiff: MaxTargetExcessDiff,
-	MinGasPrice:         MinGasPrice,
+	MinTargetPerSecond:            MinTargetPerSecond,
+	TargetConversion:              TargetConversion,
+	MaxTargetExcessDiff:           MaxTargetExcessDiff,
+	MinGasPrice:                   MinGasPrice,
+	TimeToFillCapacity:            TimeToFillCapacity,
+	TargetToMax:                   TargetToMax,
+	TargetToPriceUpdateConversion: TargetToPriceUpdateConversion,
 }
