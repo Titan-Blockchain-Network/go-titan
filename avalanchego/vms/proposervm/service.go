@@ -5,8 +5,11 @@ package proposervm
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -15,6 +18,8 @@ import (
 	"github.com/ava-labs/avalanchego/api"
 	"github.com/ava-labs/avalanchego/api/server"
 	"github.com/ava-labs/avalanchego/connectproto/pb/proposervm/proposervmconnect"
+	"github.com/ava-labs/avalanchego/database"
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/vms/proposervm/acp181"
 	"github.com/ava-labs/avalanchego/vms/proposervm/block"
 
@@ -128,6 +133,150 @@ func (j *jsonrpcService) GetCurrentEpoch(r *http.Request, _ *struct{}, reply *Ge
 	reply.StartTime = avajson.Uint64(epoch.StartTime)
 	reply.PChainHeight = avajson.Uint64(epoch.PChainHeight)
 	return nil
+}
+
+// ProposerStatus describes whether a proposer could be resolved for a given
+// EVM block hash, and if not, why not.
+type ProposerStatus string
+
+const (
+	ProposerStatusOK           ProposerStatus = "ok"
+	ProposerStatusPreFork      ProposerStatus = "preFork"
+	ProposerStatusPruned       ProposerStatus = "pruned"
+	ProposerStatusNotCanonical ProposerStatus = "notCanonical"
+	ProposerStatusNotFound     ProposerStatus = "notFound"
+)
+
+type GetProposerByEVMBlockHashArgs struct {
+	BlockHash string `json:"blockHash"`
+}
+
+type GetProposerByEVMBlockHashResponse struct {
+	NodeID            ids.NodeID     `json:"nodeID"`
+	Status            ProposerStatus `json:"status"`
+	Height            avajson.Uint64 `json:"height"`
+	PChainHeight      avajson.Uint64 `json:"pChainHeight"`
+	Timestamp         avajson.Uint64 `json:"timestamp"`
+	ProposerVMBlockID ids.ID         `json:"proposerVMBlockID"`
+}
+
+func (j *jsonrpcService) GetProposerByEVMBlockHash(r *http.Request, args *GetProposerByEVMBlockHashArgs, reply *GetProposerByEVMBlockHashResponse) error {
+	log := j.vm.ctx.Log.With(
+		zap.String("service", "proposervm"),
+		zap.String("method", "GetProposerByEVMBlockHash"),
+		zap.String("blockHash", args.BlockHash),
+	)
+	log.Debug("API called")
+
+	hashStr := strings.TrimPrefix(args.BlockHash, "0x")
+	hashStr = strings.TrimPrefix(hashStr, "0X")
+	hashBytes, err := hex.DecodeString(hashStr)
+	if err != nil {
+		return fmt.Errorf("invalid block hash %q: %w", args.BlockHash, err)
+	}
+	innerID, err := ids.ToID(hashBytes)
+	if err != nil {
+		return fmt.Errorf("invalid block hash %q: %w", args.BlockHash, err)
+	}
+
+	j.vm.ctx.Lock.Lock()
+	defer j.vm.ctx.Lock.Unlock()
+
+	resp, err := j.vm.getProposerByInnerBlockID(r.Context(), innerID)
+	if err != nil {
+		return err
+	}
+	*reply = resp
+	return nil
+}
+
+// getProposerByInnerBlockID resolves the proposer of the inner (EVM) block
+// whose ID equals innerID. It returns a populated response with Status
+// describing the outcome; only unexpected database errors return a non-nil
+// error.
+func (vm *VM) getProposerByInnerBlockID(ctx context.Context, innerID ids.ID) (GetProposerByEVMBlockHashResponse, error) {
+	innerBlk, err := vm.ChainVM.GetBlock(ctx, innerID)
+	if errors.Is(err, database.ErrNotFound) {
+		return GetProposerByEVMBlockHashResponse{Status: ProposerStatusNotFound}, nil
+	}
+	if err != nil {
+		return GetProposerByEVMBlockHashResponse{}, fmt.Errorf("failed to fetch inner block: %w", err)
+	}
+	height := innerBlk.Height()
+
+	canonicalID, err := vm.ChainVM.GetBlockIDAtHeight(ctx, height)
+	if errors.Is(err, database.ErrNotFound) {
+		return GetProposerByEVMBlockHashResponse{
+			Status: ProposerStatusNotCanonical,
+			Height: avajson.Uint64(height),
+		}, nil
+	}
+	if err != nil {
+		return GetProposerByEVMBlockHashResponse{}, fmt.Errorf("failed to fetch canonical block at height %d: %w", height, err)
+	}
+	if canonicalID != innerID {
+		return GetProposerByEVMBlockHashResponse{
+			Status: ProposerStatusNotCanonical,
+			Height: avajson.Uint64(height),
+		}, nil
+	}
+
+	forkHeight, err := vm.State.GetForkHeight()
+	switch {
+	case errors.Is(err, database.ErrNotFound):
+		return GetProposerByEVMBlockHashResponse{
+			Status: ProposerStatusPreFork,
+			Height: avajson.Uint64(height),
+		}, nil
+	case err != nil:
+		return GetProposerByEVMBlockHashResponse{}, fmt.Errorf("failed to fetch fork height: %w", err)
+	case height < forkHeight:
+		return GetProposerByEVMBlockHashResponse{
+			Status: ProposerStatusPreFork,
+			Height: avajson.Uint64(height),
+		}, nil
+	}
+
+	outerID, err := vm.State.GetBlockIDAtHeight(height)
+	if errors.Is(err, database.ErrNotFound) {
+		return GetProposerByEVMBlockHashResponse{
+			Status: ProposerStatusPruned,
+			Height: avajson.Uint64(height),
+		}, nil
+	}
+	if err != nil {
+		return GetProposerByEVMBlockHashResponse{}, fmt.Errorf("failed to fetch proposerVM block ID at height %d: %w", height, err)
+	}
+
+	outerBlock, err := vm.State.GetBlock(outerID)
+	if errors.Is(err, database.ErrNotFound) {
+		return GetProposerByEVMBlockHashResponse{
+			Status:            ProposerStatusPruned,
+			Height:            avajson.Uint64(height),
+			ProposerVMBlockID: outerID,
+		}, nil
+	}
+	if err != nil {
+		return GetProposerByEVMBlockHashResponse{}, fmt.Errorf("failed to fetch proposerVM block %s: %w", outerID, err)
+	}
+
+	signedBlock, ok := outerBlock.(block.SignedBlock)
+	if !ok {
+		return GetProposerByEVMBlockHashResponse{
+			Status:            ProposerStatusPreFork,
+			Height:            avajson.Uint64(height),
+			ProposerVMBlockID: outerID,
+		}, nil
+	}
+
+	return GetProposerByEVMBlockHashResponse{
+		NodeID:            signedBlock.Proposer(),
+		Status:            ProposerStatusOK,
+		Height:            avajson.Uint64(height),
+		PChainHeight:      avajson.Uint64(signedBlock.PChainHeight()),
+		Timestamp:         avajson.Uint64(signedBlock.Timestamp().Unix()),
+		ProposerVMBlockID: outerID,
+	}, nil
 }
 
 func (vm *VM) getCurrentEpoch(ctx context.Context) (block.Epoch, error) {
