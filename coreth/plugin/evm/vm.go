@@ -390,6 +390,7 @@ func (vm *VM) Initialize(
 	vm.ethConfig.OfflinePruningDataDirectory = vm.config.OfflinePruningDataDirectory
 	vm.ethConfig.CommitInterval = vm.config.CommitInterval
 	vm.ethConfig.SkipUpgradeCheck = vm.config.SkipUpgradeCheck
+	vm.ethConfig.Miner.WaitForGasCapacityRefill = vm.config.WaitForGasCapacityRefill
 	vm.ethConfig.AcceptedCacheSize = vm.config.AcceptedCacheSize
 	vm.ethConfig.StateHistory = vm.config.StateHistory
 	vm.ethConfig.TransactionHistory = vm.config.TransactionHistory
