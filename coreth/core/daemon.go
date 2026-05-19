@@ -11,6 +11,8 @@ import (
 	"os"
 	"time"
 
+	safemath "github.com/ava-labs/avalanchego/utils/math"
+
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/utils"
 	"github.com/ava-labs/libevm/common"
@@ -210,12 +212,18 @@ func daemon(evm EVMCaller) (int, *uint256.Int, error) {
 	// Get the contract to call
 	daemonContract := common.HexToAddress(GetDaemonContractAddr(evm.GetBlockTime()))
 
+	// Saturate on overflow: GetGasLimit() is not a constant under ACP-176.
+	gas, err := safemath.Mul(GetDaemonGasMultiplier(evm.GetBlockTime()), evm.GetGasLimit())
+	if err != nil {
+		gas = math.MaxUint64
+	}
+
 	// Call the method
 	daemonSnapshot, daemonRet, _, daemonErr := evm.DaemonCall(
 		vm.AccountRef(daemonContract),
 		daemonContract,
 		GetDaemonSelector(evm.GetBlockTime()),
-		GetDaemonGasMultiplier(evm.GetBlockTime())*evm.GetGasLimit())
+		gas)
 	// If no error and a value came back...
 	if daemonErr == nil && daemonRet != nil {
 		// Did we get one big int?
