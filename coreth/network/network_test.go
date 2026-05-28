@@ -5,6 +5,7 @@ package network
 
 import (
 	"context"
+	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"sync"
@@ -31,6 +32,12 @@ import (
 const (
 	codecVersion uint16 = 0
 )
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) {
+	return 0, errors.New("forced random reader failure")
+}
 
 var (
 	defaultPeerVersion = &version.Application{
@@ -440,6 +447,30 @@ func TestRequestMinVersion(t *testing.T) {
 	_, err = codecManager.Unmarshal(responseBytes, &response)
 	require.NoError(t, err)
 	require.Equal(t, "this is a response", response.Message)
+}
+
+func TestSendAppRequestAnyReleasesSemaphoreOnPeerSelectionError(t *testing.T) {
+	require := require.New(t)
+
+	ctx := snowtest.Context(t, snowtest.CChainID)
+	netIntf, err := NewNetwork(ctx, nil, nil, 1, prometheus.NewRegistry())
+	require.NoError(err)
+	net := netIntf.(*network)
+
+	oldReader := crand.Reader
+	crand.Reader = errReader{}
+	t.Cleanup(func() {
+		crand.Reader = oldReader
+	})
+
+	_, err = net.SendAppRequestAny(t.Context(), defaultPeerVersion, nil, nil)
+	require.Error(err)
+
+	acquireCtx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+
+	require.NoError(net.activeAppRequests.Acquire(acquireCtx, 1))
+	net.activeAppRequests.Release(1)
 }
 
 func TestOnRequestHonoursDeadline(t *testing.T) {
