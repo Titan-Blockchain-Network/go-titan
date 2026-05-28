@@ -83,6 +83,9 @@ func (n *NetworkUpgrades) checkNetworkUpgradesCompatible(newcfg *NetworkUpgrades
 	if isForkTimestampIncompatible(n.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp, time) {
 		return ethparams.NewTimestampCompatError("ApricotPhase5 fork block timestamp", n.ApricotPhase5BlockTimestamp, newcfg.ApricotPhase5BlockTimestamp)
 	}
+	if isForkTimestampIncompatible(n.SongbirdTransitionTimestamp, newcfg.SongbirdTransitionTimestamp, time) {
+		return ethparams.NewTimestampCompatError("SongbirdTransition fork block timestamp", n.SongbirdTransitionTimestamp, newcfg.SongbirdTransitionTimestamp)
+	}
 	if isForkTimestampIncompatible(n.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp, time) {
 		return ethparams.NewTimestampCompatError("ApricotPhasePre6 fork block timestamp", n.ApricotPhasePre6BlockTimestamp, newcfg.ApricotPhasePre6BlockTimestamp)
 	}
@@ -121,6 +124,7 @@ func (n *NetworkUpgrades) forkOrder() []fork {
 		{name: "apricotPhase3BlockTimestamp", timestamp: n.ApricotPhase3BlockTimestamp},
 		{name: "apricotPhase4BlockTimestamp", timestamp: n.ApricotPhase4BlockTimestamp},
 		{name: "apricotPhase5BlockTimestamp", timestamp: n.ApricotPhase5BlockTimestamp},
+		{name: "songbirdTransitionTimestamp", timestamp: n.SongbirdTransitionTimestamp, optional: true},
 		{name: "apricotPhasePre6BlockTimestamp", timestamp: n.ApricotPhasePre6BlockTimestamp},
 		{name: "apricotPhase6BlockTimestamp", timestamp: n.ApricotPhase6BlockTimestamp},
 		{name: "apricotPhasePost6BlockTimestamp", timestamp: n.ApricotPhasePost6BlockTimestamp},
@@ -244,13 +248,18 @@ func (n NetworkUpgrades) Description() string {
 }
 
 func GetNetworkUpgrades(agoUpgrade upgrade.Config) NetworkUpgrades {
+	var songbirdTransitionTimestamp *uint64
+	if !agoUpgrade.SongbirdTransitionTime.IsZero() {
+		songbirdTransitionTimestamp = utils.TimeToNewUint64(agoUpgrade.SongbirdTransitionTime)
+	}
+
 	return NetworkUpgrades{
 		ApricotPhase1BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase1Time),
 		ApricotPhase2BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase2Time),
 		ApricotPhase3BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase3Time),
 		ApricotPhase4BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase4Time),
 		ApricotPhase5BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase5Time),
-		SongbirdTransitionTimestamp:     utils.TimeToNewUint64(agoUpgrade.SongbirdTransitionTime),
+		SongbirdTransitionTimestamp:     songbirdTransitionTimestamp,
 		ApricotPhasePre6BlockTimestamp:  utils.TimeToNewUint64(agoUpgrade.ApricotPhasePre6Time),
 		ApricotPhase6BlockTimestamp:     utils.TimeToNewUint64(agoUpgrade.ApricotPhase6Time),
 		ApricotPhasePost6BlockTimestamp: utils.TimeToNewUint64(agoUpgrade.ApricotPhasePost6Time),

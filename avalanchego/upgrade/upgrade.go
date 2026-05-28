@@ -223,6 +223,11 @@ func (c *Config) Validate() error {
 		c.ApricotPhase3Time,
 		c.ApricotPhase4Time,
 		c.ApricotPhase5Time,
+	}
+	if !c.SongbirdTransitionTime.IsZero() {
+		upgrades = append(upgrades, c.SongbirdTransitionTime)
+	}
+	upgrades = append(upgrades,
 		c.ApricotPhasePre6Time,
 		c.ApricotPhase6Time,
 		c.ApricotPhasePost6Time,
@@ -232,7 +237,7 @@ func (c *Config) Validate() error {
 		c.EtnaTime,
 		c.FortunaTime,
 		c.GraniteTime,
-	}
+	)
 	for i := 0; i < len(upgrades)-1; i++ {
 		if upgrades[i].After(upgrades[i+1]) {
 			return fmt.Errorf("%w: upgrade %d (%s) is after upgrade %d (%s)",
