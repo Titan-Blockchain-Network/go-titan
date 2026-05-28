@@ -586,12 +586,14 @@ func (vm *VM) initializeChain(lastAcceptedHash common.Hash) error {
 	vm.miner = vm.eth.Miner()
 
 	// Set the gas parameters for the tx pool to the minimum gas price for the
-	// latest upgrade.
+	// fork that is active at the last accepted block. The floor is re-evaluated
+	// on every block Accept so it tracks fork activations at runtime.
+	lastAccepted := vm.blockChain.LastAcceptedBlock()
 	vm.txPool.SetGasTip(big.NewInt(0))
-	vm.txPool.SetMinFee(big.NewInt(acp176.MinGasPrice))
+	vm.txPool.SetMinFee(vm.minTxPoolFee(lastAccepted.Time()))
 
 	vm.eth.Start()
-	return vm.initChainState(vm.blockChain.LastAcceptedBlock())
+	return vm.initChainState(lastAccepted)
 }
 
 // initializeStateSync initializes the vm for performing state sync and responding to peer requests.
@@ -1118,6 +1120,15 @@ func (*VM) NewHTTPHandler(context.Context) (http.Handler, error) {
 
 func (vm *VM) chainConfigExtra() *extras.ChainConfig {
 	return params.GetExtra(vm.chainConfig)
+}
+
+// minTxPoolFee returns the txpool minimum-fee floor that applies at the given
+// block timestamp, derived from the per-fork ACP-176 params. Post-Granite on
+// Flare-family networks this is 500 GWei; otherwise it is the avalanchego
+// default (1 Wei).
+func (vm *VM) minTxPoolFee(timestamp uint64) *big.Int {
+	p := vm.chainConfigExtra().ACP176Params(timestamp)
+	return new(big.Int).SetUint64(uint64(p.MinGasPrice))
 }
 
 func (vm *VM) rules(number *big.Int, time uint64) extras.Rules {
