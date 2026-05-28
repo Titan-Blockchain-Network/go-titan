@@ -487,7 +487,10 @@ func NewBlockChain(
 
 	// if txlookup limit is 0 (uindexing disabled), we don't need to repair the tx index tail.
 	if bc.cacheConfig.TransactionHistory != 0 {
-		latestStateSynced := customrawdb.GetLatestSyncPerformed(bc.db)
+		latestStateSynced, err := customrawdb.GetLatestSyncPerformed(bc.db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read latest state sync progress: %w", err)
+		}
 		bc.repairTxIndexTail(latestStateSynced)
 	}
 
