@@ -25,6 +25,18 @@ var (
 	errInvalidGasLimit         = errors.New("invalid gas limit")
 )
 
+const (
+	// minimumBuildableCapacityTargetMultiplier scales the per-second gas target
+	// into the minimum accrued capacity the builder waits for before producing
+	// a post-Fortuna block. It MUST stay <= TargetToMax * TimeToFillCapacity
+	// (currently 2 * 4 = 8); otherwise this threshold could exceed the maximum
+	// accrued capacity and stall the builder indefinitely.
+	minimumBuildableCapacityTargetMultiplier uint64 = 4
+	// maxMinimumBuildableCapacity caps the wait threshold so it does not scale
+	// up without bound as the target grows.
+	maxMinimumBuildableCapacity uint64 = 12_000_000
+)
+
 // GasLimit takes the previous header and the timestamp of its child block and
 // calculates the gas limit for the child block.
 func GasLimit(
@@ -210,6 +222,27 @@ func GasCapacity(
 		return 0, fmt.Errorf("calculating initial fee state: %w", err)
 	}
 	return uint64(state.Gas.Capacity), nil
+}
+
+// MinimumBuildableGasCapacity returns the gas capacity the local block builder
+// waits for before producing a post-Fortuna block when capacity refill waiting
+// is enabled.
+func MinimumBuildableGasCapacity(
+	config *extras.ChainConfig,
+	parent *types.Header,
+	timeMS uint64,
+) (uint64, error) {
+	timestamp := timeMS / 1000
+	state, err := feeStateBeforeBlock(config, parent, timeMS)
+	if err != nil {
+		return 0, fmt.Errorf("calculating initial fee state: %w", err)
+	}
+
+	target := uint64(state.TargetWith(config.ACP176Params(timestamp)))
+	if target >= maxMinimumBuildableCapacity/minimumBuildableCapacityTargetMultiplier {
+		return maxMinimumBuildableCapacity, nil
+	}
+	return target * minimumBuildableCapacityTargetMultiplier, nil
 }
 
 // RemainingAtomicGasCapacity returns the maximum amount ExtDataGasUsed could be
