@@ -277,8 +277,8 @@ func (w *worker) createCurrentEnvironment(predicateContext *precompileconfig.Pre
 		return nil, fmt.Errorf("calculating gas capacity: %w", err)
 	}
 	// If Fortuna has activated, enforce we only build a block when there is a minimum
-	// built up gas capacity. Flare gates this on WaitForGasCapacityRefill so the
-	// upstream behavior is opt-in; default is to build regardless of bucket state.
+	// built up gas capacity. This follows upstream AvalancheGo behavior by default;
+	// operators can set WaitForGasCapacityRefill to false to build regardless of bucket state.
 	if w.config.WaitForGasCapacityRefill && chainConfigExtra.IsFortuna(header.Time) {
 		// ACP-176 maintains a gas capacity bucket that fills up over time separate from the gas limit.
 		// Since smaller transactions can consume the available gas capacity every second, this can lead
