@@ -34,7 +34,7 @@ const (
 	// TimeToFillCapacity is the seconds it takes to refill the gas capacity
 	// from zero to its maximum (C = R * TimeToFillCapacity).
 	// Equal to the default acp176 value
-	TimeToFillCapacity gas.Gas = 5
+	TimeToFillCapacity gas.Gas = 4
 	// TargetToMax is the multiplier applied to the target rate to obtain the
 	// maximum gas rate per second (R = T * TargetToMax).
 	// Equal to the default acp176 value
