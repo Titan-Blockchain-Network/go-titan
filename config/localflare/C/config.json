@@ -47,6 +47,6 @@
     "offline-pruning-enabled": false,
     "offline-pruning-bloom-filter-size": 512,
     "offline-pruning-data-directory": "",
-    "gas-target": 1500000,
+    "gas-target": 3500000,
     "min-delay-target": 1000
 }
