@@ -112,7 +112,7 @@ var (
 		DurangoTime:           time.Date(2025, time.June, 24, 12, 0, 0, 0, time.UTC),
 		EtnaTime:              time.Date(2025, time.November, 13, 14, 0, 0, 0, time.UTC),
 		FortunaTime:           time.Date(2026, time.March, 24, 12, 0, 0, 0, time.UTC),
-		GraniteTime:           UnscheduledActivationTime,
+		GraniteTime:           time.Date(2026, time.June, 16, 12, 0, 0, 0, time.UTC),
 		GraniteEpochDuration:  5 * time.Minute,
 	}
 	Coston = Config{
@@ -130,7 +130,7 @@ var (
 		DurangoTime:            time.Date(2025, time.July, 1, 12, 0, 0, 0, time.UTC),
 		EtnaTime:               time.Date(2025, time.November, 13, 10, 0, 0, 0, time.UTC),
 		FortunaTime:            time.Date(2026, time.March, 17, 12, 0, 0, 0, time.UTC),
-		GraniteTime:            UnscheduledActivationTime,
+		GraniteTime:            time.Date(2026, time.June, 11, 12, 0, 0, 0, time.UTC),
 		GraniteEpochDuration:   5 * time.Minute,
 	}
 	LocalFlare = Config{
