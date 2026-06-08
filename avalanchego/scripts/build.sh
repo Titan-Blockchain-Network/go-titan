@@ -16,7 +16,10 @@ print_usage() {
 race=''
 while getopts 'r' flag; do
   case "${flag}" in
-    r) race='-r' ;;
+    r)
+      echo "Building with race detection enabled"
+      race='-race'
+      ;;
     *) print_usage
       exit 1 ;;
   esac

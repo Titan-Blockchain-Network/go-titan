@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package peer
@@ -62,4 +62,8 @@ type Config struct {
 
 	// IngressConnectionCount counts the ingress (to us) connections.
 	IngressConnectionCount atomic.Int64
+
+	// If true, connects to all validators regardless of primary network validator
+	// status or of configured tracked subnets.
+	ConnectToAllValidators bool
 }

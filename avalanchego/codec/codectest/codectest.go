@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 // Package codectest provides a test suite for testing codec implementations.
@@ -650,7 +650,7 @@ func TestSerializeUnexportedField(t testing.TB, codec codecpkg.GeneralCodec) {
 
 	type s struct {
 		ExportedField   string `serialize:"true"`
-		unexportedField string `serialize:"true"` //nolint:revive
+		unexportedField string `serialize:"true"` //nolint:revive,unused
 	}
 
 	myS := s{
@@ -770,7 +770,7 @@ func TestSliceWithEmptySerialization(t testing.TB, codec codecpkg.GeneralCodec) 
 	require.NoError(manager.RegisterCodec(0, codec))
 
 	val := &nestedSliceStruct{
-		Arr: make([]emptyStruct, 0),
+		Arr: []emptyStruct{},
 	}
 	expected := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00} // codec version (0x00, 0x00) then (0x00, 0x00, 0x00, 0x00) for numElts
 	result, err := manager.Marshal(0, val)

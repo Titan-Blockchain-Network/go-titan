@@ -63,23 +63,23 @@ func getCurrentDelegatorRules(currentTimestamp time.Time, backend *Backend) *add
 	}
 }
 
-func getFlareInflationSettings(currentTimestamp time.Time, _ *config.Internal) InflationSettings {
+func getFlareInflationSettings(currentTimestamp time.Time, config *config.Internal) InflationSettings {
 	switch {
-	case currentTimestamp.Before(time.Date(2023, time.October, 1, 0, 0, 0, 0, time.UTC)):
-		// Phase 1
+	case config.UpgradeConfig.IsGraniteActivated(currentTimestamp):
+		// Phase 3 (Granite)
 		return InflationSettings{
-			MinValidatorStake:        10 * units.MegaAvax,
-			MaxValidatorStake:        50 * units.MegaAvax,
-			MinDelegatorStake:        1 * units.KiloAvax,
-			MinDelegationFee:         0,
-			MinStakeDuration:         2 * 7 * 24 * time.Hour,
+			MinValidatorStake:        1 * units.MegaAvax,
+			MaxValidatorStake:        300 * units.MegaAvax,
+			MinDelegatorStake:        50 * units.KiloAvax,
+			MinDelegationFee:         200_000,
+			MinStakeDuration:         60 * 24 * time.Hour,
 			MinDelegateDuration:      2 * 7 * 24 * time.Hour,
 			MaxStakeDuration:         365 * 24 * time.Hour,
-			MinFutureStartTimeOffset: 3 * 24 * time.Hour,
-			MaxValidatorWeightFactor: MaxValidatorWeightFactor,
-			MinStakeStartTime:        time.Date(2023, time.July, 5, 15, 0, 0, 0, time.UTC),
+			MinFutureStartTimeOffset: MaxFutureStartTime,
+			MaxValidatorWeightFactor: 15,
+			MinStakeStartTime:        time.Date(2023, time.October, 1, 0, 0, 0, 0, time.UTC),
 		}
-	default:
+	case !currentTimestamp.Before(time.Date(2023, time.October, 1, 0, 0, 0, 0, time.UTC)):
 		// Phase 2
 		return InflationSettings{
 			MinValidatorStake:        1 * units.MegaAvax,
@@ -93,26 +93,40 @@ func getFlareInflationSettings(currentTimestamp time.Time, _ *config.Internal) I
 			MaxValidatorWeightFactor: 15,
 			MinStakeStartTime:        time.Date(2023, time.October, 1, 0, 0, 0, 0, time.UTC),
 		}
-	}
-}
-
-func getCostwoInflationSettings(currentTimestamp time.Time, _ *config.Internal) InflationSettings {
-	switch {
-	case currentTimestamp.Before(time.Date(2023, time.September, 7, 0, 0, 0, 0, time.UTC)):
+	default:
 		// Phase 1
 		return InflationSettings{
-			MinValidatorStake:        100 * units.KiloAvax,
+			MinValidatorStake:        10 * units.MegaAvax,
 			MaxValidatorStake:        50 * units.MegaAvax,
 			MinDelegatorStake:        1 * units.KiloAvax,
 			MinDelegationFee:         0,
 			MinStakeDuration:         2 * 7 * 24 * time.Hour,
 			MinDelegateDuration:      2 * 7 * 24 * time.Hour,
 			MaxStakeDuration:         365 * 24 * time.Hour,
-			MinFutureStartTimeOffset: MaxFutureStartTime,
+			MinFutureStartTimeOffset: 3 * 24 * time.Hour,
 			MaxValidatorWeightFactor: MaxValidatorWeightFactor,
-			MinStakeStartTime:        time.Date(2023, time.May, 25, 15, 0, 0, 0, time.UTC),
+			MinStakeStartTime:        time.Date(2023, time.July, 5, 15, 0, 0, 0, time.UTC),
 		}
-	default:
+	}
+}
+
+func getCostwoInflationSettings(currentTimestamp time.Time, config *config.Internal) InflationSettings {
+	switch {
+	case config.UpgradeConfig.IsGraniteActivated(currentTimestamp):
+		// Phase 3 (Granite)
+		return InflationSettings{
+			MinValidatorStake:        1 * units.MegaAvax,
+			MaxValidatorStake:        200 * units.MegaAvax,
+			MinDelegatorStake:        50 * units.KiloAvax,
+			MinDelegationFee:         200_000,
+			MinStakeDuration:         60 * 24 * time.Hour,
+			MinDelegateDuration:      2 * 7 * 24 * time.Hour,
+			MaxStakeDuration:         365 * 24 * time.Hour,
+			MinFutureStartTimeOffset: MaxFutureStartTime,
+			MaxValidatorWeightFactor: 15,
+			MinStakeStartTime:        time.Date(2023, time.September, 7, 0, 0, 0, 0, time.UTC),
+		}
+	case !currentTimestamp.Before(time.Date(2023, time.September, 7, 0, 0, 0, 0, time.UTC)):
 		// Phase 2
 		return InflationSettings{
 			MinValidatorStake:        1 * units.MegaAvax,
@@ -125,6 +139,20 @@ func getCostwoInflationSettings(currentTimestamp time.Time, _ *config.Internal) 
 			MinFutureStartTimeOffset: MaxFutureStartTime,
 			MaxValidatorWeightFactor: 15,
 			MinStakeStartTime:        time.Date(2023, time.September, 7, 0, 0, 0, 0, time.UTC),
+		}
+	default:
+		// Phase 1
+		return InflationSettings{
+			MinValidatorStake:        100 * units.KiloAvax,
+			MaxValidatorStake:        50 * units.MegaAvax,
+			MinDelegatorStake:        1 * units.KiloAvax,
+			MinDelegationFee:         0,
+			MinStakeDuration:         2 * 7 * 24 * time.Hour,
+			MinDelegateDuration:      2 * 7 * 24 * time.Hour,
+			MaxStakeDuration:         365 * 24 * time.Hour,
+			MinFutureStartTimeOffset: MaxFutureStartTime,
+			MaxValidatorWeightFactor: MaxValidatorWeightFactor,
+			MinStakeStartTime:        time.Date(2023, time.May, 25, 15, 0, 0, 0, time.UTC),
 		}
 	}
 }

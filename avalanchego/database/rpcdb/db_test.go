@@ -1,10 +1,9 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package rpcdb
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/ava-labs/avalanchego/database/corruptabledb"
 	"github.com/ava-labs/avalanchego/database/dbtest"
 	"github.com/ava-labs/avalanchego/database/memdb"
+	"github.com/ava-labs/avalanchego/utils/logging"
 	"github.com/ava-labs/avalanchego/vms/rpcchainvm/grpcutils"
 
 	rpcdbpb "github.com/ava-labs/avalanchego/proto/pb/rpcdb"
@@ -120,12 +120,12 @@ func TestHealthCheck(t *testing.T) {
 			require := require.New(t)
 
 			baseDB := setupDB(t)
-			db := corruptabledb.New(baseDB.server)
+			db := corruptabledb.New(baseDB.server, logging.NoLog{})
 			defer db.Close()
 			require.NoError(scenario.testFn(db))
 
 			// check db HealthCheck
-			_, err := db.HealthCheck(context.Background())
+			_, err := db.HealthCheck(t.Context())
 			if scenario.wantErr {
 				require.Error(err) //nolint:forbidigo
 				require.Contains(err.Error(), scenario.wantErrMsg)
@@ -134,7 +134,7 @@ func TestHealthCheck(t *testing.T) {
 			require.NoError(err)
 
 			// check rpc HealthCheck
-			_, err = baseDB.client.HealthCheck(context.Background())
+			_, err = baseDB.client.HealthCheck(t.Context())
 			require.NoError(err)
 		})
 	}

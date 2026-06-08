@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -32,6 +33,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"runtime"
 	"sync"
@@ -39,18 +41,18 @@ import (
 
 	"github.com/ava-labs/coreth/consensus"
 	"github.com/ava-labs/coreth/core"
-	"github.com/ava-labs/coreth/core/state"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/core/vm"
-	"github.com/ava-labs/coreth/eth/tracers/logger"
 	"github.com/ava-labs/coreth/internal/ethapi"
 	"github.com/ava-labs/coreth/params"
 	"github.com/ava-labs/coreth/rpc"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/eth/tracers/logger"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 const (
@@ -958,15 +960,32 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	h := block.Header()
+	blockContext := core.NewEVMBlockContext(h, api.chainContext(ctx), nil)
+
 	// Apply the customization rules if required.
 	if config != nil {
+		if config.BlockOverrides != nil && config.BlockOverrides.Number.ToInt().Uint64() == h.Number.Uint64()+1 {
+			// Overriding the block number to n+1 is a common way for wallets to
+			// simulate transactions, however without the following fix, a contract
+			// can assert it is being simulated by checking if blockhash(n) == 0x0 and
+			// can behave differently during the simulation. (#32175 for more info)
+			// --
+			// Modify the parent hash and number so that downstream, blockContext's
+			// GetHash function can correctly return n.
+			h.ParentHash = h.Hash()
+			h.Number.Add(h.Number, big.NewInt(1))
+		}
 		originalTime := block.Time()
-		config.BlockOverrides.Apply(&vmctx)
+		config.BlockOverrides.Apply(&blockContext)
 		// Apply all relevant upgrades from [originalTime] to the block time set in the override.
 		// Should be applied before the state overrides.
-		err = core.ApplyUpgrades(api.backend.ChainConfig(), &originalTime, &vmctx, statedb)
-		if err != nil {
+		if err := core.ApplyUpgrades(
+			api.backend.ChainConfig(),
+			&originalTime,
+			core.NewBlockContext(block.Number(), block.Time()),
+			statedb,
+		); err != nil {
 			return nil, err
 		}
 
@@ -975,7 +994,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		}
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), vmctx.BaseFee)
+	msg, err := args.ToMessage(api.backend.RPCGasCap(), blockContext.BaseFee)
 	if err != nil {
 		return nil, err
 	}
@@ -984,7 +1003,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, msg, new(Context), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, msg, new(Context), blockContext, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
@@ -1056,57 +1075,62 @@ func APIs(backend Backend) []rpc.API {
 // along with a boolean that indicates whether the copy is canonical (equivalent to the original).
 func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) (*params.ChainConfig, bool) {
 	copy := new(params.ChainConfig)
-	*copy = *original
+	*copy = params.Copy(original)
 	canon := true
 
 	// Apply network upgrades (after Berlin) to the copy.
 	// Note in coreth, ApricotPhase2 is the "equivalent" to Berlin.
-	if timestamp := override.ApricotPhase2BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase2BlockTimestamp = timestamp
+	overrideExtra := params.GetExtra(override)
+	if timestamp := overrideExtra.ApricotPhase2BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase2BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase3BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase3BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase3BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase3BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase4BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase4BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase4BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase4BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase5BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase5BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase5BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase5BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePre6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePre6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePre6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePre6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhase6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhase6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhase6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhase6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.ApricotPhasePost6BlockTimestamp; timestamp != nil {
-		copy.ApricotPhasePost6BlockTimestamp = timestamp
+	if timestamp := overrideExtra.ApricotPhasePost6BlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).ApricotPhasePost6BlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.BanffBlockTimestamp; timestamp != nil {
-		copy.BanffBlockTimestamp = timestamp
+	if timestamp := overrideExtra.BanffBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).BanffBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.CortinaBlockTimestamp; timestamp != nil {
-		copy.CortinaBlockTimestamp = timestamp
+	if timestamp := overrideExtra.CortinaBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).CortinaBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.DurangoBlockTimestamp; timestamp != nil {
-		copy.DurangoBlockTimestamp = timestamp
+	if timestamp := overrideExtra.DurangoBlockTimestamp; timestamp != nil {
+		params.GetExtra(copy).DurangoBlockTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.EtnaTimestamp; timestamp != nil {
-		copy.EtnaTimestamp = timestamp
+	if timestamp := overrideExtra.EtnaTimestamp; timestamp != nil {
+		params.GetExtra(copy).EtnaTimestamp = timestamp
 		canon = false
 	}
-	if timestamp := override.FortunaTimestamp; timestamp != nil {
-		copy.FortunaTimestamp = timestamp
+	if timestamp := overrideExtra.FortunaTimestamp; timestamp != nil {
+		params.GetExtra(copy).FortunaTimestamp = timestamp
+		canon = false
+	}
+	if timestamp := overrideExtra.GraniteTimestamp; timestamp != nil {
+		params.GetExtra(copy).GraniteTimestamp = timestamp
 		canon = false
 	}
 	if timestamp := override.CancunTime; timestamp != nil {

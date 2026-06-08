@@ -1,4 +1,5 @@
-// (c) 2019-2020, Ava Labs, Inc.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
+// See the file LICENSE for licensing terms.
 //
 // This file is a derived work, based on the go-ethereum library whose original
 // notices appear below.
@@ -35,9 +36,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ava-labs/coreth/core/rawdb"
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/rawdb"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 // Runs multiple tests with randomized parameters.
@@ -49,7 +50,12 @@ func TestChainIndexerSingle(t *testing.T) {
 
 // Runs multiple tests with randomized parameters and different number of
 // chain backends.
+//
+// This test and all its code is unedited from go-ethereum. Since coreth forked
+// go-ethereum, no relevant fixes were made, besides replacing the ChainIndexer's
+// functionality with a different structure.
 func TestChainIndexerWithChildren(t *testing.T) {
+	t.Skip("Flaky test from go-ethereum")
 	for i := 2; i < 8; i++ {
 		testChainIndexer(t, i)
 	}

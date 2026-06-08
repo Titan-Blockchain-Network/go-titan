@@ -1,10 +1,9 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package txstest
 
 import (
-	"context"
 	"math"
 	"testing"
 
@@ -47,7 +46,7 @@ func NewWallet(
 
 	for _, utxo := range pChainUTXOs {
 		require.NoError(utxos.AddUTXO(
-			context.Background(),
+			t.Context(),
 			constants.PlatformChainID,
 			constants.PlatformChainID,
 			utxo,
@@ -68,7 +67,7 @@ func NewWallet(
 
 		for _, utxo := range remoteChainUTXOs {
 			require.NoError(utxos.AddUTXO(
-				context.Background(),
+				t.Context(),
 				chainID,
 				constants.PlatformChainID,
 				utxo,
@@ -95,12 +94,11 @@ func NewWallet(
 		}
 	}
 
-	builderContext := newContext(ctx, config, state)
 	backend := wallet.NewBackend(
-		builderContext,
 		common.NewChainUTXOs(constants.PlatformChainID, utxos),
 		owners,
 	)
+	builderContext := newContext(ctx, config, state)
 	return wallet.New(
 		&client{
 			backend: backend,
@@ -126,9 +124,17 @@ func (c *client) IssueTx(
 	options ...common.Option,
 ) error {
 	ops := common.NewOptions(options)
-	if f := ops.PostIssuanceFunc(); f != nil {
-		txID := tx.ID()
-		f(txID)
+	if f := ops.IssuanceHandler(); f != nil {
+		f(common.IssuanceReceipt{
+			ChainAlias: builder.Alias,
+			TxID:       tx.ID(),
+		})
+	}
+	if f := ops.ConfirmationHandler(); f != nil {
+		f(common.ConfirmationReceipt{
+			ChainAlias: builder.Alias,
+			TxID:       tx.ID(),
+		})
 	}
 	ctx := ops.Context()
 	return c.backend.AcceptTx(ctx, tx)

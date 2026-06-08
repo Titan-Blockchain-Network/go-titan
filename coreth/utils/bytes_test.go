@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package utils
@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/ava-labs/avalanchego/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/assert"
+	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,7 +34,7 @@ func TestIncrOne(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			output := common.CopyBytes(test.input)
 			IncrOne(output)
-			assert.Equal(t, output, test.expected)
+			require.Equal(t, test.expected, output)
 		})
 	}
 }

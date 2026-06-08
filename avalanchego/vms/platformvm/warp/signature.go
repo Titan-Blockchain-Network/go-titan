@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package warp
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ava-labs/avalanchego/snow/validators"
 	"github.com/ava-labs/avalanchego/utils/crypto/bls"
 	"github.com/ava-labs/avalanchego/utils/set"
 )
@@ -37,7 +38,7 @@ type Signature interface {
 	Verify(
 		msg *UnsignedMessage,
 		networkID uint32,
-		validators CanonicalValidatorSet,
+		validators validators.WarpSet,
 		quorumNum uint64,
 		quorumDen uint64,
 	) error
@@ -66,7 +67,7 @@ func (s *BitSetSignature) NumSigners() (int, error) {
 func (s *BitSetSignature) Verify(
 	msg *UnsignedMessage,
 	networkID uint32,
-	validators CanonicalValidatorSet,
+	validators validators.WarpSet,
 	quorumNum uint64,
 	quorumDen uint64,
 ) error {
@@ -90,8 +91,7 @@ func (s *BitSetSignature) Verify(
 		return err
 	}
 
-	// Because [signers] is a subset of [validators.Validators], this can never error.
-	sigWeight, _ := SumWeight(signers)
+	sigWeight := SumWeight(signers)
 
 	// Make sure the signature's weight is sufficient.
 	err = VerifyWeight(
@@ -129,22 +129,28 @@ func (s *BitSetSignature) String() string {
 }
 
 // VerifyWeight returns [nil] if [sigWeight] is at least [quorumNum]/[quorumDen]
-// of [totalWeight].
+// of [totalWeight]. A nil [sigWeight] or [totalWeight] is treated as zero.
 // If [sigWeight >= totalWeight * quorumNum / quorumDen] then return [nil]
 func VerifyWeight(
-	sigWeight uint64,
-	totalWeight uint64,
+	sigWeight *big.Int,
+	totalWeight *big.Int,
 	quorumNum uint64,
 	quorumDen uint64,
 ) error {
+	if totalWeight == nil {
+		totalWeight = new(big.Int)
+	}
+	if sigWeight == nil {
+		sigWeight = new(big.Int)
+	}
 	// Verifies that quorumNum * totalWeight <= quorumDen * sigWeight
-	scaledTotalWeight := new(big.Int).SetUint64(totalWeight)
+	scaledTotalWeight := new(big.Int).Set(totalWeight)
 	scaledTotalWeight.Mul(scaledTotalWeight, new(big.Int).SetUint64(quorumNum))
-	scaledSigWeight := new(big.Int).SetUint64(sigWeight)
+	scaledSigWeight := new(big.Int).Set(sigWeight)
 	scaledSigWeight.Mul(scaledSigWeight, new(big.Int).SetUint64(quorumDen))
 	if scaledTotalWeight.Cmp(scaledSigWeight) == 1 {
 		return fmt.Errorf(
-			"%w: %d*%d > %d*%d",
+			"%w: %d*%s > %d*%s",
 			ErrInsufficientWeight,
 			quorumNum,
 			totalWeight,

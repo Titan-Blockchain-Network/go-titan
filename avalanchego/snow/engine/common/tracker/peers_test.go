@@ -1,10 +1,9 @@
-// Copyright (C) 2019-2024, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package tracker
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -26,7 +25,7 @@ func TestPeers(t *testing.T) {
 	p.OnValidatorAdded(nodeID, nil, ids.Empty, 5)
 	require.Equal(big.NewInt(0), p.ConnectedWeight())
 
-	require.NoError(p.Connected(context.Background(), nodeID, version.CurrentApp))
+	require.NoError(p.Connected(t.Context(), nodeID, version.CurrentApp))
 	require.Equal(big.NewInt(5), p.ConnectedWeight())
 
 	p.OnValidatorWeightChanged(nodeID, 5, 10)
@@ -38,6 +37,6 @@ func TestPeers(t *testing.T) {
 	p.OnValidatorAdded(nodeID, nil, ids.Empty, 5)
 	require.Equal(big.NewInt(5), p.ConnectedWeight())
 
-	require.NoError(p.Disconnected(context.Background(), nodeID))
+	require.NoError(p.Disconnected(t.Context(), nodeID))
 	require.Equal(big.NewInt(0), p.ConnectedWeight())
 }

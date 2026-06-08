@@ -1,4 +1,4 @@
-// (c) 2023, Ava Labs, Inc. All rights reserved.
+// Copyright (C) 2019-2025, Ava Labs, Inc. All rights reserved.
 // See the file LICENSE for licensing terms.
 
 package modules
@@ -7,9 +7,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ava-labs/coreth/constants"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ava-labs/coreth/constants"
 )
 
 func TestInsertSortedByAddress(t *testing.T) {
@@ -50,10 +51,10 @@ func TestRegisterModuleInvalidAddresses(t *testing.T) {
 		Address: constants.BlackholeAddr,
 	}
 	err := RegisterModule(m)
-	require.ErrorContains(t, err, "overlaps with blackhole address")
+	require.ErrorIs(t, err, errBlackholeAddress)
 
 	// Test an address outside of the reserved ranges cannot be registered
 	m.Address = common.BigToAddress(big.NewInt(1))
 	err = RegisterModule(m)
-	require.ErrorContains(t, err, "not in a reserved range")
+	require.ErrorIs(t, err, errAddressNotInReservedRange)
 }
