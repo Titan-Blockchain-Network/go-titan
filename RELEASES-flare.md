@@ -4,7 +4,21 @@ Here are listed specific changes to the code for the Flare and Songbird networks
 
 ## v1.14.0
 
-TODO
+This release updates the Flare and Songbird codebase to AvalancheGo v1.14.0 (Granite upgrade).
+
+The changes go into effect
+ * June 11, 2026 at 12 PM UTC for the Coston network,
+ * June 16, 2026 at 12 PM UTC for the Coston2 network,
+ * July 7, 2026 at 12 PM UTC for the Songbird network,
+ * July 14, 2026 at 12 PM UTC for the Flare network.
+
+Nodes should be updated to this version before these times.
+
+### Note:
+
+ * The minimum C-chain gas price (base fee floor) is raised to 500 GWei.
+ * For the Flare network, the maximum validator stake amount is increased from 200 million to 300 million FLR.
+ * For the Flare and Coston2 networks, the minimum delegation fee for validators is set to 20% (previously 0%).
 
 ## v1.13.0
 
