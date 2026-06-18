@@ -194,6 +194,9 @@ var (
 	// CostonConfig is the config tat should be used to generate the Coston test
 	// network genesis.
 	CostonConfig Config
+
+	// TitanConfig is the config that should be used to generate the Titan blockchain genesis.
+	TitanConfig Config
 )
 
 func init() {
@@ -204,6 +207,7 @@ func init() {
 	unparsedLocalFlareConfig := UnparsedConfig{}
 	unparsedSongbirdConfig := UnparsedConfig{}
 	unparsedCostonConfig := UnparsedConfig{}
+	unparsedTitanConfig := UnparsedConfig{}
 
 	err := errors.Join(
 		json.Unmarshal(mainnetGenesisConfigJSON, &unparsedMainnetConfig),
@@ -213,6 +217,7 @@ func init() {
 		json.Unmarshal(localFlareGenesisConfigJSON, &unparsedLocalFlareConfig),
 		json.Unmarshal([]byte(songbirdGenesisConfigJSON), &unparsedSongbirdConfig),
 		json.Unmarshal([]byte(costonGenesisConfigJSON), &unparsedCostonConfig),
+		json.Unmarshal(titanGenesisConfigJSON, &unparsedTitanConfig),
 	)
 	if err != nil {
 		panic(err)
@@ -255,6 +260,12 @@ func init() {
 		panic(err)
 	}
 	CostonConfig.CChainGenesis = costonCChainGenesis
+
+	TitanConfig, err = unparsedTitanConfig.Parse()
+	if err != nil {
+		panic(err)
+	}
+	// cChainGenesis is already inside the titanGenesisConfigJSON
 }
 
 func GetConfig(networkID uint32) *Config {
@@ -273,6 +284,8 @@ func GetConfig(networkID uint32) *Config {
 		return &SongbirdConfig
 	case constants.CostonID:
 		return &CostonConfig
+	case constants.TitanID:
+		return &TitanConfig
 	default:
 		tempConfig := LocalConfig
 		tempConfig.NetworkID = networkID

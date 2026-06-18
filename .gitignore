@@ -3,3 +3,24 @@
 local-scripts/
 plans/
 audits/
+
+# Titan blockchain sensitive / runtime data
+titan-staking/
+titan-keys/
+*-staking/
+data/
+db/
+logs/
+*.key
+staker.crt
+staker.key
+signer.key
+
+# Common node runtime artifacts
+tmp/
+tmp-*/
+build/
+*.log
+*.pid
+db-*
+logs-*

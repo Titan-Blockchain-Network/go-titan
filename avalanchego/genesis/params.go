@@ -63,6 +63,8 @@ func GetTxFeeConfig(networkID uint32) TxFeeConfig {
 		return SongbirdParams.TxFeeConfig
 	case constants.CostonID:
 		return CostonParams.TxFeeConfig
+	case constants.TitanID:
+		return TitanParams.TxFeeConfig
 	default:
 		// for LocalID and any other networkID
 		return LocalParams.TxFeeConfig
@@ -85,6 +87,8 @@ func GetStakingConfig(networkID uint32) StakingConfig {
 		return SongbirdParams.StakingConfig
 	case constants.CostonID:
 		return CostonParams.StakingConfig
+	case constants.TitanID:
+		return TitanParams.StakingConfig
 	default:
 		return LocalParams.StakingConfig
 	}

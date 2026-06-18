@@ -46,6 +46,10 @@ func TestGetHRP(t *testing.T) {
 			id:  LocalFlareID,
 			hrp: LocalFlareHRP,
 		},
+		{
+			id:  TitanID,
+			hrp: TitanHRP,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.hrp, func(t *testing.T) {

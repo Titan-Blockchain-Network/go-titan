@@ -65,8 +65,8 @@ func SetEthUpgrades(c *ChainConfig) error {
 		// Songbird did not have AP3 active immediately
 		c.BerlinBlock = big.NewInt(0)        // AP2 has always been active
 		c.LondonBlock = big.NewInt(12349716) // https://songbird.flarescan.com/block/12349716, AP3 activation block
-	case c.ChainID != nil && (CostwoChainID.Cmp(c.ChainID) == 0 || FlareChainID.Cmp(c.ChainID) == 0):
-		// Flare and Costwo have always hand AP3 activated, so BerlinBlock and LondonBlock are both 0.
+	case c.ChainID != nil && (CostwoChainID.Cmp(c.ChainID) == 0 || FlareChainID.Cmp(c.ChainID) == 0 || TitanChainID.Cmp(c.ChainID) == 0):
+		// Flare, Costwo and Titan have AP3 activated at genesis.
 		c.BerlinBlock = big.NewInt(0)
 		c.LondonBlock = big.NewInt(0)
 	default:
