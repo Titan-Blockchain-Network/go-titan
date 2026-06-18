@@ -235,8 +235,6 @@ main() {
 
     apt_update_install
     install_go_if_needed
-    # ensure_repo removed - this script assumes the repo is already cloned by the user.
-    # (install.sh handles the bare-server clone case.)
     build_titan_tools
 
     interactive_setup
