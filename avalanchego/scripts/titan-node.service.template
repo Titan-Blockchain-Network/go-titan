@@ -1,0 +1,17 @@
+[Unit]
+Description=Titan Blockchain Node
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/titan-data
+ExecStart=/usr/local/bin/avalanchego \
+  --network-id=titan \
+  --config-file=/root/titan-data/config.json
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
