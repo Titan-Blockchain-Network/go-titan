@@ -112,6 +112,20 @@ install_go_if_needed() {
 build_titan_tools() {
     log "Building Titan CLI and avalanchego (this may take a few minutes)..."
     cd "$AVALANCHE_DIR"
+
+    # Setup mod cache with local sources (the hack from build.sh)
+    source "$AVALANCHE_DIR"/scripts/versions.sh || true
+    GOPATH=${GOPATH:-$HOME/go}
+    mkdir -p "$GOPATH/pkg/mod/github.com/ava-labs"
+    rsync -ar --delete "$AVALANCHE_DIR"/* "$GOPATH/pkg/mod/github.com/ava-labs/avalanchego@$avalanche_version" 2>/dev/null || true
+    rsync -ar --delete "$REPO_ROOT/coreth"/* "$GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version" 2>/dev/null || true
+
+    # Remove the relative replace in coreth's cached go.mod so it uses the versioned (overlaid) avalanchego
+    CORETH_MOD="$GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version/go.mod"
+    if [ -f "$CORETH_MOD" ]; then
+        sed -i '/replace github.com\/ava-labs\/avalanchego => \.\./d' "$CORETH_MOD" 2>/dev/null || true
+    fi
+
     ./scripts/build-titan.sh
     log "Build complete. Binaries in build/"
 
@@ -163,9 +177,9 @@ interactive_setup() {
     default_keys="/root/keys"
     if $IS_FIRST; then
         default_keys="/root/keys"
-        warn "For the first node you MUST have the genesis staking keys (staker.crt, staker.key, signer.key) in the keys dir."
+        warn "For the first node: if no keys are present, fresh genesis keys will be generated and backed up."
     fi
-    prompt "Directory containing staker.crt / staker.key / signer.key" "$default_keys" KEYS_DIR
+    prompt "Directory containing staker.crt / staker.key / signer.key (will generate if missing for first node)" "$default_keys" KEYS_DIR
 
     prompt "Data directory" "/root/titan-data" DATA_DIR
     prompt "Systemd service name" "titan-node" SERVICE_NAME
