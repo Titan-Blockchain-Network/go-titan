@@ -2,16 +2,20 @@
 #
 # install.sh - One-liner friendly installer/bootstrap for Titan blockchain node.
 #
-# Usage (on fresh Ubuntu server):
-#   curl -sSL https://raw.githubusercontent.com/YOURORG/go-titan/main/install.sh | bash
+# Two ways to use:
+# 1. Bare fresh server (nothing cloned yet) - one-liner:
+#    curl -sSL https://raw.githubusercontent.com/Titan-Blockchain-Network/go-titan/main/install.sh | bash
 #
-# This is the smoothest entry point. It ensures basic tools, clones, then
-# runs the full interactive bootstrap (apt update, Go, build, firewall apply,
-# systemd, healthcheck that verifies you are a validator).
+# 2. After you have already cloned the repo manually (recommended for most cases):
+#    git clone https://github.com/Titan-Blockchain-Network/go-titan.git
+#    cd go-titan
+#    ./avalanchego/scripts/titan-server-bootstrap.sh
+#
+# This script handles the bare case. When already cloned it detects and delegates cleanly.
 
 set -euo pipefail
 
-REPO="${REPO:-https://github.com/your-org/go-titan.git}"
+REPO="${REPO:-https://github.com/Titan-Blockchain-Network/go-titan.git}"
 TARGET_DIR="${TARGET_DIR:-go-titan}"
 
 echo "=== Titan one-liner installer ==="
@@ -26,6 +30,19 @@ if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
   fi
 fi
 
+# Detect if we're already inside a valid checkout (recommended path after manual clone)
+if [ -f "./avalanchego/scripts/titan-server-bootstrap.sh" ] || [ -f "../avalanchego/scripts/titan-server-bootstrap.sh" ]; then
+  echo "Detected existing go-titan checkout. Running bootstrap directly (no re-clone)."
+  if [ -f "./avalanchego/scripts/titan-server-bootstrap.sh" ]; then
+    TARGET_DIR="."
+  else
+    TARGET_DIR=".."
+  fi
+  cd "$TARGET_DIR"
+  exec ./avalanchego/scripts/titan-server-bootstrap.sh "$@"
+fi
+
+# Bare server path (one-liner curl | bash on fresh box with nothing cloned yet)
 if [ ! -d "$TARGET_DIR" ]; then
   echo "Cloning $REPO into ./$TARGET_DIR ..."
   git clone "$REPO" "$TARGET_DIR" || { echo "Clone failed. Set REPO env var or clone manually."; exit 1; }
