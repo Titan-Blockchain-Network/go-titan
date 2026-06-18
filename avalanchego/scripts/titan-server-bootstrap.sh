@@ -112,6 +112,20 @@ install_go_if_needed() {
 build_titan_tools() {
     log "Building Titan CLI and avalanchego (this may take a few minutes)..."
     cd "$AVALANCHE_DIR"
+
+    # Setup mod cache with local sources (the hack from build.sh)
+    source "$AVALANCHE_DIR"/scripts/versions.sh || true
+    GOPATH=${GOPATH:-$HOME/go}
+    mkdir -p "$GOPATH/pkg/mod/github.com/ava-labs"
+    rsync -ar --delete "$AVALANCHE_DIR"/* "$GOPATH/pkg/mod/github.com/ava-labs/avalanchego@$avalanche_version" 2>/dev/null || true
+    rsync -ar --delete "$REPO_ROOT/coreth"/* "$GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version" 2>/dev/null || true
+
+    # Remove the relative replace in coreth's cached go.mod so it uses the versioned (overlaid) avalanchego
+    CORETH_MOD="$GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version/go.mod"
+    if [ -f "$CORETH_MOD" ]; then
+        sed -i '/replace github.com\/ava-labs\/avalanchego => \.\./d' "$CORETH_MOD" 2>/dev/null || true
+    fi
+
     ./scripts/build-titan.sh
     log "Build complete. Binaries in build/"
 
