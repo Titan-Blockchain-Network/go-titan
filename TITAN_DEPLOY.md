@@ -217,4 +217,339 @@ If you ever want to change the initial validator set, token distribution, start 
 - NodeID: `NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8`
 - Use the keys from the original `titan-staking/` directory (securely copied).
 
-Happy validating on Titan!
+## Exact Mechanics: How a Node Actually Becomes a Validator (Source Review)
+
+From reading the code:
+
+1. **Node identity is derived only from files you pass on the command line**:
+   - `--staking-tls-cert-file` + `--staking-tls-key-file` → NodeID (see `ids.NodeIDFromCert` + node/node.go:136)
+   - `--staking-signer-key-file` → BLS signer → `info.getNodeID` returns the POP (node/node.go:1455, api/info/service.go)
+   - These two must match exactly what is later recorded on the P-chain.
+
+2. **Nothing in the node config "enables" validator status**.
+   - `keystore.*` APIs were **deleted** (RELEASES v1.12.2, avalanchego#3657). `/ext/keystore` returns 404 on purpose.
+   - Platform, info, health APIs are registered automatically by the VMs when the chains start (chains/manager.go + api/server).
+   - No `--api-*-enabled` flag turns a node into a validator.
+
+3. **The only thing that makes a NodeID a validator** is a record in P-chain state:
+   - At genesis: `initialStakers` array in `genesis_titan.json` is turned into `PermissionlessValidator` entries (genesis/genesis.go:383), put into the P genesis, then loaded by `state.syncGenesis` → `PutCurrentValidator` (vms/platformvm/state/state.go:1743).
+   - Later: someone with P-balance calls `IssueAddPermissionlessValidatorTx` (wallet) or submits a signed `AddPermissionlessValidatorTx`. This is executed and the staker appears in `GetCurrentValidators` (state + service.go).
+   - The running node's health "bls" check does `vdrs.GetValidator(PrimaryNetworkID, myNodeID)` (node/node.go:1457). If missing → "node is not a validator".
+
+4. **Why ATLAS showed as non-validator** (the concerning symptom):
+   - Its on-disk staking files did not produce the NodeID that exists in the *currently loaded* P-chain genesis state.
+   - Or the data directory was initialized with an older/different version of `genesis_titan.json`.
+   - `getCurrentValidators` returned `[]` and the bls health check said "node is not a validator".
+
+   Fix: use the **exact** files from `titan-staking/`, **wipe** the data dir, rebuild from current source, restart as the first node (`--bootstrap-ips=""`).
+
+5. **For a second node (Prometheus)**: generate fresh keys, start it, move funds C→P using the wallet SDK (the two Go helpers), then issue the Add tx using the exact POP returned by **that node's own** `info.getNodeID`.
+
+## Full "Add a Second Node + Make It a Validator" (Tested Against Actual Code)
+
+Use the dedicated wrapper that calls the correct wallet code paths.
+
+**On Prometheus-1 (the new node):**
+
+```bash
+# 1. Make sure source + genesis is up to date on this machine
+cd ~/go-titan
+# (scp or git pull the latest, including any genesis_titan.json changes)
+
+cd avalanchego
+./scripts/build.sh
+
+# 2. Run the complete flow (transfer + register as validator)
+# Get the hex private key from MetaMask for the funded C address first.
+bash scripts/titan-add-validator.sh --privkey 0123456789abcdef... --amount 2000000
+```
+
+The script will:
+- Print the real NodeID + POP that **this** node is advertising.
+- Run the C→P transfer (IssueExport + IssueImport).
+- Immediately issue AddPermissionlessValidatorTx using that exact POP.
+- Give you the exact `curl` commands to verify from both machines.
+
+**Verify from ATLAS (via SSH from Prometheus or directly):**
+
+```bash
+ssh root@165.22.0.208 '
+  echo "=== ATLAS health (look for bls and C) ===";
+  curl -s http://127.0.0.1:9650/ext/health | jq ".healthy, .checks.bls, .checks.C.error";
+  echo "=== Current validators (should now show 2) ===";
+  curl -s -X POST -H "Content-Type: application/json" --data '\''{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}'\'' http://127.0.0.1:9650/ext/bc/P | jq ".";
+'
+```
+
+Also run the same `getCurrentValidators` and health locally on Prometheus after the script finishes.
+
+**If ATLAS itself is still not listed:**
+
+On ATLAS:
+```bash
+systemctl stop titan-atlas1 || true
+rm -rf /root/titan-atlas1-data   # or the data dir you use
+# Make sure titan-staking/ files (or the ones matching the genesis entry) are in the right place
+cp /path/to/correct/staker.* /path/to/correct/signer.key /root/keys/   # example
+cd ~/go-titan/avalanchego && ./scripts/build.sh
+# Start again (empty bootstrap, the three staking flags pointing at the genesis-matching files)
+```
+
+Then wait for it to come up and check `platform.getCurrentValidators` again.
+
+## Regenerating keys or changing the genesis validator
+
+See the top of `scripts/gen-titan-keys.go --help` (or run it with `--genesis`). After editing `genesis_titan.json` you **must** rebuild and all nodes must use clean data directories.
+
+Happy validating on Titan! (This procedure is now grounded in the actual platformvm genesis + AddPermissionlessValidator + node identity paths.)
+
+## Security & Firewall (Critical)
+
+Before starting the node on any server (especially after reset):
+
+**Recommended (Ubuntu / DigitalOcean droplets - ufw):**
+
+```bash
+# As root
+ufw allow 22/tcp comment 'SSH'
+
+# Staking port - MUST be open for p2p (validators talk on this)
+ufw allow 9651/tcp comment 'Titan staking'
+
+# HTTP API (9650) - restrict it!
+# For initial testing you can do:
+# ufw allow 9650/tcp
+# But for real use, only from your control machine:
+ufw allow from YOUR_CONTROL_IP to any port 9650
+
+ufw --force enable
+ufw status verbose
+```
+
+To temporarily disable:
+```bash
+ufw disable
+```
+
+**Production notes:**
+- Run API on 127.0.0.1 and access via SSH tunnel if possible: `ssh -L 9650:localhost:9650 root@server`
+- Or put nginx in front with basic auth / IP allow.
+- Never leave 9650 wide open on the public internet if avoidable.
+- Keep staking (9651) public.
+
+## Systemd Units (Persistence)
+
+Use the CLI to generate them:
+
+```bash
+./build/titan node install-systemd \
+  --name titan-atlas \
+  --first \
+  --data-dir /root/titan-data \
+  --keys-dir /root/keys \
+  --public-ip 165.22.0.208
+```
+
+This writes `/etc/systemd/system/titan-atlas.service`.
+
+Then:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now titan-atlas
+journalctl -u titan-atlas -f
+```
+
+For additional nodes use `--name titan-prometheus1` (without `--first`) and fill in the bootstrap IPs/IDs in the generated unit or edit it.
+
+A template is also at `avalanchego/scripts/titan-node.service.template`.
+
+## Full Lifecycle: First Validator + Adding As Many Nodes As You Want (Minimal Manual Work)
+
+The goal is one well-defined custom blockchain (Titan, ID 888) where:
+- The first node is the **genesis validator** (baked into genesis).
+- Every additional node is a normal permissionless validator added via on-chain tx.
+- Tooling (`build/titan`) removes as much manual work as possible.
+
+### 1. The Very First Validator (Genesis Bootstrapper)
+
+This is special. It does **not** run `titan validator add`.
+
+It becomes a validator because its NodeID + BLS POP + reward address are hardcoded in `genesis_titan.json` under `initialStakers`.
+
+**Exact code path (from source):**
+- `genesis/genesis.go` turns the `initialStakers` entry into a genesis `PermissionlessValidator`.
+- `vms/platformvm/state/state.go:syncGenesis` loads it as a `CurrentStaker` at chain start.
+- No separate tx is ever issued for it.
+- The node must be started with **exactly** the staking keys that produce that NodeID and POP.
+- Start with `--bootstrap-ips="" --bootstrap-ids=""` (it is the root of trust).
+
+**With the new tooling (recommended):**
+
+On the machine that will be the first node (e.g. ATLAS):
+
+```bash
+cd ~/go-titan
+./scripts/build-titan.sh          # builds both avalanchego and the titan CLI
+
+# Use the committed genesis keys (titan-staking/ at repo root)
+./build/titan node setup --first --keys-dir ../titan-staking --public-ip=165.22.0.208
+```
+
+This prints the exact command to run the node (with empty bootstrap, correct key flags, proper dirs).
+
+Copy the keys if they are not in the suggested location:
+```bash
+mkdir -p /root/keys
+cp ../titan-staking/* /root/keys/
+chmod 600 /root/keys/*.key
+```
+
+Then run the printed `avalanchego` command (or put it in systemd).
+
+After it starts:
+```bash
+./build/titan status
+curl -s http://127.0.0.1:9650/ext/bc/P ... platform.getCurrentValidators
+# You should see the genesis NodeID as a validator.
+```
+
+If it doesn't appear, your keys do not match the genesis (see `titan node setup --first` output for the expected NodeID).
+
+### 2. Adding More Nodes (as many as you want)
+
+**On the new machine:**
+
+```bash
+./build/titan node setup --join 165.22.0.208:9651 --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8
+```
+
+This tells you:
+- Generate fresh keys: `titan keys generate --dir ./new-node-keys`
+- Start command with the right `--bootstrap-ips` and `--bootstrap-ids`
+- What NodeID/POP it will have (after you start it once and query its /ext/info)
+
+**On a control machine that has access to the master funded private key (the 0x1b37... one):**
+
+```bash
+./build/titan validator add \
+  --from @/secure/master-operator.key \
+  --uri http://new-node-public-ip:9650 \
+  --amount 2000000
+```
+
+Because we improved the CLI, it will:
+- Automatically connect to the new node's API (`--uri`)
+- Call `info.getNodeID` to get the exact current NodeID + POP
+- Do the C→P transfer from the master key
+- Issue the `AddPermissionlessValidatorTx`
+
+No manual copy-paste of hex POPs needed.
+
+**Verification (from anywhere):**
+
+```bash
+curl -s http://any-node:9650/ext/bc/P \
+  -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' \
+  | jq '.result.validators[] | select(.nodeID | contains("the-new-NodeID"))'
+```
+
+Both the genesis validator and all added ones will appear.
+
+### 3. One Custom Blockchain, Many Nodes — Defined Outcome
+
+- All nodes use the same `genesis_titan.json` (embedded at build time).
+- The genesis validator is always the one in `initialStakers[0]`.
+- Every other validator is added the same way via the P-chain.
+- Use the same `titan` CLI everywhere.
+- Fund movements and validator registration are now one `titan validator add` command.
+- Keys are always generated the same way.
+- Bootstrap is explicit via `--join`.
+
+### Next-level reductions in manual work (future / you can extend)
+
+- `titan node start` wrapper that auto-applies titan defaults and a config file.
+- Auto-generation of systemd units: `titan node install-systemd`.
+- A single "control plane" script that knows all current nodes and can mass-fund / mass-add.
+- Pre-allocating a few smaller operator addresses in genesis (still using your preferred master-key model).
+
+Run `./build/titan node help` and `./build/titan --help` after building to see the current commands.
+
+## Reset Servers & Clean Launch (Recommended for you now)
+
+Since you are resetting the two servers:
+
+**On both servers (after fresh OS / clean data):**
+
+Run the full interactive server bootstrap script. It **always starts with `apt-get update`**, installs Go (the exact version from go.mod) + build essentials, ufw, jq, git, etc., ensures the repo, builds everything, **automatically places the binary in /usr/local/bin**, then interactively asks for inputs and confirmations, applies firewall programmatically, sets up systemd, starts the node, and ends with a healthcheck (that also checks `getCurrentValidators` membership).
+
+**Super smooth one-liner (on a fresh server as root/sudo):**
+
+```bash
+curl -sSL https://raw.githubusercontent.com/.../install.sh | bash
+```
+
+Or step by step:
+
+```bash
+git clone https://.../go-titan.git
+cd go-titan
+./scripts/titan-server-bootstrap.sh
+```
+
+The script stops and asks for input at key points and ends with the healthcheck. This is the recommended single entry point after a server reset.
+```
+
+**ATLAS (first / genesis validator):**
+
+Use the high-level bootstrap (does keys verify, config, **programmatic firewall**, systemd, start, and ends with healthcheck):
+
+```bash
+cd avalanchego
+./build/titan node bootstrap --first \
+  --public-ip=YOUR_IP \
+  --keys-dir /root/keys \
+  --data-dir /root/titan-data \
+  --apply-firewall
+```
+
+(Requires root for firewall/systemd. The last step is the healthcheck.)
+```
+
+**New node (after ATLAS is up):**
+
+```bash
+./build/titan node setup --join ATLAS_IP:9651 --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8
+
+# Generate keys
+./build/titan keys generate --dir /root/keys
+
+# Install systemd (edit the unit or pass flags)
+./build/titan node install-systemd --name titan-prometheus1 --public-ip YOUR_IP
+
+# Start it
+sudo systemctl enable --now titan-prometheus1
+```
+
+**Fund + make it a validator (from control machine with master key):**
+
+```bash
+./build/titan validator add --from 0x...OR@file --uri http://new-node:9650 --amount 2000000
+```
+
+**Firewall on every server (run before or after):**
+
+```bash
+./build/titan node firewall
+# then execute the printed ufw commands (adjust IPs)
+```
+
+**Verify:**
+
+```bash
+./build/titan status
+curl -s http://localhost:9650/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
+```
+
+This should now feel like a real, low-friction custom blockchain where adding nodes is a repeatable, documented process.
+
+This gives you a clear, repeatable path from "empty repo clone" to "one running custom blockchain with N validators". The first is special (genesis), everything after is uniform (fund + register).
