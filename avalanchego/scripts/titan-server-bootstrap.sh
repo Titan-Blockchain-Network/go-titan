@@ -268,12 +268,16 @@ main() {
 
             # Parse the generated values
             NODE_ID=$(grep "NodeID:" "$GEN_OUTPUT" | head -1 | awk '{print $2}')
-            PUB_KEY=$(grep "BLS Public Key:" "$GEN_OUTPUT" | head -1 | awk '{print $3}')
-            POP=$(grep "Proof of Possession:" "$GEN_OUTPUT" | head -1 | awk '{print $3}')
+            PUB_KEY=$(grep "BLS Public Key:" "$GEN_OUTPUT" | head -1 | awk '{print $NF}')
+            POP=$(grep "Proof of Possession:" "$GEN_OUTPUT" | head -1 | awk '{print $NF}')
             REWARD_ADDR="P-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn"  # consistent with current allocations
 
             if [ -z "$NODE_ID" ] || [ -z "$PUB_KEY" ] || [ -z "$POP" ]; then
                 err "Failed to parse generated key output. Check $GEN_OUTPUT"
+                exit 1
+            fi
+            if [[ "$PUB_KEY" != 0x* ]] || [[ "$POP" != 0x* ]]; then
+                err "Parsed pubkey or pop is missing 0x prefix. Check generation output parsing."
                 exit 1
             fi
 
