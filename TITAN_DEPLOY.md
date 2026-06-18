@@ -478,7 +478,7 @@ Run `./build/titan node help` and `./build/titan --help` after building to see t
 
 Since you are resetting the two servers:
 
-**On servers after you have cloned the repo (the normal case):**
+**Clean one-script flow after clone (the main path for ATLAS-1 etc.):**
 
 ```bash
 git clone https://github.com/Titan-Blockchain-Network/go-titan.git
@@ -486,15 +486,16 @@ cd go-titan
 ./avalanchego/scripts/titan-server-bootstrap.sh
 ```
 
-The script:
-- Starts with `apt-get update`
-- Installs Go + build deps + ufw + jq if missing
-- Builds everything
-- Interactively asks questions for first vs additional node
-- Applies firewall, systemd, etc.
-- Ends with healthcheck
+**One script sets everything up interactively** (assume you've cloned):
 
-This assumes you have already cloned (no double clone work).
+- apt-get update + all deps/Go/build
+- Interactive prompts (say "yes" for first/genesis node on ATLAS-1)
+- For clean first node: auto-generates keys + backs up to separate folder (e.g. /root/genesis-keys-backup-*) + updates genesis + rebuilds
+- Programmatic firewall
+- Systemd + start
+- Ends with healthcheck (verifies validator status)
+
+No install.sh needed if cloned. This is the smooth "one run" for the titan network.
 
 **For a completely bare server (nothing cloned yet):**
 

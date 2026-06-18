@@ -177,9 +177,9 @@ interactive_setup() {
     default_keys="/root/keys"
     if $IS_FIRST; then
         default_keys="/root/keys"
-        warn "For the first node you MUST have the genesis staking keys (staker.crt, staker.key, signer.key) in the keys dir."
+        warn "For the first node: if no keys are present, fresh genesis keys will be generated and backed up."
     fi
-    prompt "Directory containing staker.crt / staker.key / signer.key" "$default_keys" KEYS_DIR
+    prompt "Directory containing staker.crt / staker.key / signer.key (will generate if missing for first node)" "$default_keys" KEYS_DIR
 
     prompt "Data directory" "/root/titan-data" DATA_DIR
     prompt "Systemd service name" "titan-node" SERVICE_NAME
