@@ -41,6 +41,15 @@ This guide explains how to deploy your own observation node: <https://docs.flare
 
 See `tests/README.md` for testing details
 
+## Titan Blockchain
+
+This repository now contains a fully rebranded independent blockchain called **Titan** (token: TITAN).
+
+See [TITAN_DEPLOY.md](./TITAN_DEPLOY.md) for:
+- How to generate origin (genesis) keys directly on your first server
+- How to generate keys for additional nodes
+- Exact commands to launch the first bootstrapper and join more nodes
+
 ## Container image
 
 Public container images are hosted on [Docker HUB](https://hub.docker.com/r/flarefoundation/go-flare) and [Github Packages](https://github.com/orgs/flare-foundation/packages?repo_name=go-flare);

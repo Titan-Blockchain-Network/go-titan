@@ -28,6 +28,27 @@ The **private** keys are **not** in the code:
 
 Only the machine(s) running the genesis-listed validator(s) need these exact private keys.
 
+### Generating the Origin (Genesis) Keys on Server 1
+
+If you want to generate the very first bootstrapper keys directly on the production Server 1 (recommended for security):
+
+```bash
+# On Server 1
+cd /path/to/go-titan/avalanchego
+./scripts/gen-titan-keys.sh --genesis --dir=/opt/titan/genesis-keys
+```
+
+This will:
+- Create the three key files locally on the server.
+- Print the full `initialStakers` JSON block you would need if you ever rebuild the genesis.
+
+**Note**: The current committed `genesis_titan.json` already contains one set of origin keys. If you generate a brand new set on Server 1, you must:
+1. Update `initialStakers` in `avalanchego/genesis/genesis_titan.json`
+2. Re-run `./scripts/build.sh`
+3. Distribute the new binary + new genesis to all nodes
+
+For most people it is simpler to just use the keys that were generated when the genesis was created (copy `titan-staking/` securely).
+
 ## First Node (Bootstrapper) Deployment
 
 ### 1. Build
@@ -41,14 +62,25 @@ The binary will be at `build/avalanchego`.
 
 ### 2. Prepare directories and keys
 
-```bash
-# On the target machine
-mkdir -p /opt/titan/data/db /opt/titan/data/logs /opt/titan/keys
+**Option A – Use pre-generated keys** (easiest if you already have the backup):
 
-# Copy the three genesis validator key files here (from your secure backup)
+```bash
+mkdir -p /opt/titan/data/db /opt/titan/data/logs /opt/titan/keys
 cp staker.crt staker.key signer.key /opt/titan/keys/
 chmod 600 /opt/titan/keys/staker.key /opt/titan/keys/signer.key
 ```
+
+**Option B – Generate origin keys directly on Server 1** (air-gapped / high security):
+
+```bash
+cd avalanchego
+./scripts/gen-titan-keys.sh --genesis --dir=/opt/titan/genesis-keys
+
+# Then use the generated files:
+cp /opt/titan/genesis-keys/* /opt/titan/keys/
+```
+
+After generation you will also see the JSON block printed — keep it if you plan to create a new genesis later.
 
 ### 3. Start the first node
 
@@ -84,61 +116,43 @@ chmod 600 /opt/titan/keys/staker.key /opt/titan/keys/signer.key
 
 The node should report `NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8`.
 
+## Generating Keys (Recommended Tool)
+
+Titan ships with an official key generator:
+
+```bash
+cd avalanchego
+
+# For a regular additional node
+./scripts/gen-titan-keys.sh
+
+# For the very first genesis bootstrapper (origin keys)
+./scripts/gen-titan-keys.sh --genesis
+
+# Custom location
+./scripts/gen-titan-keys.sh --dir=/tmp/my-titan-keys --genesis
+```
+
+The script will:
+- Write `staker.crt`, `staker.key`, and `signer.key`
+- Print the NodeID
+- Print the BLS public key + proof of possession
+- When using `--genesis`, also print the exact JSON block to use in `initialStakers`
+
+**Always run this on the target server** if you want the keys generated locally (especially useful for air-gapped or high-security Server 1).
+
+---
+
 ## Adding More Nodes (Consecutive Nodes)
 
 ### Step 1: Generate fresh keys for the new node
 
-Every new node needs its own identity.
-
-You can generate them with a small Go program (example):
+Every additional node must use its own fresh keys:
 
 ```bash
-# Create a simple key generator (run from avalanchego dir)
-cat > /tmp/gen_node_keys.go << 'EOF'
-package main
-
-import (
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
-
-	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/staking"
-	"github.com/ava-labs/avalanchego/utils/crypto/bls/signer/localsigner"
-	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
-)
-
-func main() {
-	dir := "new-node-staking"
-	os.MkdirAll(dir, 0755)
-
-	certPEM, keyPEM, _ := staking.NewCertAndKeyBytes()
-	os.WriteFile(filepath.Join(dir, "staker.crt"), certPEM, 0644)
-	os.WriteFile(filepath.Join(dir, "staker.key"), keyPEM, 0600)
-
-	tlsCert, _ := tls.X509KeyPair(certPEM, keyPEM)
-	if tlsCert.Leaf == nil {
-		tlsCert.Leaf, _ = x509.ParseCertificate(tlsCert.Certificate[0])
-	}
-	stakingCert, _ := staking.ParseCertificate(tlsCert.Leaf.Raw)
-	nodeID := ids.NodeIDFromCert(stakingCert)
-	fmt.Println("NodeID:", nodeID)
-
-	blsSk, _ := localsigner.New()
-	os.WriteFile(filepath.Join(dir, "signer.key"), blsSk.ToBytes(), 0600)
-
-	pop, _ := signer.NewProofOfPossession(blsSk)
-	fmt.Println("BLS Pubkey:", hex.EncodeToString(pop.PublicKey[:]))
-	fmt.Println("Keys written to", dir)
-}
-EOF
-go run /tmp/gen_node_keys.go
+cd avalanchego
+./scripts/gen-titan-keys.sh --dir=/path/to/new-node-staking
 ```
-
-This produces a new `new-node-staking/` directory with fresh files.
 
 ### Step 2: Start the new node pointing at an existing one
 
