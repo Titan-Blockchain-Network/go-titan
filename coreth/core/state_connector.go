@@ -51,7 +51,8 @@ var (
 		AddValue(params.CostwoChainID, GetStateConnectorIsActivatedAndCalledCostwo).
 		AddValue(params.CostonChainID, GetStateConnectorIsActivatedAndCalledCoston).
 		AddValue(params.LocalFlareChainID, GetStateConnectorIsActivatedAndCalledLocalFlare).
-		AddValue(params.LocalChainID, GetStateConnectorIsActivatedAndCalledLocal)
+		AddValue(params.LocalChainID, GetStateConnectorIsActivatedAndCalledLocal).
+		AddValue(params.TitanChainID, GetStateConnectorIsActivatedAndCalledTitan)
 )
 
 func GetStateConnectorIsActivatedAndCalled(isDurango bool, chainID *big.Int, blockTime uint64, to common.Address) bool {
@@ -79,6 +80,11 @@ func GetStateConnectorIsActivatedAndCalledLocalFlare(blockTime uint64, to common
 }
 
 func GetStateConnectorIsActivatedAndCalledLocal(_ uint64, to common.Address) bool {
+	return to == common.HexToAddress("0x1000000000000000000000000000000000000001")
+}
+
+func GetStateConnectorIsActivatedAndCalledTitan(_ uint64, to common.Address) bool {
+	// Keep state connector feature for Titan from genesis
 	return to == common.HexToAddress("0x1000000000000000000000000000000000000001")
 }
 
@@ -110,7 +116,7 @@ func GetStateConnectorIsActivatedAndCalledCoston(blockTime uint64, to common.Add
 
 func GetStateConnectorCoinbaseSignalAddr(chainID *big.Int, blockTime uint64) common.Address {
 	switch {
-	case chainID.Cmp(params.FlareChainID) == 0 || chainID.Cmp(params.CostwoChainID) == 0 || chainID.Cmp(params.LocalFlareChainID) == 0:
+	case chainID.Cmp(params.FlareChainID) == 0 || chainID.Cmp(params.CostwoChainID) == 0 || chainID.Cmp(params.LocalFlareChainID) == 0 || chainID.Cmp(params.TitanChainID) == 0:
 		return common.HexToAddress("0x00000000000000000000000000000000000DEaD1")
 	case chainID.Cmp(params.SongbirdChainID) == 0:
 		switch {

@@ -27,6 +27,7 @@ const (
 	LocalFlareID uint32 = 162
 	SongbirdID   uint32 = 5
 	CostonID     uint32 = 7
+	TitanID      uint32 = 888
 
 	MainnetName    = "mainnet"
 	CascadeName    = "cascade"
@@ -39,6 +40,7 @@ const (
 	LocalFlareName = "localflare"
 	SongbirdName   = "songbird"
 	CostonName     = "coston"
+	TitanName      = "titan"
 
 	MainnetHRP    = "avax"
 	CascadeHRP    = "cascade"
@@ -52,6 +54,7 @@ const (
 	LocalFlareHRP = "localflare"
 	SongbirdHRP   = "songbird"
 	CostonHRP     = "coston"
+	TitanHRP      = "titan"
 )
 
 // Variables to be exported
@@ -71,6 +74,7 @@ var (
 		LocalFlareID: LocalFlareName,
 		SongbirdID:   SongbirdName,
 		CostonID:     CostonName,
+		TitanID:      TitanName,
 	}
 	NetworkNameToNetworkID = map[string]uint32{
 		MainnetName:    MainnetID,
@@ -84,6 +88,7 @@ var (
 		LocalFlareName: LocalFlareID,
 		SongbirdName:   SongbirdID,
 		CostonName:     CostonID,
+		TitanName:      TitanID,
 	}
 
 	NetworkIDToHRP = map[uint32]string{
@@ -98,6 +103,7 @@ var (
 		LocalFlareID: LocalFlareHRP,
 		SongbirdID:   SongbirdHRP,
 		CostonID:     CostonHRP,
+		TitanID:      TitanHRP,
 	}
 	NetworkHRPToNetworkID = map[string]uint32{
 		MainnetHRP:    MainnetID,
@@ -111,6 +117,7 @@ var (
 		LocalFlareHRP: LocalFlareID,
 		SongbirdHRP:   SongbirdID,
 		CostonHRP:     CostonID,
+		TitanHRP:      TitanID,
 	}
 	ProductionNetworkIDs = set.Of(FlareID, SongbirdID, CostwoID, CostonID)
 

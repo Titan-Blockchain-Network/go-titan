@@ -224,7 +224,7 @@ func validateConfig(networkID uint32, config *Config, stakingCfg *StakingConfig)
 //  2. The asset ID of AVAX
 func FromFile(networkID uint32, filepath string, stakingCfg *StakingConfig) ([]byte, ids.ID, error) {
 	switch networkID {
-	case constants.FlareID, constants.SongbirdID, constants.CostwoID, constants.CostonID, constants.LocalFlareID, constants.LocalID:
+	case constants.FlareID, constants.SongbirdID, constants.CostwoID, constants.CostonID, constants.LocalFlareID, constants.LocalID, constants.TitanID:
 		return nil, ids.ID{}, fmt.Errorf(
 			"%w: %s",
 			errOverridesStandardNetworkConfig,
@@ -266,7 +266,7 @@ func FromFile(networkID uint32, filepath string, stakingCfg *StakingConfig) ([]b
 //  2. The asset ID of AVAX
 func FromFlag(networkID uint32, genesisContent string, stakingCfg *StakingConfig) ([]byte, ids.ID, error) {
 	switch networkID {
-	case constants.FlareID, constants.SongbirdID, constants.CostwoID, constants.CostonID, constants.LocalFlareID, constants.LocalID:
+	case constants.FlareID, constants.SongbirdID, constants.CostwoID, constants.CostonID, constants.LocalFlareID, constants.LocalID, constants.TitanID:
 		return nil, ids.ID{}, fmt.Errorf(
 			"%w: %s",
 			errOverridesStandardNetworkConfig,
@@ -296,8 +296,8 @@ func FromConfig(config *Config) ([]byte, ids.ID, error) {
 
 	// Specify the genesis state of the AVM
 	avax := avm.AssetDefinition{
-		Name:         "Avalanche",
-		Symbol:       "AVAX",
+		Name:         "Titan",
+		Symbol:       "TITAN",
 		Denomination: 9,
 		InitialState: avm.AssetInitialState{},
 	}

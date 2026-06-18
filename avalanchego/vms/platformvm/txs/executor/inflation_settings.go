@@ -15,7 +15,8 @@ var inflationSettingsVariants = utils.NewNetworkValue(getDefaultInflationSetting
 	AddValue(constants.LocalFlareID, getLocalFlareInflationSettings).
 	AddValue(constants.SongbirdID, getSongbirdInflationSettings).
 	AddValue(constants.CostonID, getCostonInflationSettings).
-	AddValue(constants.LocalID, getLocalInflationSettings)
+	AddValue(constants.LocalID, getLocalInflationSettings).
+	AddValue(constants.TitanID, getLocalInflationSettings)
 
 type InflationSettings struct {
 	MinValidatorStake        uint64

@@ -119,6 +119,14 @@ var (
 			0,
 			[][4]byte{},
 			[][4]byte{},
+		}).
+		AddValue(params.TitanChainID, &prioritisedParams{
+			0,
+			prioritisedSubmitterContractAddress,
+			3000000,
+			0,
+			submitterDataPrefixes,
+			prioritisedFTSOContractDataPrefixesFlareNetworks,
 		})
 )
 

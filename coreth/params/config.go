@@ -52,6 +52,7 @@ var (
 	SongbirdChainID   = big.NewInt(19)  // https://github.com/ethereum-lists/chains/blob/master/_data/chains/eip155-19.json
 	CostwoChainID     = big.NewInt(114) // TO-DO: Register with https://github.com/ethereum-lists
 	LocalFlareChainID = big.NewInt(162)
+	TitanChainID      = big.NewInt(888)
 	LocalChainID      = big.NewInt(4294967295)
 
 	errNonGenesisForkByHeight = errors.New("coreth only supports forking by height at the genesis block")

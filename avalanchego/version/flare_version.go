@@ -7,6 +7,8 @@ var applicationPrefix = "avalanche"
 func InitApplicationPrefix(networkID uint32) {
 	if networkID == constants.CostonID || networkID == constants.SongbirdID || networkID == constants.LocalID {
 		applicationPrefix = "flare"
+	} else if networkID == constants.TitanID {
+		applicationPrefix = "titan"
 	}
 }
 
