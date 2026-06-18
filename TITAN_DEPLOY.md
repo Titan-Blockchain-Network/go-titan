@@ -478,23 +478,33 @@ Run `./build/titan node help` and `./build/titan --help` after building to see t
 
 Since you are resetting the two servers:
 
-**On both servers (after fresh OS / clean data):**
-
-Run the full interactive server bootstrap script. It **always starts with `apt-get update`**, installs Go (the exact version from go.mod) + build essentials, ufw, jq, git, etc., ensures the repo, builds everything, **automatically places the binary in /usr/local/bin**, then interactively asks for inputs and confirmations, applies firewall programmatically, sets up systemd, starts the node, and ends with a healthcheck (that also checks `getCurrentValidators` membership).
-
-**Super smooth one-liner (on a fresh server as root/sudo):**
+**On servers after you have cloned the repo (the normal case):**
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/.../install.sh | bash
-```
-
-Or step by step:
-
-```bash
-git clone https://.../go-titan.git
+git clone https://github.com/Titan-Blockchain-Network/go-titan.git
 cd go-titan
-./scripts/titan-server-bootstrap.sh
+./avalanchego/scripts/titan-server-bootstrap.sh
 ```
+
+The script:
+- Starts with `apt-get update`
+- Installs Go + build deps + ufw + jq if missing
+- Builds everything
+- Interactively asks questions for first vs additional node
+- Applies firewall, systemd, etc.
+- Ends with healthcheck
+
+This assumes you have already cloned (no double clone work).
+
+**For a completely bare server (nothing cloned yet):**
+
+Use the one-liner:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/Titan-Blockchain-Network/go-titan/main/install.sh | bash
+```
+
+(The install.sh will clone + run bootstrap.)
 
 The script stops and asks for input at key points and ends with the healthcheck. This is the recommended single entry point after a server reset.
 ```
@@ -505,11 +515,10 @@ Use the high-level bootstrap (does keys verify, config, **programmatic firewall*
 
 ```bash
 cd avalanchego
-./build/titan node bootstrap --first \
-  --public-ip=YOUR_IP \
-  --keys-dir /root/keys \
-  --data-dir /root/titan-data \
-  --apply-firewall
+./avalanchego/scripts/titan-server-bootstrap.sh
+```
+
+(When prompted, answer that it is the first/genesis node.)
 ```
 
 (Requires root for firewall/systemd. The last step is the healthcheck.)

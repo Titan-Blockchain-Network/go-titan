@@ -9,22 +9,27 @@
 #   - Always starts with apt update + essential packages
 #   - Installs Go (from go.mod version) if missing
 #   - Installs build deps, ufw, jq, etc.
-#   - Clones/updates the repo (if needed)
 #   - Builds the titan CLI + avalanchego
 #   - Is interactive: asks questions, stops for confirmation
 #   - Calls `titan node bootstrap` which does the rest (firewall apply, systemd, healthcheck)
 #
-# Usage (as root or with sudo):
-#   curl -sSL ... | bash -s --   # or clone first
-#   ./scripts/titan-server-bootstrap.sh
+# IMPORTANT: This script assumes you have already cloned the repo
+# (run after `git clone ... && cd go-titan`). 
+# For bare servers with nothing cloned, use the root `install.sh` one-liner instead.
 #
-# Recommended: run as root on fresh server.
+# Recommended usage (after you have cloned the repo):
+#   git clone https://github.com/Titan-Blockchain-Network/go-titan.git
+#   cd go-titan
+#   ./avalanchego/scripts/titan-server-bootstrap.sh
+#
+# For completely bare server (nothing cloned):
+#   curl -sSL https://raw.githubusercontent.com/Titan-Blockchain-Network/go-titan/main/install.sh | bash
 
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/yourorg/go-titan.git}"  # change to real
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Go up two levels: scripts/ -> avalanchego/ -> repo root
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 AVALANCHE_DIR="$REPO_ROOT/avalanchego"
 
 # Colors
@@ -102,21 +107,6 @@ install_go_if_needed() {
 
     log "Go $GO_VERSION installed to /usr/local/go"
     go version
-}
-
-ensure_repo() {
-    if [[ -f "$AVALANCHE_DIR/go.mod" ]]; then
-        log "Repo already present at $REPO_ROOT"
-        cd "$REPO_ROOT"
-        git pull --ff-only || warn "Could not pull latest (using local version)"
-        return
-    fi
-
-    log "Cloning repo..."
-    cd /root
-    git clone "$REPO_URL" go-titan
-    REPO_ROOT="/root/go-titan"
-    AVALANCHE_DIR="$REPO_ROOT/avalanchego"
 }
 
 build_titan_tools() {
@@ -245,7 +235,6 @@ main() {
 
     apt_update_install
     install_go_if_needed
-    ensure_repo
     build_titan_tools
 
     interactive_setup
