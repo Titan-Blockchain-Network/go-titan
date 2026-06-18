@@ -250,6 +250,57 @@ main() {
 
     interactive_setup
 
+    # For the initial genesis node on a clean setup: generate keys if not present
+    if $IS_FIRST; then
+        if [ ! -f "$KEYS_DIR/staker.crt" ] || [ ! -f "$KEYS_DIR/signer.key" ]; then
+            log "This is the initial genesis node on a clean setup. Generating fresh keys..."
+            mkdir -p "$KEYS_DIR"
+            GEN_OUTPUT="/tmp/gen-titan-keys-output.txt"
+            (cd "$AVALANCHE_DIR" && ./scripts/gen-titan-keys.sh --genesis --dir="$KEYS_DIR" | tee "$GEN_OUTPUT")
+
+            # Backup the generated keys to a separate folder
+            BACKUP_DIR="/root/genesis-keys-backup-$(date +%Y%m%d-%H%M%S)"
+            cp -r "$KEYS_DIR" "$BACKUP_DIR"
+            log "Keys generated in $KEYS_DIR and backed up to $BACKUP_DIR (copy this folder off the server for safekeeping!)"
+
+            # Parse the generated values
+            NODE_ID=$(grep "NodeID:" "$GEN_OUTPUT" | head -1 | awk '{print $2}')
+            PUB_KEY=$(grep "BLS Public Key:" "$GEN_OUTPUT" | head -1 | awk '{print $3}')
+            POP=$(grep "Proof of Possession:" "$GEN_OUTPUT" | head -1 | awk '{print $3}')
+            REWARD_ADDR="P-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn"  # consistent with current allocations
+
+            if [ -z "$NODE_ID" ] || [ -z "$PUB_KEY" ] || [ -z "$POP" ]; then
+                err "Failed to parse generated key output. Check $GEN_OUTPUT"
+                exit 1
+            fi
+
+            log "Updating genesis_titan.json with the new initial staker..."
+            GENESIS_FILE="$AVALANCHE_DIR/genesis/genesis_titan.json"
+            jq --arg nid "$NODE_ID" \
+               --arg pub "$PUB_KEY" \
+               --arg pop "$POP" \
+               --arg rew "$REWARD_ADDR" \
+               '.initialStakers[0] = {
+                   "delegationFee": 0,
+                   "nodeID": $nid,
+                   "rewardAddress": $rew,
+                   "signer": {
+                       "proofOfPossession": $pop,
+                       "publicKey": $pub
+                   }
+               }' "$GENESIS_FILE" > "$GENESIS_FILE.tmp" && mv "$GENESIS_FILE.tmp" "$GENESIS_FILE"
+
+            log "genesis_titan.json updated with fresh initial staker."
+
+            log "Rebuilding the binary so the embedded genesis matches the generated keys..."
+            (cd "$AVALANCHE_DIR" && ./scripts/build-titan.sh)
+
+            log "Binary rebuilt with matching genesis for this clean start."
+        else
+            log "Using pre-existing keys in $KEYS_DIR for first node."
+        fi
+    fi
+
     # Final confirmation before heavy actions
     if ! confirm "Ready to apply firewall (if selected), systemd, and start the node?"; then
         warn "Setup stopped before applying changes."
