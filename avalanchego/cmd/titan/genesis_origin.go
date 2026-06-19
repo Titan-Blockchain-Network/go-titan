@@ -225,12 +225,10 @@ func alignWithOrigin(originURL string) error {
 		return err
 	}
 
-	newHash, err := computeEmbeddedGenesisFingerprint()
-	if err != nil {
-		return err
-	}
-	if newHash != anchor.GenesisHash {
-		return fmt.Errorf("after rebuild local hash %s still does not match origin %s", newHash, anchor.GenesisHash)
+	// Verify the rebuilt ./build/titan binary, not this running CLI process
+	// (the old binary still embeds the pre-align genesis until re-exec).
+	if err := verifyBuiltBinaryFingerprint(anchor.GenesisHash); err != nil {
+		return fmt.Errorf("after rebuild: %w", err)
 	}
 
 	if _, err := os.Stat("build/avalanchego"); err == nil {

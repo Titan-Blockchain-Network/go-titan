@@ -99,6 +99,11 @@ func keysMain(args []string) {
 }
 
 func validatorMain(args []string) {
+	if len(args) == 0 || args[0] != "add" {
+		fmt.Fprintln(os.Stderr, "usage: titan validator add --from <hex|@file> [--uri http://...]")
+		os.Exit(1)
+	}
+
 	fs := flag.NewFlagSet("validator add", flag.ExitOnError)
 	from := fs.String("from", "", "privkey hex or @file (required)")
 	amount := fs.Float64("amount", 2000000, "TITAN to stake")
@@ -107,7 +112,7 @@ func validatorMain(args []string) {
 	nodeIDFlag := fs.String("node-id", "", "override NodeID")
 	pubFlag := fs.String("bls-pub", "", "override BLS pubkey")
 	popFlag := fs.String("bls-pop", "", "override BLS proof")
-	fs.Parse(args)
+	fs.Parse(args[1:])
 
 	if *from == "" {
 		fmt.Fprintln(os.Stderr, "--from is required (hex or @path)")
@@ -136,7 +141,7 @@ func validatorMain(args []string) {
 	amt := uint64(*amount * float64(units.Avax))
 	owner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}}
 
-	if err := transferCToP(ctx, cw, pw, amt, owner); err != nil {
+	if err := transferCToP(ctx, *uri, cw, pw, amt, owner); err != nil {
 		fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
 		os.Exit(1)
 	}
