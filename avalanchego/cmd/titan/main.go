@@ -23,7 +23,6 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
@@ -129,22 +128,10 @@ func validatorMain(args []string) {
 	amt := uint64(*amount * float64(units.Avax))
 	owner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}}
 
-	fmt.Printf("Moving %.0f TITAN C→P...\n", *amount)
-	exp, err := cw.IssueExportTx(constants.PlatformChainID, []*secp256k1fx.TransferOutput{{Amt: amt, OutputOwners: *owner}})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "export: %v\n", err)
+	if err := transferCToP(ctx, cw, pw, amt, owner); err != nil {
+		fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("export %s\n", exp.ID())
-
-	time.Sleep(2 * time.Second)
-
-	imp, err := pw.IssueImportTx(cw.Builder().Context().BlockchainID, owner)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "import: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("import %s\n", imp.ID())
 
 	// auto detect NodeID + POP from the target node's API if not provided
 	var nodeID ids.NodeID
@@ -320,6 +307,9 @@ func bootstrapMain(args []string) {
 	dataDir := fs.String("data-dir", "/root/titan-data", "data directory")
 	keysDir := fs.String("keys-dir", "/root/keys", "directory containing staker.crt/key + signer.key")
 	publicIP := fs.String("public-ip", "", "public IP address")
+	rewardAddr := fs.String("reward-address", defaultGenesisRewardAddress, "P-chain reward address for genesis validator")
+	skipRebuild := fs.Bool("skip-rebuild", false, "skip binary rebuild after genesis update (not recommended)")
+	noWipeData := fs.Bool("no-wipe-data", false, "do not wipe data dir after genesis update")
 	applyFirewall := fs.Bool("apply-firewall", true, "programmatically configure ufw firewall")
 	skipSystemd := fs.Bool("skip-systemd", false, "do not install/start systemd")
 	fs.Parse(args)
@@ -345,11 +335,6 @@ func bootstrapMain(args []string) {
 	os.MkdirAll(filepath.Join(*dataDir, "db"), 0755)
 	os.MkdirAll(filepath.Join(*dataDir, "logs"), 0755)
 
-	if err := ensureKeys(*keysDir, *first); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to ensure staking keys: %v\n", err)
-		os.Exit(1)
-	}
-
 	bootIPs, bootIDs := bootstrapValues(*first, *join, *bootstrapID)
 	if !*first && (bootIPs == "" || bootIDs == "") {
 		fmt.Fprintln(os.Stderr, "bootstrap IP:port and NodeID are required for join nodes (--join / --bootstrap-id)")
@@ -357,11 +342,18 @@ func bootstrapMain(args []string) {
 	}
 
 	if *first {
-		fmt.Println("Verifying genesis keys...")
-		if !verifyGenesisKeys(*keysDir) {
-			fmt.Fprintln(os.Stderr, "genesis key verification failed — keys must match embedded genesis_titan.json")
+		fmt.Println("=== Preparing genesis validator keys ===")
+		if err := prepareGenesisNodeKeys(*keysDir, *dataDir, *rewardAddr, *skipRebuild, *noWipeData); err != nil {
+			fmt.Fprintf(os.Stderr, "genesis preparation failed: %v\n", err)
 			os.Exit(1)
 		}
+	} else {
+		if err := ensureKeys(*keysDir, false); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to ensure staking keys: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Join node keys ready. After bootstrap, register with:")
+		fmt.Println("  titan validator add --from @master.key --uri http://THIS_NODE:9650")
 	}
 
 	cfgPath := filepath.Join(*dataDir, "config.json")
@@ -400,13 +392,11 @@ func bootstrapMain(args []string) {
 		if err := runPrivileged("systemctl", "enable", "--now", *name); err != nil {
 			fmt.Printf("  Warning: could not start service: %v\n", err)
 		}
-		fmt.Println("Waiting for node to come up (up to 15s)...")
-		time.Sleep(5 * time.Second)
 	}
 
-	// 6. Healthcheck (LAST command/step)
+	// Healthcheck (LAST command/step)
 	fmt.Println("\n=== Running healthcheck (final step) ===")
-	runHealthcheck(*dataDir)
+	runHealthcheck(*first)
 }
 
 func installSystemdUnit(name, dataDir, user string) {
@@ -444,43 +434,53 @@ WantedBy=multi-user.target
 	fmt.Printf("  Wrote %s\n", path)
 }
 
-func runHealthcheck(dataDir string) {
+func runHealthcheck(isFirst bool) {
 	uri := "http://127.0.0.1:9650"
-	client := &http.Client{Timeout: 3 * time.Second}
+	ctx := context.Background()
+	infoClient := info.NewClient(uri)
 
+	waitTimeout := 30 * time.Second
+	if !isFirst {
+		waitTimeout = 10 * time.Minute
+		fmt.Printf("  Join node: waiting up to %v for API and chain sync...\n", waitTimeout)
+	}
+
+	deadline := time.Now().Add(waitTimeout)
 	var nodeID string
 
-	// Try a few times for basic reachability + get NodeID
-	for i := 0; i < 5; i++ {
-		// Get NodeID
-		infoResp, err := client.Post(uri+"/ext/info", "application/json", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"info.getNodeID"}`))
+	for time.Now().Before(deadline) {
+		id, _, err := infoClient.GetNodeID(ctx)
 		if err == nil {
-			var infoResult struct {
-				Result struct {
-					NodeID string `json:"nodeID"`
-				} `json:"result"`
-			}
-			json.NewDecoder(infoResp.Body).Decode(&infoResult)
-			infoResp.Body.Close()
-			nodeID = infoResult.Result.NodeID
+			nodeID = id.String()
 			fmt.Printf("  ✓ /ext/info reachable (NodeID: %s)\n", nodeID)
 			break
 		}
-		if i == 4 {
-			fmt.Printf("  /ext/info not yet reachable (%v). Node may still be starting.\n", err)
-		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(3 * time.Second)
+	}
+	if nodeID == "" {
+		fmt.Println("  /ext/info not reachable yet. Node may still be starting.")
+		printHealthcheckFooter(uri, isFirst, nodeID)
+		return
 	}
 
-	// Health
-	resp, err := client.Get(uri + "/ext/health")
-	if err == nil {
+	if !isFirst {
+		for _, chain := range []string{"P", "X", "C"} {
+			synced, err := info.AwaitBootstrapped(ctx, infoClient, chain, 3*time.Second)
+			if err != nil {
+				fmt.Printf("  ! chain %s bootstrap check: %v\n", chain, err)
+			} else if synced {
+				fmt.Printf("  ✓ chain %s bootstrapped\n", chain)
+			}
+		}
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	if resp, err := client.Get(uri + "/ext/health"); err == nil {
 		resp.Body.Close()
 		fmt.Println("  ✓ /ext/health reachable")
 	}
 
-	// Validator presence check (the important one for first + added nodes)
-	if nodeID != "" {
+	if isFirst {
 		vdrPayload := `{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}`
 		vdrResp, err := client.Post(uri+"/ext/bc/P", "application/json", strings.NewReader(vdrPayload))
 		if err == nil {
@@ -502,22 +502,31 @@ func runHealthcheck(dataDir string) {
 				}
 			}
 			if found {
-				fmt.Printf("  ✓ Node %s is present in current validators (good for genesis or added validator)\n", nodeID)
+				fmt.Printf("  ✓ Node %s is a genesis validator\n", nodeID)
 			} else {
-				fmt.Printf("  ! Node %s NOT yet in current validators list (may need time or funding+add tx)\n", nodeID)
+				fmt.Printf("  ✗ Node %s NOT in validators — check keys/genesis/data-dir alignment\n", nodeID)
 			}
 		}
+	} else {
+		fmt.Printf("  Join node %s synced. Register as validator with:\n", nodeID)
+		fmt.Println("    titan validator add --from @master.key --uri http://THIS_NODE:9650")
 	}
 
+	printHealthcheckFooter(uri, isFirst, nodeID)
+}
+
+func printHealthcheckFooter(uri string, isFirst bool, nodeID string) {
 	fmt.Printf(`
 Healthcheck complete.
 
-Next manual verification:
-  curl -s %s/ext/health | jq '.healthy'
+Next steps:
+  curl -s %s/ext/health | jq '.healthy, .checks.bls'
   curl -s %s/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
-
-Bootstrap finished. Use: journalctl -u titan -f   or   ./build/titan status
 `, uri, uri)
+	if !isFirst && nodeID != "" {
+		fmt.Printf("  titan validator add --from @master.key --uri %s\n", uri)
+	}
+	fmt.Println("\nBootstrap finished. Use: journalctl -u titan -f   or   ./build/titan status")
 }
 
 func installSystemdMain(args []string) {

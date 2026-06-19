@@ -7,7 +7,7 @@ then
 	if [ -z "$PUBLIC_IP" ];
 	then
 		echo "Autoconfiguring public IP"
-		PUBLIC_IP=$(curl -s -m 10 https://flare.network/cdn-cgi/trace | grep 'ip=' | cut -d'=' -f2)
+		PUBLIC_IP=$(curl -s -m 10 https://api.ipify.org || curl -s -m 10 https://ifconfig.me/ip || curl -s -m 10 https://flare.network/cdn-cgi/trace | grep 'ip=' | cut -d'=' -f2)
 		echo "  Got public address '${PUBLIC_IP}'" 
 	else
 		echo "/!\\ AUTOCONFIGURE_PUBLIC_IP is enabled, but PUBLIC_IP is already set to '$PUBLIC_IP'! Skipping autoconfigure and using current PUBLIC_IP value!"
@@ -72,11 +72,15 @@ if [ -n "${STAKING_SIGNER_KEY_FILE:-}" ]; then
 	STAKING_ARGS+=(--staking-signer-key-file="$STAKING_SIGNER_KEY_FILE")
 fi
 
+DATA_DIR="${DATA_DIR:-/app/data}"
+mkdir -p "$DATA_DIR" "$DB_DIR" "$LOG_DIR"
+
 exec /app/build/avalanchego \
 	--http-host="$HTTP_HOST" \
 	--http-port="$HTTP_PORT" \
 	--staking-port="$STAKING_PORT" \
 	--public-ip="$PUBLIC_IP" \
+	--data-dir="$DATA_DIR" \
 	--db-dir="$DB_DIR" \
 	--db-type="$DB_TYPE" \
 	--bootstrap-ips="$BOOTSTRAP_IPS" \
