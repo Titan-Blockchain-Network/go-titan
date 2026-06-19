@@ -24,3 +24,12 @@ build/
 *.pid
 db-*
 logs-*
+
+# JS apps (pnpm monorepo)
+node_modules/
+apps/*/node_modules/
+.next/
+apps/*/.next/
+.env.local
+apps/*/.env.local
+.pnpm-store/

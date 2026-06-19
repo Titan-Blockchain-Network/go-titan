@@ -1,0 +1,14 @@
+{
+  "name": "go-titan",
+  "private": true,
+  "scripts": {
+    "dev:explorer": "pnpm --filter titan-explorer dev",
+    "dev:chess": "pnpm --filter titan-chess dev",
+    "build:explorer": "pnpm --filter titan-explorer build",
+    "build:chess": "pnpm --filter titan-chess build",
+    "build:apps": "pnpm -r --filter './apps/*' build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
