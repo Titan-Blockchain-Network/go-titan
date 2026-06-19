@@ -137,6 +137,15 @@ func validatorMain(args []string) {
 		fmt.Fprintf(os.Stderr, "bad key: %v\n", err)
 		os.Exit(1)
 	}
+	const maxValidatorStakeTitan = 10000
+	if *amount > maxValidatorStakeTitan {
+		fmt.Fprintf(os.Stderr, "stake %.0f TITAN exceeds network max (%d TITAN per validator)\n", *amount, maxValidatorStakeTitan)
+		os.Exit(1)
+	}
+	if *amount < 1 {
+		fmt.Fprintf(os.Stderr, "stake must be at least 1 TITAN\n")
+		os.Exit(1)
+	}
 
 	kc := secp256k1fx.NewKeychain(priv)
 	addr := priv.Address()

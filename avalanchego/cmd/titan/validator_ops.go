@@ -6,7 +6,8 @@ import (
 	"github.com/ava-labs/avalanchego/utils/units"
 )
 
-const defaultValidatorStakeTitan = 2000000
+// defaultValidatorStakeTitan must be <= genesis MaxValidatorStake (10_000 TITAN).
+const defaultValidatorStakeTitan = 2000
 
 // pChainFundingBuffer is extra TITAN moved C→P so addPermissionlessValidator can
 // pay stake plus P-chain / import fees (exporting exactly the stake amount leaves
