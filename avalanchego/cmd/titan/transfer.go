@@ -112,17 +112,20 @@ func transferCToP(
 		baseFee = big.NewInt(transferDefaultBaseFeeWei)
 	}
 
+	cChainID := cw.Builder().Context().BlockchainID
+	avaxAssetID := cw.Builder().Context().AVAXAssetID
+	fmt.Printf("  C-chain ID %s, staking asset %s → P-chain\n", cChainID, avaxAssetID)
+
 	exp, err := cw.IssueExportTx(
 		constants.PlatformChainID,
 		[]*secp256k1fx.TransferOutput{{Amt: amount, OutputOwners: *owner}},
 		common.WithBaseFee(baseFee),
 	)
 	if err != nil {
-		return fmt.Errorf("export: %w", err)
+		return fmt.Errorf("export: %w (C-chain=%s asset=%s — rebuild titan after git pull if this persists)", err, cChainID, avaxAssetID)
 	}
 	fmt.Printf("export %s (accepted)\n", exp.ID())
 
-	cChainID := cw.Builder().Context().BlockchainID
 	var lastErr error
 	for attempt := 1; attempt <= transferImportMaxAttempts; attempt++ {
 		imp, err := pw.IssueImportTx(cChainID, owner)
