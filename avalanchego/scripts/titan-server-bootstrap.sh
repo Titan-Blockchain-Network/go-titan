@@ -244,8 +244,9 @@ main() {
     interactive_setup
 
     # For the initial genesis node on a clean setup: generate keys if not present
-    if $IS_FIRST; then
-        if [ ! -f "$KEYS_DIR/staker.crt" ] || [ ! -f "$KEYS_DIR/signer.key" ]; then
+    # Generate staking keys when missing (first = genesis, join = regular node)
+    if [ ! -f "$KEYS_DIR/staker.crt" ] || [ ! -f "$KEYS_DIR/signer.key" ]; then
+        if $IS_FIRST; then
             log "This is the initial genesis node on a clean setup. Generating fresh keys..."
             mkdir -p "$KEYS_DIR"
             GEN_OUTPUT="/tmp/gen-titan-keys-output.txt"
@@ -293,9 +294,17 @@ main() {
             (cd "$AVALANCHE_DIR" && ./scripts/build-titan.sh)
 
             log "Binary rebuilt with matching genesis for this clean start."
+
+            log "Updating /usr/local/bin/avalanchego with genesis-matched binary..."
+            run_privileged cp -f "$AVALANCHE_DIR/build/avalanchego" /usr/local/bin/avalanchego
+            run_privileged chmod +x /usr/local/bin/avalanchego
         else
-            log "Using pre-existing keys in $KEYS_DIR for first node."
+            log "Join node: generating fresh staking keys in $KEYS_DIR ..."
+            mkdir -p "$KEYS_DIR"
+            (cd "$AVALANCHE_DIR" && ./build/titan keys generate --dir="$KEYS_DIR")
         fi
+    else
+        log "Using pre-existing staking keys in $KEYS_DIR."
     fi
 
     # Final confirmation before heavy actions

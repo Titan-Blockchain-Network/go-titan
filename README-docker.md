@@ -1,6 +1,6 @@
-# go-flare
+# go-titan / Docker
 
-Docker images for the go-flare node implementation found at [github](https://github.com/flare-foundation/go-flare).
+Docker images for the Titan node (`NETWORK_ID=titan` by default). The image also retains legacy Flare network support via the `NETWORK_ID` environment variable.
 
 ## Variants
 Images with `-dless` postfix are build using distroless base and are rootless.  
@@ -14,7 +14,7 @@ docker run -d \
 	flarefoundation/go-flare:<version>
 ```
 
-<b>Currently the default network is `costwo` but you can change that by providing a `NETWORK_ID` environment variable (i.e. `NETWORK_ID=flare`).</b>
+**Default network is `titan`.** Mount staking keys at `/app/keys` (`staker.crt`, `staker.key`, `signer.key`). For join nodes, set `BOOTSTRAP_IPS` and `BOOTSTRAP_IDS`, or enable `AUTOCONFIGURE_BOOTSTRAP=1` with `AUTOCONFIGURE_BOOTSTRAP_ENDPOINT` pointing at an existing Titan node's `/ext/info` URL.
 
 ## Mounting storage
 
@@ -54,10 +54,13 @@ These are the environment variables you can edit and their default values:
 | `CHAIN_CONFIG_DIR` | `/app/conf` | Configuration directory |
 | `LOG_DIR` | `/app/logs` | Logging directory |
 | `LOG_LEVEL` | `info` | Logging level set with AvalancheGo flag [`--log-level`](https://docs.avax.network/nodes/maintain/avalanchego-config-flags#--log-level-string-verbo-debug-trace-info-warn-error-fatal-off). |
-| `NETWORK_ID` | `costwo` | The network id. The common ids are `flare \| costwo` |
-| `AUTOCONFIGURE_PUBLIC_IP` | `0` | Set to `1` to autoconfigure `PUBLIC_IP`, skipped if PUBLIC_IP is set |
-| `AUTOCONFIGURE_BOOTSTRAP` | `0` | Set to `1` to autoconfigure `BOOTSTRAP_IPS` and `BOOTSTRAP_IDS` |
-| `AUTOCONFIGURE_BOOTSTRAP_ENDPOINT` | `https://coston2-bootstrap.flare.network/ext/info` | Endpoint used for [bootstrapping](https://docs.avax.network/nodes/maintain/avalanchego-config-flags#bootstrapping) when `AUTOCONFIGURE_BOOTSTRAP` is enabled. Possible values are `https://coston2-bootstrap.flare.network/ext/info`, `https://flare-bootstrap.flare.network/ext/info`, `https://coston-bootstrap.flare.network/ext/info` or `https://songbird-bootstrap.flare.network/ext/info`. |
+| `NETWORK_ID` | `titan` | Network id (`titan` or `888` for Titan; legacy Flare ids still supported) |
+| `STAKING_TLS_CERT_FILE` | `/app/keys/staker.crt` | Staking TLS certificate (determines NodeID) |
+| `STAKING_TLS_KEY_FILE` | `/app/keys/staker.key` | Staking TLS private key |
+| `STAKING_SIGNER_KEY_FILE` | `/app/keys/signer.key` | BLS signer key |
+| `AUTOCONFIGURE_PUBLIC_IP` | `1` | Set to `1` to autoconfigure `PUBLIC_IP`, skipped if PUBLIC_IP is set |
+| `AUTOCONFIGURE_BOOTSTRAP` | `0` | Set to `1` to autoconfigure `BOOTSTRAP_IPS` and `BOOTSTRAP_IDS` from a Titan peer |
+| `AUTOCONFIGURE_BOOTSTRAP_ENDPOINT` | _(empty)_ | Titan peer API URL (e.g. `http://ATLAS_IP:9650/ext/info`) when autoconfigure is enabled |
 | `AUTOCONFIGURE_FALLBACK_ENDPOINTS` | _(empty)_ | Comma-divided fallback bootstrap endpoints, used if `AUTOCONFIGURE_BOOTSTRAP_ENDPOINT` is not valid (not whitelisted / unreachable / etc), tested from first-to-last until one is valid |
 | `BOOTSTRAP_BEACON_CONNECTION_TIMEOUT` | `1m` | Set the duration value (eg. `45s` / `5m` / `1h`) for [--bootstrap-beacon-connection-timeout](https://docs.avax.network/nodes/maintain/avalanchego-config-flags#--bootstrap-beacon-connection-timeout-duration) AvalancheGo flag. | 
 | `HTTP_ALLOWED_HOSTS` | `*` | Blocks RPC calls unless they originate from these hostnames. | 

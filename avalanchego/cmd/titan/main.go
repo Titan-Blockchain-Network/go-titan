@@ -11,22 +11,18 @@ package main
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
-	"github.com/ava-labs/avalanchego/staking"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
@@ -79,20 +75,20 @@ The bootstrap command ends with a healthcheck.`)
 }
 
 func keysMain(args []string) {
+	if len(args) == 0 || args[0] != "generate" {
+		fmt.Fprintln(os.Stderr, "usage: titan keys generate [--dir DIR] [--genesis]")
+		os.Exit(1)
+	}
+
 	fs := flag.NewFlagSet("keys generate", flag.ExitOnError)
 	dir := fs.String("dir", "titan-node-keys", "output directory")
-	genesis := fs.Bool("genesis", false, "print genesis staker JSON")
-	fs.Parse(args)
+	genesis := fs.Bool("genesis", false, "print genesis staker JSON for initialStakers")
+	fs.Parse(args[1:])
 
-	// For now we just tell people to use the excellent existing script.
-	// In a full revamp we would inline the generation here.
-	fmt.Println("For the most complete key generation (with correct NodeID + POP for genesis), use:")
-	fmt.Printf("  go run ./scripts/gen-titan-keys.go --dir=%s", *dir)
-	if *genesis {
-		fmt.Print(" --genesis")
+	if err := generateTitanKeys(*dir, *genesis); err != nil {
+		fmt.Fprintf(os.Stderr, "key generation failed: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Println()
-	fmt.Println("\n(Full inline implementation coming in next iteration of the titan CLI)")
 }
 
 func validatorMain(args []string) {
@@ -227,7 +223,7 @@ Recommended high-level command:
 Other subcommands:
   titan node setup --first
   titan node setup --join <ip:port> ...
-  titan node verify-keys [--cert path]
+  titan node verify-keys [--keys-dir path]
   titan node install-systemd --first --name titan-atlas ...
   titan node firewall --apply
 
@@ -266,27 +262,10 @@ func setupMain(args []string) {
 	if *first {
 		fmt.Println("=== Setting up FIRST / GENESIS validator (the bootstrapper) ===")
 		fmt.Printf("Using keys from: %s\n", *keysDir)
-		fmt.Println("IMPORTANT: These keys MUST produce exactly NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8")
-		fmt.Println("and the POP that is in genesis_titan.json, otherwise it will not be a validator.")
+		fmt.Println("IMPORTANT: These keys MUST match initialStakers in genesis_titan.json.")
 		fmt.Println()
 
-		// Generate a simple config file for less manual flags
-		cfg := fmt.Sprintf(`{
-  "network-id": "titan",
-  "data-dir": "%s",
-  "db-dir": "%s/db",
-  "log-dir": "%s/logs",
-  "http-host": "0.0.0.0",
-  "http-port": 9650,
-  "staking-port": 9651,
-  "public-ip": "%s",
-  "staking-tls-cert-file": "%s/staker.crt",
-  "staking-tls-key-file": "%s/staker.key",
-  "staking-signer-key-file": "%s/signer.key",
-  "bootstrap-ips": "",
-  "bootstrap-ids": "",
-  "http-allowed-hosts": "*"
-}`, *dataDir, *dataDir, *dataDir, *publicIP, *keysDir, *keysDir, *keysDir)
+		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, "", "")
 
 		cfgPath := filepath.Join(*dataDir, "config.json")
 		os.MkdirAll(*dataDir, 0755)
@@ -308,12 +287,18 @@ func setupMain(args []string) {
 	if *joinIP != "" {
 		fmt.Println("=== Setting up ADDITIONAL node (will need funding + validator registration) ===")
 		fmt.Printf("Bootstrapping from: %s (id: %s)\n", *joinIP, *joinID)
-		fmt.Printf("Will generate fresh keys in ./titan-node-keys (run titan keys generate if you want to control location)\n")
+
+		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, *joinIP, *joinID)
+		cfgPath := filepath.Join(*dataDir, "config.json")
+		os.MkdirAll(*dataDir, 0755)
+		if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err == nil {
+			fmt.Printf("Wrote config: %s\n", cfgPath)
+		}
+
 		fmt.Println()
 		fmt.Println("1. On THIS machine, generate keys + start:")
-		fmt.Println("   titan keys generate --dir ./my-node-keys")
-		fmt.Println("   # then start avalanchego with --bootstrap-ips=" + *joinIP + " --bootstrap-ids=" + *joinID)
-		fmt.Println("   # and your new staker.* + signer.key")
+		fmt.Printf("   titan keys generate --dir %s\n", *keysDir)
+		fmt.Printf("   # bootstrap-ips=%s bootstrap-ids=%s (already in config.json)\n", *joinIP, *joinID)
 		fmt.Println()
 		fmt.Println("2. On CONTROL machine (with the master funded private key):")
 		fmt.Printf("   titan validator add --from @master.key --uri http://this-node-ip:9650\n")
@@ -360,31 +345,27 @@ func bootstrapMain(args []string) {
 	os.MkdirAll(filepath.Join(*dataDir, "db"), 0755)
 	os.MkdirAll(filepath.Join(*dataDir, "logs"), 0755)
 
-	// 1. Keys verification for first node
-	if *first {
-		fmt.Println("Verifying genesis keys...")
-		verifyForFirst(*keysDir)
+	if err := ensureKeys(*keysDir, *first); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to ensure staking keys: %v\n", err)
+		os.Exit(1)
 	}
 
-	// 2. Write config
-	cfgPath := filepath.Join(*dataDir, "config.json")
+	bootIPs, bootIDs := bootstrapValues(*first, *join, *bootstrapID)
+	if !*first && (bootIPs == "" || bootIDs == "") {
+		fmt.Fprintln(os.Stderr, "bootstrap IP:port and NodeID are required for join nodes (--join / --bootstrap-id)")
+		os.Exit(1)
+	}
 
-	cfg := fmt.Sprintf(`{
-  "network-id": "titan",
-  "data-dir": "%s",
-  "db-dir": "%s/db",
-  "log-dir": "%s/logs",
-  "http-host": "0.0.0.0",
-  "http-port": 9650,
-  "staking-port": 9651,
-  "public-ip": "%s",
-  "staking-tls-cert-file": "%s/staker.crt",
-  "staking-tls-key-file": "%s/staker.key",
-  "staking-signer-key-file": "%s/signer.key",
-  "bootstrap-ips": "%s",
-  "bootstrap-ids": "%s",
-  "http-allowed-hosts": "*"
-}`, *dataDir, *dataDir, *dataDir, *publicIP, *keysDir, *keysDir, *keysDir, "", "")
+	if *first {
+		fmt.Println("Verifying genesis keys...")
+		if !verifyGenesisKeys(*keysDir) {
+			fmt.Fprintln(os.Stderr, "genesis key verification failed — keys must match embedded genesis_titan.json")
+			os.Exit(1)
+		}
+	}
+
+	cfgPath := filepath.Join(*dataDir, "config.json")
+	cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs)
 
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
 		fmt.Printf("Warning: could not write config: %v\n", err)
@@ -400,22 +381,25 @@ func bootstrapMain(args []string) {
 		}
 	}
 
-	// 4. Systemd + binary placement
 	if !*skipSystemd {
 		fmt.Println("\n=== Installing systemd unit ===")
-		// Try to place the binary if we're in the build dir
 		if _, err := os.Stat("build/avalanchego"); err == nil {
-			exec.Command("cp", "build/avalanchego", "/usr/local/bin/avalanchego").Run()
-			fmt.Println("  Copied build/avalanchego to /usr/local/bin/avalanchego (may need sudo in real run)")
+			if err := runPrivileged("cp", "-f", "build/avalanchego", "/usr/local/bin/avalanchego"); err != nil {
+				fmt.Printf("  Warning: could not copy binary to /usr/local/bin: %v\n", err)
+			} else {
+				fmt.Println("  Installed build/avalanchego to /usr/local/bin/avalanchego")
+			}
+			_ = runPrivileged("chmod", "+x", "/usr/local/bin/avalanchego")
 		}
-		installSystemdForBootstrap(*name, *dataDir, *keysDir, *publicIP, *first, *join, *bootstrapID)
+		installSystemdUnit(*name, *dataDir, "root")
 	}
 
-	// 5. Start
 	if !*skipSystemd {
 		fmt.Println("\nStarting service...")
-		exec.Command("systemctl", "daemon-reload").Run()
-		exec.Command("systemctl", "enable", "--now", *name).Run()
+		_ = runPrivileged("systemctl", "daemon-reload")
+		if err := runPrivileged("systemctl", "enable", "--now", *name); err != nil {
+			fmt.Printf("  Warning: could not start service: %v\n", err)
+		}
 		fmt.Println("Waiting for node to come up (up to 15s)...")
 		time.Sleep(5 * time.Second)
 	}
@@ -425,50 +409,36 @@ func bootstrapMain(args []string) {
 	runHealthcheck(*dataDir)
 }
 
-func verifyForFirst(keysDir string) {
-	certPath := filepath.Join(keysDir, "staker.crt")
-	expected := "NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8"
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		fmt.Printf("  Could not read %s: %v (make sure genesis keys are in %s)\n", certPath, err, keysDir)
-		return
+func installSystemdUnit(name, dataDir, user string) {
+	if user == "" {
+		user = "root"
 	}
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		fmt.Println("  Bad PEM in cert")
-		return
-	}
-	cert, _ := x509.ParseCertificate(block.Bytes)
-	stakeCert, _ := staking.ParseCertificate(cert.Raw)
-	nodeID := ids.NodeIDFromCert(stakeCert)
-	if nodeID.String() == expected {
-		fmt.Println("  ✓ Genesis key matches expected NodeID")
-	} else {
-		fmt.Printf("  ✗ Key mismatch! Got %s, want %s\n", nodeID, expected)
-	}
-}
-
-func installSystemdForBootstrap(name, dataDir, keysDir, publicIP string, isFirst bool, bootIP, bootID string) {
+	cfgPath := filepath.Join(dataDir, "config.json")
 	unit := fmt.Sprintf(`[Unit]
 Description=Titan Node (%s)
 After=network.target
 
 [Service]
 Type=simple
-User=root
+User=%s
 WorkingDirectory=%s
-ExecStart=/usr/local/bin/avalanchego --config-file=%s/config.json
+ExecStart=/usr/local/bin/avalanchego --config-file=%s
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-`, name, dataDir, dataDir)
+`, name, user, dataDir, cfgPath)
 
 	path := fmt.Sprintf("/etc/systemd/system/%s.service", name)
-	if err := os.WriteFile(path, []byte(unit), 0644); err != nil {
-		fmt.Printf("  Could not write %s: %v (try sudo)\n", path, err)
+	tmp := filepath.Join(os.TempDir(), name+".service")
+	if err := os.WriteFile(tmp, []byte(unit), 0644); err != nil {
+		fmt.Printf("  Could not write temp unit: %v\n", err)
+		return
+	}
+	if err := runPrivileged("cp", tmp, path); err != nil {
+		fmt.Printf("  Could not install %s: %v (try sudo)\n", path, err)
 		return
 	}
 	fmt.Printf("  Wrote %s\n", path)
@@ -557,50 +527,25 @@ func installSystemdMain(args []string) {
 	keysDir := fs.String("keys-dir", "/root/keys", "keys dir")
 	publicIP := fs.String("public-ip", "", "public IP")
 	isFirst := fs.Bool("first", false, "genesis bootstrapper (empty bootstrap)")
+	joinIP := fs.String("join", "", "bootstrap IP:port for join nodes")
+	bootstrapID := fs.String("bootstrap-id", "", "bootstrap NodeID for join nodes")
 	user := fs.String("user", "root", "systemd user")
 	fs.Parse(args)
 
-	unit := fmt.Sprintf(`[Unit]
-Description=Titan Blockchain Node (%s)
-After=network.target
-
-[Service]
-Type=simple
-User=%s
-WorkingDirectory=%s
-ExecStart=/usr/local/bin/avalanchego \
-  --network-id=titan \
-  --data-dir=%s \
-  --db-dir=%s/db \
-  --log-dir=%s/logs \
-  --http-host=0.0.0.0 \
-  --http-port=9650 \
-  --staking-port=9651 \
-  --public-ip=%s \
-  --staking-tls-cert-file=%s/staker.crt \
-  --staking-tls-key-file=%s/staker.key \
-  --staking-signer-key-file=%s/signer.key \
-  --bootstrap-ips="%s" \
-  --bootstrap-ids="%s" \
-  --http-allowed-hosts="*"
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-`, *name, *user, *dataDir, *dataDir, *dataDir, *dataDir, *publicIP, *keysDir, *keysDir, *keysDir,
-		map[bool]string{true: "", false: "YOUR_BOOTSTRAP_IP:9651"}[*isFirst],
-		map[bool]string{true: "", false: "YOUR_BOOTSTRAP_NODEID"}[*isFirst])
-
-	unitPath := fmt.Sprintf("/etc/systemd/system/%s.service", *name)
-	if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
-		fmt.Printf("Failed to write %s: %v\n", unitPath, err)
-		fmt.Println("Run with sudo or copy the output manually.")
-		return
+	bootIPs, bootIDs := bootstrapValues(*isFirst, *joinIP, *bootstrapID)
+	if !*isFirst && (bootIPs == "" || bootIDs == "") {
+		fmt.Fprintln(os.Stderr, "join nodes require --join and --bootstrap-id")
+		os.Exit(1)
 	}
 
-	fmt.Printf("Wrote %s\n", unitPath)
+	cfgPath := filepath.Join(*dataDir, "config.json")
+	os.MkdirAll(*dataDir, 0755)
+	if err := os.WriteFile(cfgPath, []byte(nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs)), 0644); err != nil {
+		fmt.Printf("Failed to write %s: %v\n", cfgPath, err)
+		os.Exit(1)
+	}
+
+	installSystemdUnit(*name, *dataDir, *user)
 	fmt.Println("Now run:")
 	fmt.Printf("  sudo systemctl daemon-reload\n")
 	fmt.Printf("  sudo systemctl enable --now %s\n", *name)
@@ -624,7 +569,7 @@ func firewallMain(args []string) {
 		fmt.Printf("Failed to apply some rules: %v\n", err)
 	}
 	fmt.Println("Firewall configuration complete. Current status:")
-	exec.Command("ufw", "status", "verbose").Run()
+	_ = runPrivileged("ufw", "status", "verbose")
 }
 
 func printFirewallCommands(allowAPI bool) {
@@ -648,13 +593,9 @@ func applyUFWFirewall(allowAPI bool) error {
 	rules = append(rules, []string{"--force", "enable"})
 
 	for _, r := range rules {
-		cmd := append([]string{"ufw"}, r...)
 		fmt.Printf("> ufw %s\n", strings.Join(r, " "))
-		out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
-		if len(out) > 0 {
-			fmt.Printf("%s", out)
-		}
-		if err != nil {
+		cmd := append([]string{"ufw"}, r...)
+		if err := runPrivileged(cmd[0], cmd[1:]...); err != nil {
 			fmt.Printf("  (ufw returned: %v)\n", err)
 		}
 	}
@@ -663,39 +604,11 @@ func applyUFWFirewall(allowAPI bool) error {
 
 func verifyKeysMain() {
 	fs := flag.NewFlagSet("node verify-keys", flag.ExitOnError)
-	certPath := fs.String("cert", "../titan-staking/staker.crt", "path to staker.crt")
-	fs.Parse(os.Args[3:]) // best effort after "node verify-keys"
+	keysDir := fs.String("keys-dir", "../titan-staking", "directory with staker.crt and signer.key")
+	fs.Parse(os.Args[3:])
 
-	expected := "NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8"
-
-	certPEM, err := os.ReadFile(*certPath)
-	if err != nil {
-		fmt.Printf("Could not read cert: %v\n", err)
-		return
-	}
-
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		fmt.Println("failed to decode PEM")
-		return
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		fmt.Printf("parse cert: %v\n", err)
-		return
-	}
-	stakeCert, err := staking.ParseCertificate(cert.Raw)
-	if err != nil {
-		fmt.Printf("staking.ParseCertificate: %v\n", err)
-		return
-	}
-	nodeID := ids.NodeIDFromCert(stakeCert)
-
-	fmt.Printf("Computed NodeID from %s: %s\n", *certPath, nodeID)
-	if nodeID.String() == expected {
-		fmt.Println("✓ Matches expected genesis validator NodeID!")
-	} else {
-		fmt.Printf("✗ MISMATCH. Expected %s. You must use the exact genesis staking keys.\n", expected)
+	if !verifyGenesisKeys(*keysDir) {
+		os.Exit(1)
 	}
 }
 

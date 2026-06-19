@@ -16,7 +16,7 @@ var inflationSettingsVariants = utils.NewNetworkValue(getDefaultInflationSetting
 	AddValue(constants.SongbirdID, getSongbirdInflationSettings).
 	AddValue(constants.CostonID, getCostonInflationSettings).
 	AddValue(constants.LocalID, getLocalInflationSettings).
-	AddValue(constants.TitanID, getLocalInflationSettings)
+	AddValue(constants.TitanID, getTitanInflationSettings)
 
 type InflationSettings struct {
 	MinValidatorStake        uint64
@@ -229,6 +229,21 @@ func getCostonInflationSettings(currentTimestamp time.Time, config *config.Inter
 			MaxValidatorWeightFactor: 15,
 			MinStakeStartTime:        time.Date(2024, time.July, 30, 12, 0, 0, 0, time.UTC),
 		}
+	}
+}
+
+func getTitanInflationSettings(currentTimestamp time.Time, config *config.Internal) InflationSettings {
+	return InflationSettings{
+		MinValidatorStake:        1 * units.Avax,
+		MaxValidatorStake:        10000 * units.Avax,
+		MinDelegatorStake:        0,
+		MinDelegationFee:         0,
+		MinStakeDuration:         24 * time.Hour,
+		MinDelegateDuration:      24 * time.Hour,
+		MaxStakeDuration:         365 * 24 * time.Hour,
+		MinFutureStartTimeOffset: MaxFutureStartTime,
+		MaxValidatorWeightFactor: 15,
+		MinStakeStartTime:        time.Date(2025, time.June, 18, 0, 0, 0, 0, time.UTC),
 	}
 }
 
