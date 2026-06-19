@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -225,11 +226,31 @@ func generateTitanKeys(outDir string, genesis bool) error {
 		fmt.Println(string(pretty))
 	} else {
 		fmt.Println(">>> Keys for an additional Titan node <<<")
-		fmt.Println("After starting the node, fund it and run: titan validator add --from @key --uri http://...:9650")
+		printAtlasValidatorAddCommand(&genesisStakerExpectation{
+			NodeID:            nodeID.String(),
+			PublicKey:         "0x" + pkHex,
+			ProofOfPossession: "0x" + popHex,
+		}, defaultValidatorStakeTitan)
 	}
 	fmt.Println("================================================================")
 	fmt.Println("BACK UP THE .key FILES NOW.")
 	return secureKeysDir(outDir)
+}
+
+func keysShowMain(args []string) {
+	fs := flag.NewFlagSet("keys show", flag.ExitOnError)
+	dir := fs.String("dir", "/root/keys", "directory with staker.crt/key + signer.key")
+	amount := fs.Float64("amount", defaultValidatorStakeTitan, "stake amount in TITAN")
+	fs.Parse(args)
+
+	staker, err := deriveStakerFromKeys(*dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not read keys from %s: %v\n", *dir, err)
+		os.Exit(1)
+	}
+	fmt.Printf("NodeID:         %s\n", staker.NodeID)
+	fmt.Printf("BLS Public Key: %s\n", staker.PublicKey)
+	printAtlasValidatorAddCommand(staker, *amount)
 }
 
 func secureKeysDir(dir string) error {

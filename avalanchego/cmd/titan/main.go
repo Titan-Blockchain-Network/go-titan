@@ -74,7 +74,8 @@ Direct CLI usage:
   titan wallet balances --from @master.key --uri http://127.0.0.1:9650
   titan node bootstrap --first ...
   titan node firewall --apply
-  titan validator add --from <hex|@file> [--uri http://...]
+  titan validator add --from @master.key [--node-id ... --bls-pub ... --bls-pop ...]
+  titan keys show [--dir /root/keys]   # print ATLAS register command for this node
   titan status
 
 See TITAN_DEPLOY.md for the complete reset-and-launch flow.
@@ -82,36 +83,47 @@ The bootstrap command ends with a healthcheck.`)
 }
 
 func keysMain(args []string) {
-	if len(args) == 0 || args[0] != "generate" {
-		fmt.Fprintln(os.Stderr, "usage: titan keys generate [--dir DIR] [--genesis]")
-		os.Exit(1)
+	if len(args) == 0 {
+		fmt.Println(`titan keys - node staking identity
+
+  titan keys generate [--dir DIR] [--genesis]   # create staker.crt/key + signer.key
+  titan keys show [--dir /root/keys]            # show NodeID + ATLAS register command`)
+		return
 	}
 
-	fs := flag.NewFlagSet("keys generate", flag.ExitOnError)
-	dir := fs.String("dir", "titan-node-keys", "output directory")
-	genesis := fs.Bool("genesis", false, "print genesis staker JSON for initialStakers")
-	fs.Parse(args[1:])
-
-	if err := generateTitanKeys(*dir, *genesis); err != nil {
-		fmt.Fprintf(os.Stderr, "key generation failed: %v\n", err)
+	switch args[0] {
+	case "generate":
+		fs := flag.NewFlagSet("keys generate", flag.ExitOnError)
+		dir := fs.String("dir", "titan-node-keys", "output directory")
+		genesis := fs.Bool("genesis", false, "print genesis staker JSON for initialStakers")
+		fs.Parse(args[1:])
+		if err := generateTitanKeys(*dir, *genesis); err != nil {
+			fmt.Fprintf(os.Stderr, "key generation failed: %v\n", err)
+			os.Exit(1)
+		}
+	case "show":
+		keysShowMain(args[1:])
+	default:
+		fmt.Fprintf(os.Stderr, "unknown keys subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
 
 func validatorMain(args []string) {
 	if len(args) == 0 || args[0] != "add" {
-		fmt.Fprintln(os.Stderr, "usage: titan validator add --from <hex|@file> [--uri http://...]")
+		fmt.Fprintln(os.Stderr, "usage: titan validator add --from @master.key [--uri http://127.0.0.1:9650] [--node-id ... --bls-pub ... --bls-pop ...]")
 		os.Exit(1)
 	}
 
 	fs := flag.NewFlagSet("validator add", flag.ExitOnError)
-	from := fs.String("from", "", "privkey hex or @file (required)")
-	amount := fs.Float64("amount", 2000000, "TITAN to stake")
+	from := fs.String("from", "", "treasury privkey hex or @file (required)")
+	amount := fs.Float64("amount", defaultValidatorStakeTitan, "TITAN to stake")
 	days := fs.Int("duration-days", 14, "duration")
-	uri := fs.String("uri", "http://127.0.0.1:9650", "node API")
-	nodeIDFlag := fs.String("node-id", "", "override NodeID")
-	pubFlag := fs.String("bls-pub", "", "override BLS pubkey")
-	popFlag := fs.String("bls-pop", "", "override BLS proof")
+	uri := fs.String("uri", "http://127.0.0.1:9650", "local node API for wallet txs (run on ATLAS)")
+	targetURI := fs.String("target-uri", "", "optional: fetch NodeID/BLS from another node (SSH tunnel); prefer --node-id on ATLAS")
+	nodeIDFlag := fs.String("node-id", "", "join node NodeID (required on ATLAS unless --target-uri set)")
+	pubFlag := fs.String("bls-pub", "", "join node BLS public key")
+	popFlag := fs.String("bls-pop", "", "join node BLS proof of possession")
 	fs.Parse(args[1:])
 
 	if *from == "" {
@@ -161,13 +173,19 @@ func validatorMain(args []string) {
 		copy(pop.ProofOfPossession[:], pp)
 	}
 
+	lookupURI := strings.TrimRight(*targetURI, "/")
+	if lookupURI == "" {
+		lookupURI = strings.TrimRight(*uri, "/")
+	}
+
 	if nodeID == ids.EmptyNodeID || pop == nil {
-		fmt.Printf("Fetching NodeID + BLS POP from %s ...\n", *uri)
-		infoClient := info.NewClient(*uri)
+		fmt.Printf("Fetching NodeID + BLS POP from %s ...\n", lookupURI)
+		infoClient := info.NewClient(lookupURI)
 		fetchedID, fetchedPOP, err := infoClient.GetNodeID(context.Background())
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to fetch info.getNodeID from %s: %v\n", *uri, err)
-			fmt.Fprintln(os.Stderr, "Provide --node-id --bls-pub --bls-pop manually.")
+			fmt.Fprintf(os.Stderr, "failed to fetch info.getNodeID from %s: %v\n", lookupURI, err)
+			fmt.Fprintln(os.Stderr, "On ATLAS: pass --node-id --bls-pub --bls-pop from the join node's bootstrap output.")
+			fmt.Fprintln(os.Stderr, "On join node: run ./build/titan keys show")
 			os.Exit(1)
 		}
 		if nodeID == ids.EmptyNodeID {
@@ -300,8 +318,9 @@ func setupMain(args []string) {
 		fmt.Printf("   titan keys generate --dir %s\n", *keysDir)
 		fmt.Printf("   # bootstrap-ips=%s bootstrap-ids=%s (already in config.json)\n", *joinIP, *joinID)
 		fmt.Println()
-		fmt.Println("2. On CONTROL machine (with the master funded private key):")
-		fmt.Printf("   titan validator add --from @master.key --uri http://this-node-ip:9650\n")
+		fmt.Println("2. On ATLAS (treasury ~/master.key) after this node syncs:")
+		fmt.Println("   ./build/titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 --node-id ... --bls-pub ... --bls-pop ...")
+		fmt.Println("   (bootstrap healthcheck prints the full command; or run: titan keys show)")
 		fmt.Println()
 		fmt.Println("3. Verify it appears as validator on any node:")
 		fmt.Println("   curl ... platform.getCurrentValidators | grep your-NodeID")
@@ -400,8 +419,10 @@ func bootstrapMain(args []string) {
 			os.Exit(1)
 		}
 		_ = secureKeysDir(*keysDir)
-		fmt.Println("Join node keys ready. After bootstrap, register with:")
-		fmt.Println("  titan validator add --from @master.key --uri http://THIS_NODE:9650")
+		if staker, err := deriveStakerFromKeys(*keysDir); err == nil {
+			fmt.Println("Join node keys ready. After sync, register from ATLAS:")
+			printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan)
+		}
 	}
 
 	cfgPath := filepath.Join(*dataDir, "config.json")
@@ -481,6 +502,7 @@ func bootstrapMain(args []string) {
 		originURL:     resolvedOrigin,
 		publicIP:      *publicIP,
 		keysBackupDir: *keysBackupDir,
+		keysDir:       *keysDir,
 	})
 }
 
@@ -490,6 +512,7 @@ type healthcheckOpts struct {
 	originURL     string
 	publicIP      string
 	keysBackupDir string
+	keysDir       string
 }
 
 func installSystemdUnit(name, dataDir, user string) {
@@ -583,11 +606,19 @@ func runHealthcheck(opts healthcheckOpts) {
 
 	deadline := time.Now().Add(waitTimeout)
 	var nodeID string
+	var joinStaker *genesisStakerExpectation
 
 	for time.Now().Before(deadline) {
-		id, _, err := infoClient.GetNodeID(ctx)
+		id, pop, err := infoClient.GetNodeID(ctx)
 		if err == nil {
 			nodeID = id.String()
+			if pop != nil {
+				joinStaker = &genesisStakerExpectation{
+					NodeID:            nodeID,
+					PublicKey:         "0x" + hex.EncodeToString(pop.PublicKey[:]),
+					ProofOfPossession: "0x" + hex.EncodeToString(pop.ProofOfPossession[:]),
+				}
+			}
 			fmt.Printf("  ✓ /ext/info reachable (NodeID: %s)\n", nodeID)
 			break
 		}
@@ -639,8 +670,14 @@ func runHealthcheck(opts healthcheckOpts) {
 			fmt.Printf("  ✗ Node %s NOT in validators yet — check: journalctl -u titan-node -n 50\n", nodeID)
 		}
 	} else {
-		fmt.Printf("  Join node %s synced. Register as validator with:\n", nodeID)
-		fmt.Println("    titan validator add --from @master.key --uri http://THIS_NODE:9650")
+		fmt.Printf("  ✓ Join node %s synced — register from ATLAS (treasury), not from this server:\n", nodeID)
+		if joinStaker != nil {
+			printAtlasValidatorAddCommand(joinStaker, defaultValidatorStakeTitan)
+		} else if opts.keysDir != "" {
+			if staker, err := deriveStakerFromKeys(opts.keysDir); err == nil {
+				printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan)
+			}
+		}
 		if opts.originURL != "" {
 			fmt.Println("  --- Post-sync origin verification ---")
 			if err := verifyAlignedWithOrigin(opts.originURL); err != nil {
@@ -672,10 +709,10 @@ Next steps:
 		fmt.Printf("  curl -s %s/anchor.json | jq .genesisHash\n", opts.originURL)
 		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
 	}
-	if !opts.isFirst && nodeID != "" {
-		fmt.Printf("  titan validator add --from @master.key --uri %s\n", uri)
+	if !opts.isFirst {
+		fmt.Println("  ./build/titan keys show   # re-print ATLAS register command anytime")
 	}
-	fmt.Println("\nBootstrap finished. Use: journalctl -u titan -f   or   ./build/titan status")
+	fmt.Println("\nBootstrap finished. Use: journalctl -u titan-node -f   or   ./build/titan status")
 }
 
 func installSystemdMain(args []string) {

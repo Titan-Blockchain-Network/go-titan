@@ -295,7 +295,7 @@ main() {
     echo
     log "For the first node: make sure getCurrentValidators shows your genesis NodeID."
     log "For additional nodes: ensure ATLAS exposes port 9652 (origin bundle), then run this script on join servers."
-    log "After join sync: run 'titan validator add' from a machine that has the funded key."
+    log "After join sync: on ATLAS run the 'validator add' command from healthcheck (or: titan keys show on the join node)."
 }
 
 main "$@"
