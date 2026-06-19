@@ -6,10 +6,42 @@
 #   avalanchego/build/titan
 #   avalanchego/build/avalanchego
 #
+# Install to /usr/local/bin (used by systemd):
+#   ./scripts/build-titan.sh --install
+#   ./scripts/build-titan.sh --install --restart
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AVAGO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+INSTALL=false
+RESTART=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install|-i)
+      INSTALL=true
+      shift
+      ;;
+    --restart)
+      RESTART=true
+      INSTALL=true
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 [--install] [--restart]"
+      echo "  Builds build/titan and build/avalanchego."
+      echo "  --install copies to /usr/local/bin (stops running titan* services first)."
+      echo "  --restart starts services again after --install."
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 
 mkdir -p "$AVAGO_DIR/build"
 
@@ -23,6 +55,15 @@ echo "Built: $AVAGO_DIR/build/titan"
 echo "Built: $AVAGO_DIR/build/avalanchego"
 echo
 
+if $INSTALL; then
+  INSTALL_ARGS=()
+  if $RESTART; then
+    INSTALL_ARGS+=(--restart)
+  fi
+  "$SCRIPT_DIR/install-titan-binaries.sh" "${INSTALL_ARGS[@]}"
+  echo
+fi
+
 # If a local node is up, verify C→P export path (chain/asset alignment on every node;
 # full treasury check when master key is present — required on ATLAS for validator add).
 if curl -sf --max-time 2 "http://127.0.0.1:9650/ext/health" >/dev/null 2>&1; then
@@ -32,20 +73,25 @@ if curl -sf --max-time 2 "http://127.0.0.1:9650/ext/health" >/dev/null 2>&1; the
     VERIFY_ARGS+=(--from "@${MASTER_KEY}")
   fi
   echo "Local node detected — verifying atomic export path (C→P)..."
-  if "$AVAGO_DIR/build/titan" "${VERIFY_ARGS[@]}"; then
+  TITAN_CLI="$AVAGO_DIR/build/titan"
+  if $INSTALL && command -v titan >/dev/null 2>&1; then
+    TITAN_CLI="titan"
+  fi
+  if "$TITAN_CLI" "${VERIFY_ARGS[@]}"; then
     echo "Export path OK."
   else
     echo "WARN: export-path verification failed (see above)."
-    echo "  Fix: git pull && ./scripts/build-titan.sh"
+    echo "  Fix: git pull && ./scripts/build-titan.sh --install --restart"
     echo "  ATLAS: place treasury key at /root/master.key (or set TITAN_MASTER_KEY)"
   fi
   echo
 fi
 
-echo "For fresh servers, use the full interactive bootstrap:"
-echo "  ./scripts/titan-server-bootstrap.sh"
+echo "Fresh server bootstrap (recommended after reset):"
+echo "  cd go-titan && ./avalanchego/scripts/titan-server-bootstrap.sh"
 echo
-echo "Try the CLI:"
-echo "  ./build/titan --help"
-echo "  ./build/titan wallet verify-export --from @/root/master.key"
-echo "  ./build/titan node bootstrap --help"
+echo "Rebuild + install on a running node:"
+echo "  ./scripts/build-titan.sh --install --restart"
+echo
+echo "CLI (before install):  ./build/titan --help"
+echo "CLI (after bootstrap): titan --help"

@@ -209,7 +209,7 @@ func validatorMain(args []string) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to fetch info.getNodeID from %s: %v\n", lookupURI, err)
 			fmt.Fprintln(os.Stderr, "On ATLAS: pass --node-id --bls-pub --bls-pop from the join node's bootstrap output.")
-			fmt.Fprintln(os.Stderr, "On join node: run ./build/titan keys show")
+			fmt.Fprintln(os.Stderr, "On join node: run titan keys show")
 			os.Exit(1)
 		}
 		if nodeID == ids.EmptyNodeID {
@@ -267,6 +267,7 @@ Other subcommands:
   titan node setup --join <ip:port> ...
   titan node verify-keys [--keys-dir path]
   titan node install-systemd --first --name titan-atlas ...
+  titan node install-binaries [--restart] [--service titan-node]
   titan node firewall --apply
 
 The bootstrap command builds the running system and ends with a healthcheck.
@@ -284,6 +285,8 @@ First validator is special (baked into genesis).
 		verifyKeysMain()
 	case "install-systemd":
 		installSystemdMain(args[1:])
+	case "install-binaries":
+		installBinariesMain(args[1:])
 	case "firewall":
 		firewallMain(args[1:])
 	default:
@@ -316,12 +319,12 @@ func setupMain(args []string) {
 		}
 
 		fmt.Println("Recommended: use the config + systemd")
-		fmt.Printf("  ./build/titan node install-systemd --first --name titan-atlas --data-dir %s --keys-dir %s --public-ip %s\n", *dataDir, *keysDir, *publicIP)
+		fmt.Printf("  titan node install-systemd --first --name titan-atlas --data-dir %s --keys-dir %s --public-ip %s\n", *dataDir, *keysDir, *publicIP)
 		fmt.Println()
 		fmt.Println("Then:")
 		fmt.Println("  sudo systemctl daemon-reload && sudo systemctl enable --now titan-atlas")
 		fmt.Println()
-		fmt.Println("Check with: ./build/titan status   and   platform.getCurrentValidators")
+		fmt.Println("Check with: titan status   and   platform.getCurrentValidators")
 		fmt.Println("The first node is a validator automatically (no add tx).")
 		return
 	}
@@ -343,7 +346,7 @@ func setupMain(args []string) {
 		fmt.Printf("   # bootstrap-ips=%s bootstrap-ids=%s (already in config.json)\n", *joinIP, *joinID)
 		fmt.Println()
 		fmt.Println("2. On ATLAS (treasury ~/master.key) after this node syncs:")
-		fmt.Println("   ./build/titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 --node-id ... --bls-pub ... --bls-pop ...")
+		fmt.Println("   titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 --node-id ... --bls-pub ... --bls-pop ...")
 		fmt.Println("   (bootstrap healthcheck prints the full command; or run: titan keys show)")
 		fmt.Println()
 		fmt.Println("3. Verify it appears as validator on any node:")
@@ -481,22 +484,14 @@ func bootstrapMain(args []string) {
 	}
 
 	if !*skipSystemd {
-		fmt.Println("\n=== Installing systemd unit ===")
-		if _, err := os.Stat("build/avalanchego"); err == nil {
-			if err := runPrivileged("cp", "-f", "build/avalanchego", "/usr/local/bin/avalanchego"); err != nil {
-				fmt.Printf("  Warning: could not copy binary to /usr/local/bin: %v\n", err)
-			} else {
-				fmt.Println("  Installed build/avalanchego to /usr/local/bin/avalanchego")
-			}
-			_ = runPrivileged("chmod", "+x", "/usr/local/bin/avalanchego")
-		}
-		if _, err := os.Stat("build/titan"); err == nil {
-			_ = runPrivileged("cp", "-f", "build/titan", "/usr/local/bin/titan")
-			_ = runPrivileged("chmod", "+x", "/usr/local/bin/titan")
+		fmt.Println("\n=== Installing binaries + systemd unit ===")
+		originSvc := *name + "-origin"
+		if err := installBuiltBinaries(false); err != nil {
+			fmt.Printf("  Warning: binary install failed: %v\n", err)
+			fmt.Println("  Run from avalanchego/: ./scripts/install-titan-binaries.sh")
 		}
 		installSystemdUnit(*name, *dataDir, "root")
 		if *first {
-			originSvc := *name + "-origin"
 			if err := installOriginServeSystemd(originSvc, *dataDir); err != nil {
 				fmt.Printf("  Warning: could not install origin server: %v\n", err)
 			} else {
@@ -754,6 +749,24 @@ Next steps:
 	fmt.Println("\nBootstrap finished. Use: journalctl -u titan-node -f   or   titan status")
 }
 
+func installBinariesMain(args []string) {
+	fs := flag.NewFlagSet("node install-binaries", flag.ExitOnError)
+	restart := fs.Bool("restart", false, "restart systemd services after install")
+	fs.Parse(args)
+
+	services := fs.Args()
+	if len(services) == 0 {
+		services = []string{"titan-node", "titan-node-origin"}
+	}
+
+	fmt.Println("=== Installing Titan binaries to /usr/local/bin ===")
+	if err := installBuiltBinaries(*restart, services...); err != nil {
+		fmt.Fprintf(os.Stderr, "install failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Done. systemd units use /usr/local/bin/avalanchego and /usr/local/bin/titan")
+}
+
 func installSystemdMain(args []string) {
 	fs := flag.NewFlagSet("node install-systemd", flag.ExitOnError)
 	name := fs.String("name", "titan", "service name (titan or titan-atlas, titan-prom etc)")
@@ -785,6 +798,9 @@ func installSystemdMain(args []string) {
 		os.Exit(1)
 	}
 
+	if err := installBuiltBinaries(false); err != nil {
+		fmt.Printf("Warning: binary install failed: %v\n", err)
+	}
 	installSystemdUnit(*name, *dataDir, *user)
 	fmt.Println("Now run:")
 	fmt.Printf("  sudo systemctl daemon-reload\n")

@@ -231,13 +231,8 @@ func alignWithOrigin(originURL string) error {
 		return fmt.Errorf("after rebuild: %w", err)
 	}
 
-	if _, err := os.Stat("build/avalanchego"); err == nil {
-		_ = runPrivileged("cp", "-f", "build/avalanchego", "/usr/local/bin/avalanchego")
-		_ = runPrivileged("chmod", "+x", "/usr/local/bin/avalanchego")
-	}
-	if _, err := os.Stat("build/titan"); err == nil {
-		_ = runPrivileged("cp", "-f", "build/titan", "/usr/local/bin/titan")
-		_ = runPrivileged("chmod", "+x", "/usr/local/bin/titan")
+	if err := installBuiltBinaries(false, "titan-node", "titan-node-origin"); err != nil {
+		fmt.Printf("  Warning: could not install rebuilt binaries: %v\n", err)
 	}
 
 	fmt.Println("  ✓ Genesis aligned and binary rebuilt to match origin.")

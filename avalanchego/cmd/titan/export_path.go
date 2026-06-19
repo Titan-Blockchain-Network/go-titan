@@ -158,7 +158,7 @@ func verifyExportPath(ctx context.Context, nodeURI, masterKeyPath string) export
 	if report.ok {
 		fmt.Println("  ✓ Export path ready for validator add")
 	} else {
-		fmt.Println("  ✗ Export path checks failed — fix issues above, then: git pull && ./scripts/build-titan.sh")
+		fmt.Println("  ✗ Export path checks failed — fix issues above, then: git pull && ./scripts/build-titan.sh --install --restart")
 	}
 	return report
 }

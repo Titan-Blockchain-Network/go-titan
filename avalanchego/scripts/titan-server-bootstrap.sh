@@ -118,7 +118,7 @@ build_titan_tools() {
 
     ./scripts/build-titan.sh
     log "Build complete. Binaries in build/"
-    log "Final binaries are installed to /usr/local/bin during 'titan node bootstrap' (after genesis alignment)."
+    log "Binaries are installed to /usr/local/bin during 'titan node bootstrap' (systemd uses that path)."
 }
 
 prompt() {
@@ -263,6 +263,7 @@ run_bootstrap() {
     fi
 
     log "Running: ./build/titan node bootstrap ${BOOT_ARGS[*]}"
+    log "(installs to /usr/local/bin; afterward use: titan ...)"
     ./build/titan node bootstrap "${BOOT_ARGS[@]}"
 }
 

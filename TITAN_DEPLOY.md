@@ -540,11 +540,23 @@ Both the genesis validator and all added ones will appear.
 - A single "control plane" script that knows all current nodes and can mass-fund / mass-add.
 - Pre-allocating a few smaller operator addresses in genesis (still using your preferred master-key model).
 
-Run `./build/titan node help` and `./build/titan --help` after building to see the current commands.
+Run `titan node help` and `titan --help` after bootstrap (or `./build/titan` before install).
 
-## Reset Servers & Clean Launch (Recommended for you now)
+## Reset Servers & Clean Launch
 
-Since you are resetting the two servers:
+### 0. Wipe an existing server (ATLAS or Prometheus)
+
+```bash
+# Optional: backup treasury key off-box first
+scp root@ATLAS:/root/master.key ./master.key.backup
+
+cd ~/go-titan/avalanchego   # if repo exists
+sudo ./scripts/wipe-titan-server.sh --purge-repo
+```
+
+Keeps `/root/master.key` unless you pass `--all-keys`.
+
+### 1. ATLAS (first / genesis validator)
 
 **Clean one-script flow after clone (the main path for ATLAS-1 etc.):**
 
@@ -586,56 +598,48 @@ cd go-titan
 ./avalanchego/scripts/titan-server-bootstrap.sh
 ```
 
-When prompted, answer that it is the first/genesis node. Requires root/sudo for firewall and systemd. The last step is the healthcheck.
+When prompted: **first node = yes**, treasury path `/root/master.key`, confirm firewall.
 
-**New node (after ATLAS is up):**
-
-```bash
-cd go-titan/avalanchego
-./scripts/build-titan.sh
-
-# Full automated join-node bootstrap (generates keys, writes bootstrap config, systemd, healthcheck)
-./build/titan node bootstrap \
-  --join ATLAS_IP:9651 \
-  --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8 \
-  --public-ip YOUR_IP \
-  --keys-dir /root/keys \
-  --name titan-prometheus1
-```
-
-Or step-by-step:
+Place `/root/master.key` (64 hex chars) before `titan validator add`. Bootstrap installs binaries to `/usr/local/bin` and ends with healthcheck.
 
 ```bash
-./build/titan keys generate --dir /root/keys
-./build/titan node install-systemd \
-  --name titan-prometheus1 \
-  --join ATLAS_IP:9651 \
-  --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8 \
-  --public-ip YOUR_IP \
-  --keys-dir /root/keys
-sudo systemctl enable --now titan-prometheus1
+titan wallet verify-export --from @/root/master.key
+titan genesis fingerprint
+curl -s http://127.0.0.1:9652/anchor.json | jq -r .genesisHash
 ```
 
-**Fund + make it a validator (from control machine with master key):**
+### 2. Prometheus (join node, after ATLAS is healthy)
 
 ```bash
-./build/titan validator add --from 0x...OR@file --uri http://new-node:9650 --amount 2000000
+git clone https://github.com/Titan-Blockchain-Network/go-titan.git
+cd go-titan
+./avalanchego/scripts/titan-server-bootstrap.sh
 ```
 
-**Firewall on every server (run before or after):**
+When prompted: **first node = no**, bootstrap `ATLAS_IP:9651`, NodeID from ATLAS (not a stale doc example).
+
+Healthcheck prints the exact `titan validator add` command for ATLAS.
+
+### 3. Register Prometheus on ATLAS
 
 ```bash
-./build/titan node firewall
-# then execute the printed ufw commands (adjust IPs)
+titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 \
+  --node-id <FROM_PROMETHEUS> --bls-pub 0x... --bls-pop 0x... --amount 2000000
 ```
 
-**Verify:**
+### 4. Verify
 
 ```bash
-./build/titan status
-curl -s http://localhost:9650/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
+titan status
+curl -s http://127.0.0.1:9650/ext/bc/P \
+  -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq '.result.validators | length'
 ```
 
-This should now feel like a real, low-friction custom blockchain where adding nodes is a repeatable, documented process.
+### Rebuild on a running node
 
-This gives you a clear, repeatable path from "empty repo clone" to "one running custom blockchain with N validators". The first is special (genesis), everything after is uniform (fund + register).
+```bash
+cd ~/go-titan/avalanchego && git pull
+./scripts/build-titan.sh --install --restart
+```
+
+`build-titan.sh` only writes to `build/` unless you pass `--install` (stops `titan-node` first — no "Text file busy").

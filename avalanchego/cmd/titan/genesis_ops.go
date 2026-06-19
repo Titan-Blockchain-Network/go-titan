@@ -451,7 +451,7 @@ func prepareGenesisNodeKeys(keysDir, dataDir, rewardAddress string, skipRebuild,
 	if !verifyGenesisKeysFromDisk(keysDir) {
 		return fmt.Errorf("keys do not match genesis_titan.json after update")
 	}
-	fmt.Println("  Genesis and keys are aligned. Re-run bootstrap with ./build/titan if this process predates the rebuild.")
+	fmt.Println("  Genesis and keys are aligned.")
 	return nil
 }
 
