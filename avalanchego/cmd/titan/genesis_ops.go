@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/ava-labs/avalanchego/genesis"
 	"github.com/ava-labs/avalanchego/ids"
@@ -17,7 +18,72 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
 )
 
-const defaultGenesisRewardAddress = "P-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn"
+const (
+	defaultGenesisRewardAddress = "P-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn"
+	genesisStartLookback        = 2 * time.Hour
+)
+
+func genesisValidatorEndTime(cfg *genesis.Config) time.Time {
+	return time.Unix(int64(cfg.StartTime), 0).Add(time.Duration(cfg.InitialStakeDuration) * time.Second)
+}
+
+func isGenesisValidatorExpired(cfg *genesis.Config) bool {
+	return !time.Now().Before(genesisValidatorEndTime(cfg))
+}
+
+func loadDiskGenesisConfig() (*genesis.Config, error) {
+	genesisPath, err := findGenesisJSONPath()
+	if err != nil {
+		return nil, err
+	}
+	return genesis.GetConfigFile(genesisPath)
+}
+
+func applyGenesisStartTime(cfg map[string]json.RawMessage) (uint64, error) {
+	startUnix := uint64(time.Now().UTC().Add(-genesisStartLookback).Unix())
+	b, err := json.Marshal(startUnix)
+	if err != nil {
+		return 0, err
+	}
+	cfg["startTime"] = b
+	return startUnix, nil
+}
+
+func writeGenesisConfigMap(genesisPath string, cfg map[string]json.RawMessage) error {
+	out, err := json.MarshalIndent(cfg, "", "    ")
+	if err != nil {
+		return err
+	}
+	out = append(out, '\n')
+	tmp := genesisPath + ".tmp"
+	if err := os.WriteFile(tmp, out, 0644); err != nil {
+		return fmt.Errorf("write temp genesis: %w", err)
+	}
+	return os.Rename(tmp, genesisPath)
+}
+
+func refreshGenesisStartTimeInFile(genesisPath string) error {
+	data, err := os.ReadFile(genesisPath)
+	if err != nil {
+		return fmt.Errorf("read genesis: %w", err)
+	}
+	var cfg map[string]json.RawMessage
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parse genesis: %w", err)
+	}
+	startUnix, err := applyGenesisStartTime(cfg)
+	if err != nil {
+		return err
+	}
+	var stakeDuration uint64 = 31536000
+	if raw, ok := cfg["initialStakeDuration"]; ok {
+		_ = json.Unmarshal(raw, &stakeDuration)
+	}
+	end := time.Unix(int64(startUnix), 0).Add(time.Duration(stakeDuration) * time.Second)
+	fmt.Printf("  Genesis startTime refreshed to %s\n", time.Unix(int64(startUnix), 0).UTC().Format(time.RFC3339))
+	fmt.Printf("  Genesis validator active until %s\n", end.UTC().Format(time.RFC3339))
+	return writeGenesisConfigMap(genesisPath, cfg)
+}
 
 func embeddedGenesisExpectation() (*genesisStakerExpectation, error) {
 	cfg := genesis.GetConfig(constants.TitanID)
@@ -180,17 +246,21 @@ func updateGenesisJSON(staker *genesisStakerExpectation, rewardAddress string) e
 	}
 	cfg["initialStakers"] = stakerJSON
 
-	out, err := json.MarshalIndent(cfg, "", "    ")
+	startUnix, err := applyGenesisStartTime(cfg)
 	if err != nil {
 		return err
 	}
-	out = append(out, '\n')
-
-	tmp := genesisPath + ".tmp"
-	if err := os.WriteFile(tmp, out, 0644); err != nil {
-		return fmt.Errorf("write temp genesis: %w", err)
+	var stakeDuration uint64 = 31536000
+	if raw, ok := cfg["initialStakeDuration"]; ok {
+		_ = json.Unmarshal(raw, &stakeDuration)
 	}
-	if err := os.Rename(tmp, genesisPath); err != nil {
+	end := time.Unix(int64(startUnix), 0).Add(time.Duration(stakeDuration) * time.Second)
+	fmt.Printf("  Genesis startTime set to %s (validator active until %s)\n",
+		time.Unix(int64(startUnix), 0).UTC().Format(time.RFC3339),
+		end.UTC().Format(time.RFC3339),
+	)
+
+	if err := writeGenesisConfigMap(genesisPath, cfg); err != nil {
 		return fmt.Errorf("replace genesis: %w", err)
 	}
 	fmt.Printf("  Updated %s with NodeID %s\n", genesisPath, staker.NodeID)
@@ -249,12 +319,43 @@ func prepareGenesisNodeKeys(keysDir, dataDir, rewardAddress string, skipRebuild,
 	}
 
 	fmt.Println("Verifying keys against embedded genesis...")
-	if verifyGenesisKeys(keysDir) {
-		fmt.Println("  Keys match embedded genesis.")
-		return nil
+	keysMatchEmbedded := verifyGenesisKeys(keysDir)
+	if keysMatchEmbedded {
+		if diskCfg, err := loadDiskGenesisConfig(); err == nil && !isGenesisValidatorExpired(diskCfg) {
+			fmt.Println("  Keys match embedded genesis.")
+			return nil
+		}
+		if diskCfg, err := loadDiskGenesisConfig(); err == nil && isGenesisValidatorExpired(diskCfg) {
+			fmt.Printf("  Genesis validator stake expired (ended %s) — refreshing startTime.\n",
+				genesisValidatorEndTime(diskCfg).UTC().Format(time.RFC3339))
+			genesisPath, err := findGenesisJSONPath()
+			if err != nil {
+				return err
+			}
+			if err := refreshGenesisStartTimeInFile(genesisPath); err != nil {
+				return err
+			}
+			if !skipRebuild {
+				if err := rebuildBinaries(); err != nil {
+					return err
+				}
+			}
+			if !noWipe {
+				if err := wipeDataDir(dataDir); err != nil {
+					return err
+				}
+			}
+			fmt.Println("  Genesis timing refreshed and data wiped. Republish origin if the node is already running.")
+			return nil
+		}
 	}
 
 	needsGenesisUpdate := !verifyGenesisKeysFromDisk(keysDir)
+	if keysMatchEmbedded && !needsGenesisUpdate {
+		// Keys/binary/disk agree on staker identity but we fell through (e.g. could not load config).
+		fmt.Println("  Keys match embedded genesis.")
+		return nil
+	}
 	if needsGenesisUpdate {
 		if hadKeys {
 			fmt.Println("  Keys do not match genesis — updating genesis_titan.json to match keys.")
