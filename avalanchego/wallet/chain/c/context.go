@@ -11,7 +11,7 @@ import (
 	"github.com/ava-labs/avalanchego/snow"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/logging"
-	"github.com/ava-labs/avalanchego/vms/avm"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
 )
 
 const Alias = "C"
@@ -24,14 +24,14 @@ type Context struct {
 
 func NewContextFromURI(ctx context.Context, uri string) (*Context, error) {
 	infoClient := info.NewClient(uri)
-	xChainClient := avm.NewClient(uri, "X")
-	return NewContextFromClients(ctx, infoClient, xChainClient)
+	pChainClient := platformvm.NewClient(uri)
+	return NewContextFromClients(ctx, infoClient, pChainClient)
 }
 
 func NewContextFromClients(
 	ctx context.Context,
 	infoClient *info.Client,
-	xChainClient *avm.Client,
+	pChainClient *platformvm.Client,
 ) (*Context, error) {
 	networkID, err := infoClient.GetNetworkID(ctx)
 	if err != nil {
@@ -43,7 +43,10 @@ func NewContextFromClients(
 		return nil, err
 	}
 
-	avaxAsset, err := xChainClient.GetAssetDescription(ctx, "AVAX")
+	// Match the asset ID the C-chain VM uses when verifying atomic exports (same
+	// source as platform.getStakingAssetID). The X-chain "AVAX" alias can differ
+	// on custom networks like Titan.
+	avaxAssetID, err := pChainClient.GetStakingAssetID(ctx, constants.PrimaryNetworkID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +54,7 @@ func NewContextFromClients(
 	return &Context{
 		NetworkID:    networkID,
 		BlockchainID: blockchainID,
-		AVAXAssetID:  avaxAsset.AssetID,
+		AVAXAssetID:  avaxAssetID,
 	}, nil
 }
 

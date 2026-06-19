@@ -89,13 +89,10 @@ func FetchState(
 		return nil, err
 	}
 
-	cCTX, err := c.NewContextFromClients(ctx, infoClient, xClient)
+	cCTX, err := c.NewContextFromClients(ctx, infoClient, pClient)
 	if err != nil {
 		return nil, err
 	}
-	// On custom networks (e.g. Titan) the X-chain asset lookup can disagree with the
-	// P-chain staking asset ID that the C-chain VM uses when verifying atomic exports.
-	cCTX.AVAXAssetID = pCTX.AVAXAssetID
 
 	utxos := walletcommon.NewUTXOs()
 	addrList := addrs.List()

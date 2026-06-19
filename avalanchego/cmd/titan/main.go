@@ -153,9 +153,32 @@ func validatorMain(args []string) {
 	amt := uint64(*amount * float64(units.Avax))
 	owner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}}
 
-	if err := transferCToP(ctx, *uri, cw, pw, amt, owner); err != nil {
-		fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
-		os.Exit(1)
+	pCtx := pw.Builder().Context()
+	pBalMap, pBalErr := pw.Builder().GetBalance()
+	pBal := uint64(0)
+	if pBalErr == nil {
+		pBal = pBalMap[pCtx.AVAXAssetID]
+	}
+	switch {
+	case pBal >= amt:
+		fmt.Printf("P-chain already has %.0f TITAN (need %.0f) — skipping C→P\n",
+			float64(pBal)/float64(units.Avax), *amount)
+	case pBalErr != nil:
+		fmt.Printf("Warning: could not read P-chain balance (%v) — attempting C→P\n", pBalErr)
+		if err := transferCToP(ctx, *uri, cw, pw, amt, owner); err != nil {
+			fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		transferAmt := amt - pBal
+		if pBal > 0 {
+			fmt.Printf("P-chain has %.0f TITAN; moving %.0f more from C→P\n",
+				float64(pBal)/float64(units.Avax), float64(transferAmt)/float64(units.Avax))
+		}
+		if err := transferCToP(ctx, *uri, cw, pw, transferAmt, owner); err != nil {
+			fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// auto detect NodeID + POP from the target node's API if not provided

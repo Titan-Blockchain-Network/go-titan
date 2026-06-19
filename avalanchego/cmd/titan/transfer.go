@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ava-labs/avalanchego/api/info"
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/constants"
+	"github.com/ava-labs/avalanchego/vms/avm"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/wallet/chain/c"
 	"github.com/ava-labs/avalanchego/wallet/chain/p/wallet"
@@ -94,6 +98,43 @@ func fetchEthBaseFee(ctx context.Context, nodeURI string) (*big.Int, error) {
 	return nil, fmt.Errorf("unsupported eth_baseFee result: %s", string(envelope.Result))
 }
 
+type chainAssetSnapshot struct {
+	networkID    uint32
+	cChainID     ids.ID
+	pStakingID   ids.ID
+	xAvaxAliasID ids.ID
+}
+
+func fetchChainAssetSnapshot(ctx context.Context, nodeURI string) (*chainAssetSnapshot, error) {
+	uri := strings.TrimRight(nodeURI, "/")
+	infoClient := info.NewClient(uri)
+	pClient := platformvm.NewClient(uri)
+	xClient := avm.NewClient(uri, "X")
+
+	networkID, err := infoClient.GetNetworkID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cChainID, err := infoClient.GetBlockchainID(ctx, "C")
+	if err != nil {
+		return nil, err
+	}
+	pStakingID, err := pClient.GetStakingAssetID(ctx, constants.PrimaryNetworkID)
+	if err != nil {
+		return nil, err
+	}
+
+	snap := &chainAssetSnapshot{
+		networkID:  networkID,
+		cChainID:   cChainID,
+		pStakingID: pStakingID,
+	}
+	if xAsset, err := xClient.GetAssetDescription(ctx, "AVAX"); err == nil {
+		snap.xAvaxAliasID = xAsset.AssetID
+	}
+	return snap, nil
+}
+
 // transferCToP moves TITAN from C-chain to P-chain, retrying import until the
 // exported atomic UTXO is visible on the P-chain.
 func transferCToP(
@@ -112,9 +153,23 @@ func transferCToP(
 		baseFee = big.NewInt(transferDefaultBaseFeeWei)
 	}
 
-	cChainID := cw.Builder().Context().BlockchainID
-	avaxAssetID := cw.Builder().Context().AVAXAssetID
+	walletCtx := cw.Builder().Context()
+	cChainID := walletCtx.BlockchainID
+	avaxAssetID := walletCtx.AVAXAssetID
 	fmt.Printf("  C-chain ID %s, staking asset %s → P-chain\n", cChainID, avaxAssetID)
+
+	if snap, err := fetchChainAssetSnapshot(ctx, nodeURI); err == nil {
+		if snap.cChainID != cChainID {
+			fmt.Printf("  Warning: wallet C-chain ID %s != node %s\n", cChainID, snap.cChainID)
+		}
+		if snap.pStakingID != avaxAssetID {
+			fmt.Printf("  Warning: wallet asset %s != P-chain staking asset %s\n", avaxAssetID, snap.pStakingID)
+		}
+		if snap.xAvaxAliasID != ids.Empty && snap.xAvaxAliasID != snap.pStakingID {
+			fmt.Printf("  Note: X-chain AVAX alias %s differs from staking asset %s (wallet uses staking asset)\n",
+				snap.xAvaxAliasID, snap.pStakingID)
+		}
+	}
 
 	exp, err := cw.IssueExportTx(
 		constants.PlatformChainID,
@@ -122,7 +177,10 @@ func transferCToP(
 		common.WithBaseFee(baseFee),
 	)
 	if err != nil {
-		return fmt.Errorf("export: %w (C-chain=%s asset=%s — rebuild titan after git pull if this persists)", err, cChainID, avaxAssetID)
+		return fmt.Errorf(
+			"export: %w (network=%d C-chain=%s asset=%s — run: titan wallet balances --from @master.key; if P-chain already funded, validator add will skip C→P after rebuild)",
+			err, walletCtx.NetworkID, cChainID, avaxAssetID,
+		)
 	}
 	fmt.Printf("export %s (accepted)\n", exp.ID())
 
