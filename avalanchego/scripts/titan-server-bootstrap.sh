@@ -207,6 +207,7 @@ interactive_setup() {
     echo "Service name:        $SERVICE_NAME"
     echo "Apply firewall:      $APPLY_FIREWALL"
     if $IS_FIRST; then
+        echo "Keys backup dir:     /root/titan-genesis-backup"
         echo "Origin bundle URL:   http://${PUBLIC_IP}:9652  (for join nodes)"
     else
         echo "Bootstrap:           $BOOTSTRAP_IP / $BOOTSTRAP_ID"

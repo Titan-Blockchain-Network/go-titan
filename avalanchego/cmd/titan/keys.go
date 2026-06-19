@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/staking"
@@ -16,10 +18,132 @@ import (
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
 )
 
+const defaultGenesisKeysBackupDir = "/root/titan-genesis-backup"
+
+var genesisKeyFilenames = []string{"staker.crt", "staker.key", "signer.key"}
+
 type genesisStakerExpectation struct {
 	NodeID            string
 	PublicKey         string
 	ProofOfPossession string
+}
+
+func copyFilePreservePerm(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", src, err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", src, err)
+	}
+	perm := info.Mode().Perm()
+	if strings.HasSuffix(dst, ".key") {
+		perm = 0600
+	}
+	if err := os.WriteFile(dst, data, perm); err != nil {
+		return fmt.Errorf("write %s: %w", dst, err)
+	}
+	return nil
+}
+
+func archiveExistingGenesisBackup(backupDir string) error {
+	if !keysPresent(backupDir) {
+		return nil
+	}
+	snapshot := filepath.Join(backupDir, "snapshots", time.Now().UTC().Format("2006-01-02T15-04-05Z"))
+	if err := os.MkdirAll(snapshot, 0700); err != nil {
+		return err
+	}
+	for _, name := range append(append([]string{}, genesisKeyFilenames...), "genesis_titan.json", "anchor.json", "backup-info.json", "README.txt") {
+		src := filepath.Join(backupDir, name)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		if err := os.Rename(src, filepath.Join(snapshot, name)); err != nil {
+			if err := copyFilePreservePerm(src, filepath.Join(snapshot, name)); err != nil {
+				return err
+			}
+			_ = os.Remove(src)
+		}
+	}
+	fmt.Printf("  Previous genesis backup archived to %s\n", snapshot)
+	return nil
+}
+
+// backupGenesisKeys copies genesis staking keys (and related files) to a protected folder on disk.
+func backupGenesisKeys(keysDir, dataDir, backupDir string) error {
+	if backupDir == "" {
+		backupDir = defaultGenesisKeysBackupDir
+	}
+	if !keysPresent(keysDir) {
+		return fmt.Errorf("no staking keys in %s to back up", keysDir)
+	}
+
+	if err := archiveExistingGenesisBackup(backupDir); err != nil {
+		return fmt.Errorf("archive previous backup: %w", err)
+	}
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		return err
+	}
+
+	for _, name := range genesisKeyFilenames {
+		if err := copyFilePreservePerm(filepath.Join(keysDir, name), filepath.Join(backupDir, name)); err != nil {
+			return fmt.Errorf("backup %s: %w", name, err)
+		}
+	}
+
+	if genesisPath, err := findGenesisJSONPath(); err == nil {
+		_ = copyFilePreservePerm(genesisPath, filepath.Join(backupDir, "genesis_titan.json"))
+	}
+
+	anchorPath := filepath.Join(originBundleDir(dataDir), originAnchorFile)
+	if _, err := os.Stat(anchorPath); err == nil {
+		_ = copyFilePreservePerm(anchorPath, filepath.Join(backupDir, "anchor.json"))
+	}
+
+	staker, err := deriveStakerFromKeys(keysDir)
+	if err != nil {
+		return err
+	}
+	genesisHash, _ := computeEmbeddedGenesisFingerprint()
+
+	info := map[string]string{
+		"backedUpAt":    time.Now().UTC().Format(time.RFC3339),
+		"keysSourceDir": keysDir,
+		"nodeID":        staker.NodeID,
+		"genesisHash":   genesisHash,
+		"blsPublicKey":  staker.PublicKey,
+	}
+	infoBytes, _ := json.MarshalIndent(info, "", "  ")
+	if err := os.WriteFile(filepath.Join(backupDir, "backup-info.json"), infoBytes, 0600); err != nil {
+		return err
+	}
+
+	readme := fmt.Sprintf(`Titan Genesis Validator Backup
+==============================
+Backed up: %s
+NodeID:    %s
+Keys from: %s
+
+Files:
+  staker.crt, staker.key, signer.key  — genesis validator identity (KEEP SECRET)
+  genesis_titan.json                  — genesis config used to build this network
+  anchor.json                         — genesis fingerprint served to join nodes
+  backup-info.json                    — machine-readable metadata
+
+Copy this entire directory offline (USB, vault, etc.). Anyone with these keys
+controls the genesis validator.
+`, info["backedUpAt"], staker.NodeID, keysDir)
+	if err := os.WriteFile(filepath.Join(backupDir, "README.txt"), []byte(readme), 0600); err != nil {
+		return err
+	}
+
+	fmt.Println("=== Genesis keys backed up ===")
+	fmt.Printf("  Directory: %s (mode 0700)\n", backupDir)
+	fmt.Printf("  NodeID:    %s\n", staker.NodeID)
+	fmt.Println("  Copy this folder offline — it controls the genesis validator.")
+	return nil
 }
 
 func generateTitanKeys(outDir string, genesis bool) error {

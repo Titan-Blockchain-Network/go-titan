@@ -310,6 +310,7 @@ func bootstrapMain(args []string) {
 	name := fs.String("name", "titan", "systemd service name")
 	dataDir := fs.String("data-dir", "/root/titan-data", "data directory")
 	keysDir := fs.String("keys-dir", "/root/keys", "directory containing staker.crt/key + signer.key")
+	keysBackupDir := fs.String("keys-backup-dir", defaultGenesisKeysBackupDir, "first node: where to back up genesis keys on this server")
 	publicIP := fs.String("public-ip", "", "public IP address")
 	rewardAddr := fs.String("reward-address", defaultGenesisRewardAddress, "P-chain reward address for genesis validator")
 	originURL := fs.String("origin-url", "", "origin bundle URL for join nodes (default: http://<join-host>:9652)")
@@ -355,6 +356,11 @@ func bootstrapMain(args []string) {
 		}
 		if err := publishOriginBundle(*dataDir); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to publish origin bundle: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("=== Backing up genesis keys on server ===")
+		if err := backupGenesisKeys(*keysDir, *dataDir, *keysBackupDir); err != nil {
+			fmt.Fprintf(os.Stderr, "genesis key backup failed: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
@@ -444,18 +450,20 @@ func bootstrapMain(args []string) {
 	fmt.Println("\n=== Running healthcheck (final step) ===")
 	resolvedOrigin := resolveOriginURL(*originURL, bootIPs)
 	runHealthcheck(healthcheckOpts{
-		isFirst:   *first,
-		dataDir:   *dataDir,
-		originURL: resolvedOrigin,
-		publicIP:  *publicIP,
+		isFirst:       *first,
+		dataDir:       *dataDir,
+		originURL:     resolvedOrigin,
+		publicIP:      *publicIP,
+		keysBackupDir: *keysBackupDir,
 	})
 }
 
 type healthcheckOpts struct {
-	isFirst   bool
-	dataDir   string
-	originURL string
-	publicIP  string
+	isFirst       bool
+	dataDir       string
+	originURL     string
+	publicIP      string
+	keysBackupDir string
 }
 
 func installSystemdUnit(name, dataDir, user string) {
@@ -500,6 +508,11 @@ func runHealthcheck(opts healthcheckOpts) {
 
 	fmt.Println("  --- Origin / genesis checks ---")
 	if opts.isFirst {
+		if keysPresent(opts.keysBackupDir) {
+			fmt.Printf("  ✓ Genesis keys backed up at %s\n", opts.keysBackupDir)
+		} else {
+			fmt.Printf("  ✗ Genesis key backup missing at %s\n", opts.keysBackupDir)
+		}
 		if err := waitAndVerifyLocalOriginServer(opts.publicIP); err != nil {
 			fmt.Printf("  ✗ Origin server check failed: %v\n", err)
 			fmt.Println("  Ensure titan-origin systemd is running and port 9652 is open (ufw + cloud firewall).")
@@ -609,6 +622,9 @@ Next steps:
   curl -s %s/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
 `, uri, uri)
 	if opts.isFirst {
+		if opts.keysBackupDir != "" {
+			fmt.Printf("  ls -la %s   # offline backup of genesis keys\n", opts.keysBackupDir)
+		}
 		if opts.publicIP != "" {
 			fmt.Printf("  curl -s http://%s:%s/anchor.json | jq .genesisHash\n", opts.publicIP, defaultOriginPort)
 		}

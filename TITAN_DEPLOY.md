@@ -177,6 +177,21 @@ curl -s http://ATLAS_IP:9652/anchor.json | jq .genesisHash
 
 **Operational order:** ATLAS fully up first → then bootstrap join servers.
 
+**Genesis key backup (first node only):** After keys are generated and genesis is aligned, bootstrap copies them to `/root/titan-genesis-backup/` (mode `0700`):
+
+```
+/root/titan-genesis-backup/
+  staker.crt, staker.key, signer.key   # genesis validator identity
+  genesis_titan.json                   # genesis used for this network
+  anchor.json                          # fingerprint join nodes verify against
+  backup-info.json                     # NodeID, genesis hash, timestamp
+  README.txt
+```
+
+If you re-bootstrap and keys change, the previous backup is moved to `snapshots/<timestamp>/`. Copy the backup folder offline immediately.
+
+Override with `titan node bootstrap --first --keys-backup-dir /path/to/backup`.
+
 ---
 
 ## Adding More Nodes (Consecutive Nodes)
@@ -526,7 +541,7 @@ cd go-titan
 
 - apt-get update + all deps/Go/build
 - Interactive prompts (say "yes" for first/genesis node on ATLAS-1)
-- For clean first node: auto-generates keys + backs up to separate folder (e.g. /root/genesis-keys-backup-*) + updates genesis + rebuilds
+- For clean first node: auto-generates keys + backs up to `/root/titan-genesis-backup` (previous copies go to `snapshots/`) + updates genesis + rebuilds
 - Programmatic firewall
 - Systemd + start
 - Ends with healthcheck (verifies validator status)
