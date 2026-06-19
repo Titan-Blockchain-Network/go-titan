@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -308,6 +309,59 @@ func verifyEmbeddedMatchesAnchor(anchor *TitanOriginAnchor) error {
 	return nil
 }
 
+func verifyOnDiskGenesisMatchesAnchor(anchor *TitanOriginAnchor) error {
+	genesisPath, err := findGenesisJSONPath()
+	if err != nil {
+		return err
+	}
+	fileHash, err := computeFileGenesisFingerprint(genesisPath)
+	if err != nil {
+		return err
+	}
+	if fileHash != anchor.GenesisHash {
+		return fmt.Errorf("on-disk genesis %s != origin anchor %s", fileHash, anchor.GenesisHash)
+	}
+	return nil
+}
+
+// verifyBuiltBinaryFingerprint checks the rebuilt ./build/titan binary (not the running CLI process).
+func verifyBuiltBinaryFingerprint(expected string) error {
+	avagoDir, err := findAvalanchegoDir()
+	if err != nil {
+		return err
+	}
+	titanBin := filepath.Join(avagoDir, "build", "titan")
+	if _, err := os.Stat(titanBin); err != nil {
+		return fmt.Errorf("rebuilt titan binary missing at %s: %w", titanBin, err)
+	}
+	cmd := exec.Command(titanBin, "genesis", "fingerprint")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("fingerprint command failed: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	line := strings.TrimSpace(string(out))
+	const prefix = "embedded genesis hash:"
+	if !strings.Contains(line, prefix) {
+		return fmt.Errorf("unexpected fingerprint output: %s", line)
+	}
+	got := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	if got != expected {
+		return fmt.Errorf("rebuilt binary hash %s != expected %s", got, expected)
+	}
+	fmt.Printf("  ✓ Rebuilt binary embeds genesis hash: %s\n", shortGenesisHash(got))
+	return nil
+}
+
+func verifyGenesisMatchesAnchor(anchor *TitanOriginAnchor) error {
+	if err := verifyOnDiskGenesisMatchesAnchor(anchor); err != nil {
+		return err
+	}
+	if err := verifyBuiltBinaryFingerprint(anchor.GenesisHash); err != nil {
+		return fmt.Errorf("%w (on-disk genesis matches origin; rebuild or re-run bootstrap)", err)
+	}
+	return nil
+}
+
 // waitAndVerifyLocalOriginServer checks the first node's origin HTTP service on :9652.
 func waitAndVerifyLocalOriginServer(publicIP string) error {
 	baseURL := "http://127.0.0.1:" + defaultOriginPort
@@ -324,8 +378,11 @@ func waitAndVerifyLocalOriginServer(publicIP string) error {
 	if anchor == nil {
 		return fmt.Errorf("origin server not reachable at %s: %v", baseURL, lastErr)
 	}
-	if err := verifyEmbeddedMatchesAnchor(anchor); err != nil {
+	if err := verifyOnDiskGenesisMatchesAnchor(anchor); err != nil {
 		return fmt.Errorf("origin bundle mismatch: %w", err)
+	}
+	if err := verifyBuiltBinaryFingerprint(anchor.GenesisHash); err != nil {
+		return err
 	}
 	fmt.Printf("  ✓ Origin server healthy on :%s (genesis hash: %s)\n", defaultOriginPort, shortGenesisHash(anchor.GenesisHash))
 	fmt.Printf("  ✓ Genesis validator NodeID: %s\n", anchor.GenesisNodeID)
@@ -344,7 +401,7 @@ func verifyAlignedWithOrigin(originURL string) error {
 	if err != nil {
 		return err
 	}
-	if err := verifyEmbeddedMatchesAnchor(anchor); err != nil {
+	if err := verifyGenesisMatchesAnchor(anchor); err != nil {
 		return fmt.Errorf("%w — node would be on a different chain than %s", err, originURL)
 	}
 	fmt.Printf("  ✓ Genesis origin aligned with %s (hash: %s)\n", originURL, shortGenesisHash(anchor.GenesisHash))

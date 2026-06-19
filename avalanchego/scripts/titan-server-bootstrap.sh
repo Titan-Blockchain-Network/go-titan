@@ -118,15 +118,7 @@ build_titan_tools() {
 
     ./scripts/build-titan.sh
     log "Build complete. Binaries in build/"
-
-    # Automatic binary placement for /usr/local/bin (smooth for systemd)
-    if [ -x "build/avalanchego" ]; then
-        log "Placing avalanchego binary into /usr/local/bin (for systemd units)..."
-        run_privileged mkdir -p /usr/local/bin
-        run_privileged cp -f build/avalanchego /usr/local/bin/avalanchego
-        run_privileged chmod +x /usr/local/bin/avalanchego
-        log "Binary installed to /usr/local/bin/avalanchego"
-    fi
+    log "Final binaries are installed to /usr/local/bin during 'titan node bootstrap' (after genesis alignment)."
 }
 
 prompt() {

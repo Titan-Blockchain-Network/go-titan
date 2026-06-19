@@ -518,6 +518,32 @@ WantedBy=multi-user.target
 	fmt.Printf("  Wrote %s\n", path)
 }
 
+func waitForValidator(client *http.Client, uri, nodeID string, timeout time.Duration) bool {
+	vdrPayload := `{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}`
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		vdrResp, err := client.Post(uri+"/ext/bc/P", "application/json", strings.NewReader(vdrPayload))
+		if err == nil {
+			var vdrResult struct {
+				Result struct {
+					Validators []struct {
+						NodeID string `json:"nodeID"`
+					} `json:"validators"`
+				} `json:"result"`
+			}
+			json.NewDecoder(vdrResp.Body).Decode(&vdrResult)
+			vdrResp.Body.Close()
+			for _, v := range vdrResult.Result.Validators {
+				if v.NodeID == nodeID {
+					return true
+				}
+			}
+		}
+		time.Sleep(3 * time.Second)
+	}
+	return false
+}
+
 func runHealthcheck(opts healthcheckOpts) {
 	uri := "http://127.0.0.1:9650"
 	ctx := context.Background()
@@ -590,31 +616,18 @@ func runHealthcheck(opts healthcheckOpts) {
 	}
 
 	if opts.isFirst {
-		vdrPayload := `{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}`
-		vdrResp, err := client.Post(uri+"/ext/bc/P", "application/json", strings.NewReader(vdrPayload))
-		if err == nil {
-			defer vdrResp.Body.Close()
-			var vdrResult struct {
-				Result struct {
-					Validators []struct {
-						NodeID string `json:"nodeID"`
-					} `json:"validators"`
-				} `json:"result"`
+		for _, chain := range []string{"P", "X", "C"} {
+			synced, err := info.AwaitBootstrapped(ctx, infoClient, chain, 5*time.Second)
+			if err != nil {
+				fmt.Printf("  ! chain %s bootstrap check: %v\n", chain, err)
+			} else if synced {
+				fmt.Printf("  ✓ chain %s bootstrapped\n", chain)
 			}
-			json.NewDecoder(vdrResp.Body).Decode(&vdrResult)
-
-			found := false
-			for _, v := range vdrResult.Result.Validators {
-				if v.NodeID == nodeID {
-					found = true
-					break
-				}
-			}
-			if found {
-				fmt.Printf("  ✓ Node %s is a genesis validator\n", nodeID)
-			} else {
-				fmt.Printf("  ✗ Node %s NOT in validators — check keys/genesis/data-dir alignment\n", nodeID)
-			}
+		}
+		if found := waitForValidator(client, uri, nodeID, 90*time.Second); found {
+			fmt.Printf("  ✓ Node %s is a genesis validator\n", nodeID)
+		} else {
+			fmt.Printf("  ✗ Node %s NOT in validators yet — check: journalctl -u titan-node -n 50\n", nodeID)
 		}
 	} else {
 		fmt.Printf("  Join node %s synced. Register as validator with:\n", nodeID)
