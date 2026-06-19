@@ -22,8 +22,9 @@ type rpcResponse struct {
 	Result json.RawMessage `json:"result"`
 }
 
-func fetchPublicIP() (string, error) {
-	resp, err := http.Get("https://flare.network/cdn-cgi/trace")
+func fetchPublicIPFromEndpoint(url string) (string, error) {
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -34,13 +35,37 @@ func fetchPublicIP() (string, error) {
 		return "", err
 	}
 
-	for _, line := range strings.Split(string(body), "\n") {
+	text := strings.TrimSpace(string(body))
+	for _, line := range strings.Split(text, "\n") {
 		if strings.HasPrefix(line, "ip=") {
-			return strings.TrimPrefix(line, "ip="), nil
+			return strings.TrimSpace(strings.TrimPrefix(line, "ip=")), nil
 		}
 	}
+	if text != "" && !strings.Contains(text, "\n") {
+		return text, nil
+	}
 
-	return "", fmt.Errorf("no ip= line in trace")
+	return "", fmt.Errorf("could not parse public IP from %s", url)
+}
+
+func fetchPublicIP() (string, error) {
+	endpoints := []string{
+		"https://api.ipify.org",
+		"https://ifconfig.me/ip",
+		"https://flare.network/cdn-cgi/trace",
+	}
+	var lastErr error
+	for _, endpoint := range endpoints {
+		ip, err := fetchPublicIPFromEndpoint(endpoint)
+		if err == nil && ip != "" {
+			return ip, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all public IP endpoints failed")
+	}
+	return "", lastErr
 }
 
 func parseIPResult(raw json.RawMessage) (string, error) {
@@ -193,6 +218,11 @@ func main() {
 		os.Setenv("BOOTSTRAP_IDS", bootstrap_IDs)
 	}
 
+	dataDir := os.Getenv("DATA_DIR")
+	if dataDir == "" {
+		dataDir = "/app/data"
+	}
+
 	path := "/app/build/avalanchego"
 	args := []string{
 		path,
@@ -200,6 +230,7 @@ func main() {
 		"--http-port", os.Getenv("HTTP_PORT"),
 		"--staking-port", os.Getenv("STAKING_PORT"),
 		"--public-ip", os.Getenv("PUBLIC_IP"),
+		"--data-dir", dataDir,
 		"--db-dir", os.Getenv("DB_DIR"),
 		"--db-type", os.Getenv("DB_TYPE"),
 		"--bootstrap-ips", os.Getenv("BOOTSTRAP_IPS"),

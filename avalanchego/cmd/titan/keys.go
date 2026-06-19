@@ -125,44 +125,16 @@ func ensureKeys(dir string, genesis bool) error {
 	return generateTitanKeys(dir, genesis)
 }
 
-func loadGenesisExpectation() (*genesisStakerExpectation, error) {
-	candidates := []string{
-		"genesis/genesis_titan.json",
-		"../genesis/genesis_titan.json",
-		"../../genesis/genesis_titan.json",
-	}
-	for _, path := range candidates {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		var cfg struct {
-			InitialStakers []struct {
-				NodeID string `json:"nodeID"`
-				Signer struct {
-					PublicKey         string `json:"publicKey"`
-					ProofOfPossession string `json:"proofOfPossession"`
-				} `json:"signer"`
-			} `json:"initialStakers"`
-		}
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
-		}
-		if len(cfg.InitialStakers) == 0 {
-			return nil, fmt.Errorf("no initialStakers in %s", path)
-		}
-		s := cfg.InitialStakers[0]
-		return &genesisStakerExpectation{
-			NodeID:            s.NodeID,
-			PublicKey:         s.Signer.PublicKey,
-			ProofOfPossession: s.Signer.ProofOfPossession,
-		}, nil
-	}
-	return nil, fmt.Errorf("genesis_titan.json not found (run from avalanchego/ or repo root)")
+func verifyGenesisKeys(keysDir string) bool {
+	return verifyGenesisKeysWith(keysDir, loadGenesisExpectation)
 }
 
-func verifyGenesisKeys(keysDir string) bool {
-	expect, err := loadGenesisExpectation()
+func verifyGenesisKeysFromDisk(keysDir string) bool {
+	return verifyGenesisKeysWith(keysDir, loadDiskGenesisExpectation)
+}
+
+func verifyGenesisKeysWith(keysDir string, loadExpect func() (*genesisStakerExpectation, error)) bool {
+	expect, err := loadExpect()
 	if err != nil {
 		fmt.Printf("  Could not load genesis expectation: %v\n", err)
 		return false

@@ -22,6 +22,7 @@ ENV HTTP_HOST=0.0.0.0 \
     HTTP_PORT=9650 \
     STAKING_PORT=9651 \
     PUBLIC_IP= \
+    DATA_DIR=/app/data \
     DB_DIR=/app/db \
     DB_TYPE=leveldb \
     BOOTSTRAP_IPS= \
@@ -43,7 +44,7 @@ ENV HTTP_HOST=0.0.0.0 \
 RUN apt-get update -y && \
     apt-get install -y curl jq
 
-RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db
+RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db /app/data
 
 COPY --from=build /app/avalanchego/build /app/build
 COPY entrypoint.sh /app/entrypoint.sh

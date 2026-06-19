@@ -33,6 +33,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
 	"github.com/ava-labs/avalanchego/wallet/subnet/primary"
 )
@@ -123,16 +124,25 @@ func main() {
 	}
 	fmt.Printf("  export txID: %s (took %s)\n", exportTx.ID(), time.Since(exportStart))
 
-	// Small delay for the export to be accepted before import attempt
-	time.Sleep(2 * time.Second)
-
-	fmt.Printf("Issuing P-Chain import from C-Chain...\n")
-	importStart := time.Now()
-	importTx, err := pWallet.IssueImportTx(cChainID, &owner)
-	if err != nil {
-		log.Fatalf("P import failed: %s (the export may still confirm; try re-running the import step manually or wait)", err)
+	fmt.Printf("Issuing P-Chain import from C-Chain (retrying until atomic UTXO is visible)...\n")
+	const maxAttempts = 30
+	var importTx *txs.Tx
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		importStart := time.Now()
+		importTx, lastErr = pWallet.IssueImportTx(cChainID, &owner)
+		if lastErr == nil {
+			fmt.Printf("  import txID: %s (attempt %d, took %s)\n", importTx.ID(), attempt, time.Since(importStart))
+			break
+		}
+		if attempt < maxAttempts {
+			fmt.Printf("  import not ready (attempt %d/%d): %v — retrying...\n", attempt, maxAttempts, lastErr)
+			time.Sleep(2 * time.Second)
+		}
 	}
-	fmt.Printf("  import txID: %s (took %s)\n", importTx.ID(), time.Since(importStart))
+	if lastErr != nil {
+		log.Fatalf("P import failed after %d attempts: %s", maxAttempts, lastErr)
+	}
 
 	fmt.Printf("\nSuccess. C->P transfer complete.\n")
 	fmt.Printf("Use the P address %s for staking (addPermissionlessValidator).\n", pAddr)
