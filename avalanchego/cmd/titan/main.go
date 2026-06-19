@@ -777,13 +777,30 @@ func verifyKeysMain() {
 func loadKey(from string) (*secp256k1.PrivateKey, error) {
 	s := strings.TrimPrefix(strings.TrimSpace(from), "0x")
 	if strings.HasPrefix(from, "@") {
-		b, _ := os.ReadFile(strings.TrimPrefix(from, "@"))
+		path := strings.TrimSpace(strings.TrimPrefix(from, "@"))
+		if strings.HasPrefix(path, "~/") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("resolve home dir: %w", err)
+			}
+			path = filepath.Join(home, path[2:])
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read key file %s: %w", path, err)
+		}
 		s = strings.TrimSpace(string(b))
 		s = strings.TrimPrefix(s, "0x")
+		s = strings.Map(func(r rune) rune {
+			if r == '\n' || r == '\r' || r == ' ' || r == '\t' {
+				return -1
+			}
+			return r
+		}, s)
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil || len(b) != 32 {
-		return nil, fmt.Errorf("need 64 hex chars")
+		return nil, fmt.Errorf("need 64 hex chars (got %d) — paste only the private key, no spaces or quotes", len(s))
 	}
 	return secp256k1.ToPrivateKey(b)
 }
