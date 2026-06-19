@@ -2,9 +2,16 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/ava-labs/avalanchego/utils/units"
 )
 
 const defaultValidatorStakeTitan = 2000000
+
+// pChainFundingBuffer is extra TITAN moved C→P so addPermissionlessValidator can
+// pay stake plus P-chain / import fees (exporting exactly the stake amount leaves
+// the treasury a few million nAVAX short).
+const pChainFundingBuffer = 10 * units.Avax
 
 // printAtlasValidatorAddCommand prints the recommended one-shot command to run on
 // the treasury / first node. Join nodes keep API on localhost; no SSH required.

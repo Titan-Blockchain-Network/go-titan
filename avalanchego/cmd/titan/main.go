@@ -160,21 +160,28 @@ func validatorMain(args []string) {
 	if pBalErr == nil {
 		pBal = pBalMap[pCtx.AVAXAssetID]
 	}
+	fundTarget := amt + pChainFundingBuffer
 	switch {
-	case pBal >= amt:
-		fmt.Printf("P-chain already has %.0f TITAN (need %.0f) — skipping C→P\n",
+	case pBal >= fundTarget:
+		fmt.Printf("P-chain already has %.4f TITAN (need %.0f stake + fee buffer) — skipping C→P\n",
 			float64(pBal)/float64(units.Avax), *amount)
 	case pBalErr != nil:
 		fmt.Printf("Warning: could not read P-chain balance (%v) — attempting C→P\n", pBalErr)
-		if err := transferCToP(ctx, *uri, cw, pw, amt, owner); err != nil {
+		if err := transferCToP(ctx, *uri, cw, pw, fundTarget, owner); err != nil {
 			fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
 			os.Exit(1)
 		}
 	default:
-		transferAmt := amt - pBal
+		transferAmt := fundTarget - pBal
 		if pBal > 0 {
-			fmt.Printf("P-chain has %.0f TITAN; moving %.0f more from C→P\n",
-				float64(pBal)/float64(units.Avax), float64(transferAmt)/float64(units.Avax))
+			fmt.Printf("P-chain has %.4f TITAN; moving %.4f more from C→P (stake %.0f + fee buffer)\n",
+				float64(pBal)/float64(units.Avax),
+				float64(transferAmt)/float64(units.Avax),
+				*amount)
+		} else {
+			fmt.Printf("Moving %.4f TITAN C→P (stake %.0f + %.0f fee buffer)...\n",
+				float64(fundTarget)/float64(units.Avax), *amount,
+				float64(pChainFundingBuffer)/float64(units.Avax))
 		}
 		if err := transferCToP(ctx, *uri, cw, pw, transferAmt, owner); err != nil {
 			fmt.Fprintf(os.Stderr, "C→P transfer: %v\n", err)
