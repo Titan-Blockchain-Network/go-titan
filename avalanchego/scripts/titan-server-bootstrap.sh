@@ -175,13 +175,25 @@ interactive_setup() {
     prompt "Systemd service name" "titan-node" SERVICE_NAME
 
     APPLY_FIREWALL=true
-    if confirm "Apply firewall rules now (recommended: ufw allow SSH + 9651 + 9650)?"; then
+    if $IS_FIRST; then
+        firewall_prompt="Apply firewall rules now (recommended: ufw allow SSH + 9651 staking + 9650 API + 9652 origin bundle)?"
+    else
+        firewall_prompt="Apply firewall rules now (recommended: ufw allow SSH + 9651 + 9650)?"
+    fi
+    if confirm "$firewall_prompt"; then
         APPLY_FIREWALL=true
     else
         APPLY_FIREWALL=false
     fi
 
+    if $IS_FIRST; then
+        warn "First node serves the genesis origin bundle on TCP 9652 — join nodes fetch genesis from here."
+        warn "Open 9652 in your cloud firewall (DigitalOcean/AWS SG) in addition to ufw on this host."
+    fi
+
     if ! $IS_FIRST; then
+        warn "The first node MUST already be running with its origin server (port 9652)."
+        warn "Join nodes will auto-download genesis from http://<bootstrap-host>:9652 before starting."
         prompt "Bootstrap IP:port (e.g. 165.22.0.208:9651)" "" BOOTSTRAP_IP
         prompt "Bootstrap NodeID" "" BOOTSTRAP_ID
     fi
@@ -194,8 +206,12 @@ interactive_setup() {
     echo "Data dir:            $DATA_DIR"
     echo "Service name:        $SERVICE_NAME"
     echo "Apply firewall:      $APPLY_FIREWALL"
-    if ! $IS_FIRST; then
+    if $IS_FIRST; then
+        echo "Origin bundle URL:   http://${PUBLIC_IP}:9652  (for join nodes)"
+    else
         echo "Bootstrap:           $BOOTSTRAP_IP / $BOOTSTRAP_ID"
+        origin_host="${BOOTSTRAP_IP%%:*}"
+        echo "Origin align URL:    http://${origin_host}:9652"
     fi
     echo
 
@@ -269,7 +285,8 @@ main() {
     echo "  journalctl -u $SERVICE_NAME -f"
     echo
     log "For the first node: make sure getCurrentValidators shows your genesis NodeID."
-    log "For additional nodes: run 'titan validator add' from a machine that has the funded key."
+    log "For additional nodes: ensure ATLAS exposes port 9652 (origin bundle), then run this script on join servers."
+    log "After join sync: run 'titan validator add' from a machine that has the funded key."
 }
 
 main "$@"

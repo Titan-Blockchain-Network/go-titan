@@ -143,6 +143,42 @@ The script will:
 
 ---
 
+## Same Origin Guarantee (Critical for Join Nodes)
+
+Every node must embed **identical** `genesis_titan.json` bytes. If the first node regenerates genesis locally, a plain `git clone` on join servers is **not** enough — they would build a different chain.
+
+**Automatic fix (built into bootstrap):**
+
+1. **First node** (`titan node bootstrap --first`) publishes an **origin bundle** to `$dataDir/titan-origin/`:
+   - `anchor.json` — genesis hash, network ID, genesis NodeID
+   - `genesis_titan.json` — exact file used to build the binary
+2. A **`titan-origin` systemd service** serves that bundle on **port 9652** (open in ufw + cloud firewall).
+3. **Join nodes** automatically run `titan genesis align --from http://ATLAS_IP:9652` before starting. This downloads genesis, rebuilds `avalanchego`, and **refuses to start** if the hash does not match.
+
+**Firewall ports (first node / ATLAS):**
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 22 | TCP | SSH |
+| 9651 | TCP | P2P staking (bootstrap) |
+| 9650 | TCP | HTTP API (health, validator ops) |
+| 9652 | TCP | Genesis origin bundle (join nodes download genesis here) |
+
+Bootstrap applies these via `ufw` when you confirm firewall setup. You must also allow **9652/TCP** in your cloud provider security group. Join nodes only need 9651 + 9650 (they fetch origin outbound to ATLAS).
+
+**Manual check:**
+
+```bash
+# On any machine — compare to first node
+./build/titan genesis fingerprint
+curl -s http://ATLAS_IP:9652/anchor.json | jq .genesisHash
+# Hashes must match before the join node starts.
+```
+
+**Operational order:** ATLAS fully up first → then bootstrap join servers.
+
+---
+
 ## Adding More Nodes (Consecutive Nodes)
 
 ### Step 1: Generate fresh keys for the new node

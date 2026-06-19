@@ -23,6 +23,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
@@ -41,6 +42,8 @@ func main() {
 	switch os.Args[1] {
 	case "keys":
 		keysMain(os.Args[2:])
+	case "genesis":
+		genesisMain(os.Args[2:])
 	case "validator":
 		validatorMain(os.Args[2:])
 	case "status":
@@ -64,6 +67,7 @@ For a fresh server (recommended):
 
 Direct CLI usage:
   titan keys generate [--dir DIR] [--genesis]
+  titan genesis align --from http://FIRST_NODE:9652
   titan node bootstrap --first ...
   titan node firewall --apply
   titan validator add --from <hex|@file> [--uri http://...]
@@ -308,6 +312,8 @@ func bootstrapMain(args []string) {
 	keysDir := fs.String("keys-dir", "/root/keys", "directory containing staker.crt/key + signer.key")
 	publicIP := fs.String("public-ip", "", "public IP address")
 	rewardAddr := fs.String("reward-address", defaultGenesisRewardAddress, "P-chain reward address for genesis validator")
+	originURL := fs.String("origin-url", "", "origin bundle URL for join nodes (default: http://<join-host>:9652)")
+	skipOriginAlign := fs.Bool("skip-origin-align", false, "DANGEROUS: skip genesis alignment with first node")
 	skipRebuild := fs.Bool("skip-rebuild", false, "skip binary rebuild after genesis update (not recommended)")
 	noWipeData := fs.Bool("no-wipe-data", false, "do not wipe data dir after genesis update")
 	applyFirewall := fs.Bool("apply-firewall", true, "programmatically configure ufw firewall")
@@ -347,7 +353,25 @@ func bootstrapMain(args []string) {
 			fmt.Fprintf(os.Stderr, "genesis preparation failed: %v\n", err)
 			os.Exit(1)
 		}
+		if err := publishOriginBundle(*dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to publish origin bundle: %v\n", err)
+			os.Exit(1)
+		}
 	} else {
+		if !*skipOriginAlign {
+			resolved := resolveOriginURL(*originURL, bootIPs)
+			if resolved == "" {
+				fmt.Fprintln(os.Stderr, "join nodes require --origin-url or --join (to derive http://host:9652)")
+				os.Exit(1)
+			}
+			if err := alignWithOrigin(resolved); err != nil {
+				fmt.Fprintf(os.Stderr, "genesis origin alignment failed: %v\n", err)
+				fmt.Fprintln(os.Stderr, "Ensure the first node is running and port 9652 serves the origin bundle.")
+				os.Exit(1)
+			}
+		} else {
+			fmt.Println("WARNING: --skip-origin-align — this node may join a different chain than the bootstrapper.")
+		}
 		if err := ensureKeys(*keysDir, false); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to ensure staking keys: %v\n", err)
 			os.Exit(1)
@@ -368,7 +392,12 @@ func bootstrapMain(args []string) {
 	// 3. Firewall
 	if *applyFirewall {
 		fmt.Println("\n=== Applying firewall ===")
-		if err := applyUFWFirewall(true); err != nil {
+		if *first {
+			fmt.Println("  First node: opening 22, 9651 (staking), 9650 (API), 9652 (origin bundle)")
+		} else {
+			fmt.Println("  Join node: opening 22, 9651 (staking), 9650 (API)")
+		}
+		if err := applyUFWFirewall(true, *first); err != nil {
 			fmt.Printf("Firewall apply had issues (run as root?): %v\n", err)
 		}
 	}
@@ -383,7 +412,24 @@ func bootstrapMain(args []string) {
 			}
 			_ = runPrivileged("chmod", "+x", "/usr/local/bin/avalanchego")
 		}
+		if _, err := os.Stat("build/titan"); err == nil {
+			_ = runPrivileged("cp", "-f", "build/titan", "/usr/local/bin/titan")
+			_ = runPrivileged("chmod", "+x", "/usr/local/bin/titan")
+		}
 		installSystemdUnit(*name, *dataDir, "root")
+		if *first {
+			originSvc := *name + "-origin"
+			if err := installOriginServeSystemd(originSvc, *dataDir); err != nil {
+				fmt.Printf("  Warning: could not install origin server: %v\n", err)
+			} else {
+				_ = runPrivileged("systemctl", "daemon-reload")
+				if err := runPrivileged("systemctl", "enable", "--now", originSvc); err != nil {
+					fmt.Printf("  Warning: could not start origin server: %v\n", err)
+				} else {
+					fmt.Printf("  Origin bundle server started (%s on port %s)\n", originSvc, defaultOriginPort)
+				}
+			}
+		}
 	}
 
 	if !*skipSystemd {
@@ -396,7 +442,20 @@ func bootstrapMain(args []string) {
 
 	// Healthcheck (LAST command/step)
 	fmt.Println("\n=== Running healthcheck (final step) ===")
-	runHealthcheck(*first)
+	resolvedOrigin := resolveOriginURL(*originURL, bootIPs)
+	runHealthcheck(healthcheckOpts{
+		isFirst:   *first,
+		dataDir:   *dataDir,
+		originURL: resolvedOrigin,
+		publicIP:  *publicIP,
+	})
+}
+
+type healthcheckOpts struct {
+	isFirst   bool
+	dataDir   string
+	originURL string
+	publicIP  string
 }
 
 func installSystemdUnit(name, dataDir, user string) {
@@ -434,13 +493,25 @@ WantedBy=multi-user.target
 	fmt.Printf("  Wrote %s\n", path)
 }
 
-func runHealthcheck(isFirst bool) {
+func runHealthcheck(opts healthcheckOpts) {
 	uri := "http://127.0.0.1:9650"
 	ctx := context.Background()
 	infoClient := info.NewClient(uri)
 
+	fmt.Println("  --- Origin / genesis checks ---")
+	if opts.isFirst {
+		if err := waitAndVerifyLocalOriginServer(opts.publicIP); err != nil {
+			fmt.Printf("  ✗ Origin server check failed: %v\n", err)
+			fmt.Println("  Ensure titan-origin systemd is running and port 9652 is open (ufw + cloud firewall).")
+		}
+	} else if opts.originURL != "" {
+		if err := verifyAlignedWithOrigin(opts.originURL); err != nil {
+			fmt.Printf("  ✗ Genesis origin alignment check failed: %v\n", err)
+		}
+	}
+
 	waitTimeout := 30 * time.Second
-	if !isFirst {
+	if !opts.isFirst {
 		waitTimeout = 10 * time.Minute
 		fmt.Printf("  Join node: waiting up to %v for API and chain sync...\n", waitTimeout)
 	}
@@ -459,11 +530,19 @@ func runHealthcheck(isFirst bool) {
 	}
 	if nodeID == "" {
 		fmt.Println("  /ext/info not reachable yet. Node may still be starting.")
-		printHealthcheckFooter(uri, isFirst, nodeID)
+		printHealthcheckFooter(uri, opts, nodeID)
 		return
 	}
 
-	if !isFirst {
+	if networkID, err := infoClient.GetNetworkID(ctx); err != nil {
+		fmt.Printf("  ! network ID check: %v\n", err)
+	} else if networkID != constants.TitanID {
+		fmt.Printf("  ✗ network ID %d is not Titan (%d) — wrong chain\n", networkID, constants.TitanID)
+	} else {
+		fmt.Printf("  ✓ network ID %d (titan)\n", networkID)
+	}
+
+	if !opts.isFirst {
 		for _, chain := range []string{"P", "X", "C"} {
 			synced, err := info.AwaitBootstrapped(ctx, infoClient, chain, 3*time.Second)
 			if err != nil {
@@ -480,7 +559,7 @@ func runHealthcheck(isFirst bool) {
 		fmt.Println("  ✓ /ext/health reachable")
 	}
 
-	if isFirst {
+	if opts.isFirst {
 		vdrPayload := `{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}`
 		vdrResp, err := client.Post(uri+"/ext/bc/P", "application/json", strings.NewReader(vdrPayload))
 		if err == nil {
@@ -510,12 +589,18 @@ func runHealthcheck(isFirst bool) {
 	} else {
 		fmt.Printf("  Join node %s synced. Register as validator with:\n", nodeID)
 		fmt.Println("    titan validator add --from @master.key --uri http://THIS_NODE:9650")
+		if opts.originURL != "" {
+			fmt.Println("  --- Post-sync origin verification ---")
+			if err := verifyAlignedWithOrigin(opts.originURL); err != nil {
+				fmt.Printf("  ✗ Post-sync origin check failed: %v\n", err)
+			}
+		}
 	}
 
-	printHealthcheckFooter(uri, isFirst, nodeID)
+	printHealthcheckFooter(uri, opts, nodeID)
 }
 
-func printHealthcheckFooter(uri string, isFirst bool, nodeID string) {
+func printHealthcheckFooter(uri string, opts healthcheckOpts, nodeID string) {
 	fmt.Printf(`
 Healthcheck complete.
 
@@ -523,7 +608,16 @@ Next steps:
   curl -s %s/ext/health | jq '.healthy, .checks.bls'
   curl -s %s/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
 `, uri, uri)
-	if !isFirst && nodeID != "" {
+	if opts.isFirst {
+		if opts.publicIP != "" {
+			fmt.Printf("  curl -s http://%s:%s/anchor.json | jq .genesisHash\n", opts.publicIP, defaultOriginPort)
+		}
+		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
+	} else if opts.originURL != "" {
+		fmt.Printf("  curl -s %s/anchor.json | jq .genesisHash\n", opts.originURL)
+		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
+	}
+	if !opts.isFirst && nodeID != "" {
 		fmt.Printf("  titan validator add --from @master.key --uri %s\n", uri)
 	}
 	fmt.Println("\nBootstrap finished. Use: journalctl -u titan -f   or   ./build/titan status")
@@ -574,7 +668,7 @@ func firewallMain(args []string) {
 	}
 
 	fmt.Println("Applying firewall rules with ufw...")
-	if err := applyUFWFirewall(*allowAPI); err != nil {
+		if err := applyUFWFirewall(*allowAPI, false); err != nil {
 		fmt.Printf("Failed to apply some rules: %v\n", err)
 	}
 	fmt.Println("Firewall configuration complete. Current status:")
@@ -591,13 +685,16 @@ ufw allow 9651/tcp comment 'Titan staking p2p'`)
 ufw status verbose`)
 }
 
-func applyUFWFirewall(allowAPI bool) error {
+func applyUFWFirewall(allowAPI bool, allowOrigin bool) error {
 	rules := [][]string{
 		{"allow", "22/tcp"},
 		{"allow", "9651/tcp"},
 	}
 	if allowAPI {
 		rules = append(rules, []string{"allow", "9650/tcp"})
+	}
+	if allowOrigin {
+		rules = append(rules, []string{"allow", defaultOriginPort + "/tcp"})
 	}
 	rules = append(rules, []string{"--force", "enable"})
 
