@@ -142,13 +142,17 @@ func main() {
 				fmt.Fprintf(os.Stderr, "    error: %v\n", err)
 				continue
 			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode == http.StatusOK {
-				endpoint = ep
+			func() {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					endpoint = ep
+				} else {
+					fmt.Fprintln(os.Stderr, "    Failed! The endpoint is unreachable.")
+				}
+			}()
+			if endpoint != "" {
 				break
 			}
-			fmt.Fprintln(os.Stderr, "    Failed! The endpoint is unreachable.")
 		}
 
 		if endpoint == "" {
@@ -191,7 +195,7 @@ func main() {
 
 	path := "/app/build/avalanchego"
 	args := []string{
-		path, // argv[0] must be the program name
+		path,
 		"--http-host", os.Getenv("HTTP_HOST"),
 		"--http-port", os.Getenv("HTTP_PORT"),
 		"--staking-port", os.Getenv("STAKING_PORT"),
@@ -207,6 +211,15 @@ func main() {
 		"--network-id", os.Getenv("NETWORK_ID"),
 		"--http-allowed-hosts", os.Getenv("HTTP_ALLOWED_HOSTS"),
 	}
+	if cert := os.Getenv("STAKING_TLS_CERT_FILE"); cert != "" {
+		args = append(args, "--staking-tls-cert-file", cert)
+	}
+	if key := os.Getenv("STAKING_TLS_KEY_FILE"); key != "" {
+		args = append(args, "--staking-tls-key-file", key)
+	}
+	if signer := os.Getenv("STAKING_SIGNER_KEY_FILE"); signer != "" {
+		args = append(args, "--staking-signer-key-file", signer)
+	}
 	if extra := os.Getenv("EXTRA_ARGUMENTS"); extra != "" {
 		args = append(args, strings.Fields(extra)...)
 	}
@@ -215,12 +228,10 @@ func main() {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintln(os.Stderr, "file does not exist")
 		os.Exit(1)
-	} else {
-		env := os.Environ()
-		err := syscall.Exec(path, args, env)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to exec avalanchego: %v\n", err)
-			os.Exit(1)
-		}
+	}
+	env := os.Environ()
+	if err := syscall.Exec(path, args, env); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to exec avalanchego: %v\n", err)
+		os.Exit(1)
 	}
 }

@@ -61,6 +61,17 @@ then
 	echo "  Got bootstrap ids: '${BOOTSTRAP_IDS}'"
 fi
 
+STAKING_ARGS=()
+if [ -n "${STAKING_TLS_CERT_FILE:-}" ]; then
+	STAKING_ARGS+=(--staking-tls-cert-file="$STAKING_TLS_CERT_FILE")
+fi
+if [ -n "${STAKING_TLS_KEY_FILE:-}" ]; then
+	STAKING_ARGS+=(--staking-tls-key-file="$STAKING_TLS_KEY_FILE")
+fi
+if [ -n "${STAKING_SIGNER_KEY_FILE:-}" ]; then
+	STAKING_ARGS+=(--staking-signer-key-file="$STAKING_SIGNER_KEY_FILE")
+fi
+
 exec /app/build/avalanchego \
 	--http-host="$HTTP_HOST" \
 	--http-port="$HTTP_PORT" \
@@ -76,4 +87,5 @@ exec /app/build/avalanchego \
 	--log-level="$LOG_LEVEL" \
 	--network-id="$NETWORK_ID" \
 	--http-allowed-hosts="$HTTP_ALLOWED_HOSTS" \
+	"${STAKING_ARGS[@]}" \
 	$EXTRA_ARGUMENTS

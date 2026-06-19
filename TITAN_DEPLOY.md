@@ -388,11 +388,11 @@ It becomes a validator because its NodeID + BLS POP + reward address are hardcod
 On the machine that will be the first node (e.g. ATLAS):
 
 ```bash
-cd ~/go-titan
+cd ~/go-titan/avalanchego
 ./scripts/build-titan.sh          # builds both avalanchego and the titan CLI
 
 # Use the committed genesis keys (titan-staking/ at repo root)
-./build/titan node setup --first --keys-dir ../titan-staking --public-ip=165.22.0.208
+./build/titan node setup --first --keys-dir ../titan-staking --public-ip=YOUR_PUBLIC_IP
 ```
 
 This prints the exact command to run the node (with empty bootstrap, correct key flags, proper dirs).
@@ -508,35 +508,43 @@ curl -sSL https://raw.githubusercontent.com/Titan-Blockchain-Network/go-titan/ma
 (The install.sh will clone + run bootstrap.)
 
 The script stops and asks for input at key points and ends with the healthcheck. This is the recommended single entry point after a server reset.
-```
 
 **ATLAS (first / genesis validator):**
 
 Use the high-level bootstrap (does keys verify, config, **programmatic firewall**, systemd, start, and ends with healthcheck):
 
 ```bash
-cd avalanchego
+cd go-titan
 ./avalanchego/scripts/titan-server-bootstrap.sh
 ```
 
-(When prompted, answer that it is the first/genesis node.)
-```
-
-(Requires root for firewall/systemd. The last step is the healthcheck.)
-```
+When prompted, answer that it is the first/genesis node. Requires root/sudo for firewall and systemd. The last step is the healthcheck.
 
 **New node (after ATLAS is up):**
 
 ```bash
-./build/titan node setup --join ATLAS_IP:9651 --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8
+cd go-titan/avalanchego
+./scripts/build-titan.sh
 
-# Generate keys
+# Full automated join-node bootstrap (generates keys, writes bootstrap config, systemd, healthcheck)
+./build/titan node bootstrap \
+  --join ATLAS_IP:9651 \
+  --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8 \
+  --public-ip YOUR_IP \
+  --keys-dir /root/keys \
+  --name titan-prometheus1
+```
+
+Or step-by-step:
+
+```bash
 ./build/titan keys generate --dir /root/keys
-
-# Install systemd (edit the unit or pass flags)
-./build/titan node install-systemd --name titan-prometheus1 --public-ip YOUR_IP
-
-# Start it
+./build/titan node install-systemd \
+  --name titan-prometheus1 \
+  --join ATLAS_IP:9651 \
+  --bootstrap-id NodeID-6X6AdU2gcAbgWciu9RvWctX45WYmtfzK8 \
+  --public-ip YOUR_IP \
+  --keys-dir /root/keys
 sudo systemctl enable --now titan-prometheus1
 ```
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
-# Builds the titan CLI (the user-friendly operator tool for Titan).
+# Builds the titan CLI and avalanchego node binary (embeds current genesis).
 #
-# Output: avalanchego/build/titan
+# Output:
+#   avalanchego/build/titan
+#   avalanchego/build/avalanchego
 #
 set -euo pipefail
 
@@ -14,17 +16,15 @@ mkdir -p "$AVAGO_DIR/build"
 echo "Building titan CLI..."
 (cd "$AVAGO_DIR" && go build -o build/titan ./cmd/titan)
 
-# Also make sure the regular node is built
-if [[ ! -x "$AVAGO_DIR/build/avalanchego" ]]; then
-  echo "Also building avalanchego node binary..."
-  ./scripts/build.sh
-fi
+echo "Building avalanchego (embeds genesis_titan.json)..."
+(cd "$AVAGO_DIR" && ./scripts/build.sh)
 
 echo "Built: $AVAGO_DIR/build/titan"
+echo "Built: $AVAGO_DIR/build/avalanchego"
 echo
-echo "For fresh servers, use the full interactive bootstrap instead:"
+echo "For fresh servers, use the full interactive bootstrap:"
 echo "  ./scripts/titan-server-bootstrap.sh"
 echo
-echo "Try the CLI directly:"
+echo "Try the CLI:"
 echo "  ./build/titan --help"
 echo "  ./build/titan node bootstrap --help"

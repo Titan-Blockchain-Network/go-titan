@@ -29,10 +29,13 @@ ENV HTTP_HOST=0.0.0.0 \
     CHAIN_CONFIG_DIR=/app/conf \
     LOG_DIR=/app/logs \
     LOG_LEVEL=info \
-    NETWORK_ID=costwo \
+    NETWORK_ID=titan \
+    STAKING_TLS_CERT_FILE=/app/keys/staker.crt \
+    STAKING_TLS_KEY_FILE=/app/keys/staker.key \
+    STAKING_SIGNER_KEY_FILE=/app/keys/signer.key \
     AUTOCONFIGURE_PUBLIC_IP=1 \
-    AUTOCONFIGURE_BOOTSTRAP=1 \
-    AUTOCONFIGURE_BOOTSTRAP_ENDPOINT=https://coston2-bootstrap.flare.network/ext/info \
+    AUTOCONFIGURE_BOOTSTRAP=0 \
+    AUTOCONFIGURE_BOOTSTRAP_ENDPOINT= \
     EXTRA_ARGUMENTS="" \
     BOOTSTRAP_BEACON_CONNECTION_TIMEOUT="1m" \
     HTTP_ALLOWED_HOSTS="*"
@@ -40,7 +43,7 @@ ENV HTTP_HOST=0.0.0.0 \
 RUN apt-get update -y && \
     apt-get install -y curl jq
 
-RUN mkdir -p /app/conf/coston /app/conf/C /app/logs /app/db
+RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db
 
 COPY --from=build /app/avalanchego/build /app/build
 COPY entrypoint.sh /app/entrypoint.sh
@@ -51,6 +54,7 @@ EXPOSE ${HTTP_PORT}
 VOLUME [ "${DB_DIR}" ]
 VOLUME [ "${LOG_DIR}" ]
 VOLUME [ "${CHAIN_CONFIG_DIR}" ]
+VOLUME [ "/app/keys" ]
 
 HEALTHCHECK CMD curl --fail http://localhost:${HTTP_PORT}/ext/health || exit 1
 

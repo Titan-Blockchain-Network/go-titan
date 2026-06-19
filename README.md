@@ -1,8 +1,20 @@
-# go-flare
+# go-titan
 
-go-flare is a modified version of [avalanchego@v1.14.0](https://github.com/ava-labs/avalanchego/releases/tag/v1.14.0) and [coreth@v0.16.0 rc0](https://github.com/ava-labs/coreth/releases/tag/v0.16.0-rc.0), incorporating specific features for Flare and Songbird networks. These features include prioritized contract handling and the invocation of the daemon contract.
+**go-titan** is an independent Avalanche-style blockchain implementation for the **Titan** network (network ID `888`, token **TITAN**). It is forked from [go-flare](https://github.com/flare-foundation/go-flare), which itself derives from [avalanchego@v1.14.0](https://github.com/ava-labs/avalanchego/releases/tag/v1.14.0) and [coreth@v0.16.0-rc.0](https://github.com/ava-labs/coreth/releases/tag/v0.16.0-rc.0).
 
-See [release notes](./RELEASES-flare.md) for more info.
+## Quick start (Titan)
+
+```sh
+git clone https://github.com/Titan-Blockchain-Network/go-titan.git
+cd go-titan
+./avalanchego/scripts/titan-server-bootstrap.sh
+```
+
+See [TITAN_DEPLOY.md](./TITAN_DEPLOY.md) for the full launch guide (genesis node, join nodes, validator registration).
+
+## Flare / Songbird heritage
+
+The codebase retains Flare and Songbird network support from upstream. See [release notes](./RELEASES-flare.md) for Flare-specific changes.
 
 ## System Requirements
 
@@ -18,7 +30,7 @@ See [release notes](./RELEASES-flare.md) for more info.
 After cloning this repository, run:
 
 ```sh
-cd go-flare/avalanchego && ./scripts/build.sh
+cd go-titan/avalanchego && ./scripts/build-titan.sh
 ```
 
 ## Deploy a Validation Node
@@ -41,16 +53,7 @@ This guide explains how to deploy your own observation node: <https://docs.flare
 
 See `tests/README.md` for testing details
 
-## Titan Blockchain
-
-This repository now contains a fully rebranded independent blockchain called **Titan** (token: TITAN).
-
-See [TITAN_DEPLOY.md](./TITAN_DEPLOY.md) for:
-- How to generate origin (genesis) keys directly on your first server
-- How to generate keys for additional nodes
-- Exact commands to launch the first bootstrapper and join more nodes
-
-## Container image
+## Container image (legacy Flare builds)
 
 Public container images are hosted on [Docker HUB](https://hub.docker.com/r/flarefoundation/go-flare) and [Github Packages](https://github.com/orgs/flare-foundation/packages?repo_name=go-flare);
 
