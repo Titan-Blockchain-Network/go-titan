@@ -15,11 +15,28 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AVAGO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if ! command -v go >/dev/null 2>&1; then
-  echo "ERROR: Go is not installed." >&2
+# Bootstrap installs Go to /usr/local/go and writes /etc/profile.d/go.sh, but
+# non-login shells (e.g. SSH one-liners) often skip that — find Go anyway.
+ensure_go_in_path() {
+  if command -v go >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -f /etc/profile.d/go.sh ]]; then
+    # shellcheck source=/dev/null
+    source /etc/profile.d/go.sh
+  fi
+  if [[ -x /usr/local/go/bin/go ]]; then
+    export PATH="/usr/local/go/bin:${PATH}"
+  fi
+  command -v go >/dev/null 2>&1
+}
+
+if ! ensure_go_in_path; then
+  echo "ERROR: Go is not installed (not in PATH and not at /usr/local/go/bin/go)." >&2
+  echo "If bootstrap already ran, try:" >&2
+  echo "  export PATH=/usr/local/go/bin:\$PATH && go version" >&2
   echo "On a fresh server, run the full bootstrap (installs Go + deps + build):" >&2
   echo "  cd go-titan && ./avalanchego/scripts/titan-server-bootstrap.sh" >&2
-  echo "Or install Go manually, then re-run this script." >&2
   exit 1
 fi
 
