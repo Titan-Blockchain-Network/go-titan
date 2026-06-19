@@ -12,10 +12,8 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +24,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
+	"github.com/ava-labs/avalanchego/vms/platformvm"
 	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
@@ -256,19 +255,7 @@ func validatorMain(args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("\nAdded! tx = %s\n", tx.ID())
-	fmt.Println("Check: curl $URI/ext/bc/P ... platform.getCurrentValidators")
-}
-
-func statusMain(args []string) {
-	uri := "http://127.0.0.1:9650"
-	if len(args) > 0 {
-		uri = args[0]
-	}
-	fmt.Printf("Node: %s\n", uri)
-	fmt.Println("Run these for now (we will make nice formatted output):")
-	fmt.Printf("  curl -s %s/ext/info | jq '.result | {nodeID, nodePOP}'\n", uri)
-	fmt.Printf("  curl -s %s/ext/health | jq '{healthy, bls: .checks.bls}'\n", uri)
-	fmt.Printf("  curl -s %s/ext/bc/P -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"platform.getCurrentValidators\"}' | jq '.result.validators | length'\n", uri)
+	fmt.Println("Validator starts ~5 minutes after tx acceptance. Check with: titan status")
 }
 
 func nodeMain(args []string) {
@@ -588,23 +575,18 @@ WantedBy=multi-user.target
 	fmt.Printf("  Wrote %s\n", path)
 }
 
-func waitForValidator(client *http.Client, uri, nodeID string, timeout time.Duration) bool {
-	vdrPayload := `{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}`
+func waitForValidator(ctx context.Context, uri, nodeID string, timeout time.Duration) bool {
+	target, err := ids.NodeIDFromString(nodeID)
+	if err != nil {
+		return false
+	}
+	pClient := platformvm.NewClient(uri)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		vdrResp, err := client.Post(uri+"/ext/bc/P", "application/json", strings.NewReader(vdrPayload))
+		validators, err := pClient.GetCurrentValidators(ctx, constants.PrimaryNetworkID, []ids.NodeID{target})
 		if err == nil {
-			var vdrResult struct {
-				Result struct {
-					Validators []struct {
-						NodeID string `json:"nodeID"`
-					} `json:"validators"`
-				} `json:"result"`
-			}
-			json.NewDecoder(vdrResp.Body).Decode(&vdrResult)
-			vdrResp.Body.Close()
-			for _, v := range vdrResult.Result.Validators {
-				if v.NodeID == nodeID {
+			for _, v := range validators {
+				if v.NodeID == target {
 					return true
 				}
 			}
@@ -687,9 +669,7 @@ func runHealthcheck(opts healthcheckOpts) {
 		}
 	}
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	if resp, err := client.Get(uri + "/ext/health"); err == nil {
-		resp.Body.Close()
+	if ok, _ := fetchNodeHealth(uri); ok {
 		fmt.Println("  ✓ /ext/health reachable")
 	}
 
@@ -702,7 +682,7 @@ func runHealthcheck(opts healthcheckOpts) {
 				fmt.Printf("  ✓ chain %s bootstrapped\n", chain)
 			}
 		}
-		if found := waitForValidator(client, uri, nodeID, 90*time.Second); found {
+		if found := waitForValidator(ctx, uri, nodeID, 90*time.Second); found {
 			fmt.Printf("  ✓ Node %s is a genesis validator\n", nodeID)
 		} else {
 			fmt.Printf("  ✗ Node %s NOT in validators yet — check: journalctl -u titan-node -n 50\n", nodeID)
@@ -742,9 +722,9 @@ func printHealthcheckFooter(uri string, opts healthcheckOpts, nodeID string) {
 Healthcheck complete.
 
 Next steps:
+  titan status
   curl -s %s/ext/health | jq '.healthy, .checks.bls'
-  curl -s %s/ext/bc/P -d '{"jsonrpc":"2.0","id":1,"method":"platform.getCurrentValidators"}' | jq
-`, uri, uri)
+`, uri)
 	if opts.isFirst {
 		if opts.keysBackupDir != "" {
 			fmt.Printf("  ls -la %s   # offline backup of genesis keys\n", opts.keysBackupDir)
