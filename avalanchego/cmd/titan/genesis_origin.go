@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -118,8 +119,12 @@ func publishOriginBundle(dataDir string) error {
 	if err := os.WriteFile(filepath.Join(bundleDir, originGenesisFile), genesisBytes, 0644); err != nil {
 		return err
 	}
+	if err := scrubOriginBundleDir(bundleDir); err != nil {
+		return err
+	}
 
 	fmt.Println("=== Titan origin bundle published ===")
+	fmt.Println("  (Public only: anchor + genesis JSON. Private staking keys are NOT served.)")
 	fmt.Printf("  Directory: %s\n", bundleDir)
 	fmt.Printf("  Genesis hash: %s\n", anchor.GenesisHash)
 	fmt.Printf("  Genesis NodeID: %s\n", anchor.GenesisNodeID)
@@ -347,16 +352,80 @@ func verifyAlignedWithOrigin(originURL string) error {
 	return nil
 }
 
+var originBundleAllowedFiles = map[string]bool{
+	originAnchorFile:  true,
+	originGenesisFile: true,
+}
+
+func scrubOriginBundleDir(bundleDir string) error {
+	entries, err := os.ReadDir(bundleDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if err := os.RemoveAll(filepath.Join(bundleDir, entry.Name())); err != nil {
+				return fmt.Errorf("remove unexpected origin subdir %s: %w", entry.Name(), err)
+			}
+			fmt.Printf("  Warning: removed unexpected subdirectory from origin bundle: %s\n", entry.Name())
+			continue
+		}
+		name := entry.Name()
+		if originBundleAllowedFiles[name] {
+			continue
+		}
+		if isSensitiveKeyFilename(name) {
+			return fmt.Errorf("refusing to publish origin bundle: sensitive file %s in %s", name, bundleDir)
+		}
+		if err := os.Remove(filepath.Join(bundleDir, name)); err != nil {
+			return fmt.Errorf("remove unexpected origin file %s: %w", name, err)
+		}
+		fmt.Printf("  Warning: removed unexpected file from origin bundle: %s\n", name)
+	}
+	return nil
+}
+
+func isSensitiveKeyFilename(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasSuffix(lower, ".key") ||
+		strings.HasSuffix(lower, ".pem") ||
+		name == "staker.crt" ||
+		name == "backup-info.json" ||
+		name == "README.txt"
+}
+
+func newOriginHTTPHandler(bundleDir string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if name == "." || name == "/" || name == "" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if !originBundleAllowedFiles[name] {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, filepath.Join(bundleDir, name))
+	})
+}
+
 func serveOrigin(dataDir, port string) error {
 	bundleDir := originBundleDir(dataDir)
 	if _, err := os.Stat(filepath.Join(bundleDir, originAnchorFile)); err != nil {
 		return fmt.Errorf("origin bundle missing in %s — run bootstrap --first first", bundleDir)
 	}
+	if err := scrubOriginBundleDir(bundleDir); err != nil {
+		return err
+	}
 	addr := ":" + port
-	fmt.Printf("Serving Titan origin bundle at http://0.0.0.0%s/\n", addr)
+	fmt.Printf("Serving Titan origin bundle at http://0.0.0.0%s/ (whitelist: %s, %s only)\n", addr, originAnchorFile, originGenesisFile)
 	fmt.Printf("  anchor:  http://<this-host>:%s/%s\n", port, originAnchorFile)
 	fmt.Printf("  genesis: http://<this-host>:%s/%s\n", port, originGenesisFile)
-	return http.ListenAndServe(addr, http.FileServer(http.Dir(bundleDir)))
+	return http.ListenAndServe(addr, newOriginHTTPHandler(bundleDir))
 }
 
 func genesisMain(args []string) {

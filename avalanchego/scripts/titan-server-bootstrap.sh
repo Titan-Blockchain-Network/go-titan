@@ -175,10 +175,21 @@ interactive_setup() {
     prompt "Systemd service name" "titan-node" SERVICE_NAME
 
     APPLY_FIREWALL=true
+    RESTRICT_API=false
+    if confirm "Restrict HTTP API to localhost only? (recommended; access via SSH tunnel instead of public 9650)"; then
+        RESTRICT_API=true
+    fi
+
     if $IS_FIRST; then
-        firewall_prompt="Apply firewall rules now (recommended: ufw allow SSH + 9651 staking + 9650 API + 9652 origin bundle)?"
+        if $RESTRICT_API; then
+            firewall_prompt="Apply firewall rules now (ufw: SSH + 9651 staking + 9652 origin; API localhost-only)?"
+        else
+            firewall_prompt="Apply firewall rules now (ufw: SSH + 9651 + 9650 API + 9652 origin bundle)?"
+        fi
+    elif $RESTRICT_API; then
+        firewall_prompt="Apply firewall rules now (ufw: SSH + 9651; API localhost-only)?"
     else
-        firewall_prompt="Apply firewall rules now (recommended: ufw allow SSH + 9651 + 9650)?"
+        firewall_prompt="Apply firewall rules now (ufw: SSH + 9651 + 9650)?"
     fi
     if confirm "$firewall_prompt"; then
         APPLY_FIREWALL=true
@@ -187,7 +198,8 @@ interactive_setup() {
     fi
 
     if $IS_FIRST; then
-        warn "First node serves the genesis origin bundle on TCP 9652 — join nodes fetch genesis from here."
+        warn "First node serves PUBLIC genesis files on TCP 9652 (anchor.json + genesis_titan.json)."
+        warn "Private staking keys are NOT served — they stay in /root/keys and /root/titan-genesis-backup."
         warn "Open 9652 in your cloud firewall (DigitalOcean/AWS SG) in addition to ufw on this host."
     fi
 
@@ -206,6 +218,7 @@ interactive_setup() {
     echo "Data dir:            $DATA_DIR"
     echo "Service name:        $SERVICE_NAME"
     echo "Apply firewall:      $APPLY_FIREWALL"
+    echo "Restrict API:        $RESTRICT_API"
     if $IS_FIRST; then
         echo "Keys backup dir:     /root/titan-genesis-backup"
         echo "Origin bundle URL:   http://${PUBLIC_IP}:9652  (for join nodes)"
@@ -242,6 +255,9 @@ run_bootstrap() {
         BOOT_ARGS+=(--apply-firewall)
     else
         BOOT_ARGS+=(--apply-firewall=false)
+    fi
+    if $RESTRICT_API; then
+        BOOT_ARGS+=(--restrict-api)
     fi
 
     log "Running: ./build/titan node bootstrap ${BOOT_ARGS[*]}"

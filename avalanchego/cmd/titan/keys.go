@@ -229,6 +229,13 @@ func generateTitanKeys(outDir string, genesis bool) error {
 	}
 	fmt.Println("================================================================")
 	fmt.Println("BACK UP THE .key FILES NOW.")
+	return secureKeysDir(outDir)
+}
+
+func secureKeysDir(dir string) error {
+	if err := os.Chmod(dir, 0700); err != nil {
+		return fmt.Errorf("chmod %s: %w", dir, err)
+	}
 	return nil
 }
 
@@ -332,13 +339,20 @@ func verifyGenesisKeysWith(keysDir string, loadExpect func() (*genesisStakerExpe
 	return ok
 }
 
-func nodeConfigJSON(dataDir, publicIP, keysDir, bootIPs, bootIDs string) string {
+func nodeConfigJSON(dataDir, publicIP, keysDir, bootIPs, bootIDs, httpHost string) string {
+	if httpHost == "" {
+		httpHost = "0.0.0.0"
+	}
+	allowedHosts := `"*"`
+	if httpHost == "127.0.0.1" || httpHost == "localhost" {
+		allowedHosts = `"localhost,127.0.0.1"`
+	}
 	return fmt.Sprintf(`{
   "network-id": "titan",
   "data-dir": "%s",
   "db-dir": "%s/db",
   "log-dir": "%s/logs",
-  "http-host": "0.0.0.0",
+  "http-host": "%s",
   "http-port": 9650,
   "staking-port": 9651,
   "public-ip": "%s",
@@ -347,6 +361,6 @@ func nodeConfigJSON(dataDir, publicIP, keysDir, bootIPs, bootIDs string) string 
   "staking-signer-key-file": "%s/signer.key",
   "bootstrap-ips": "%s",
   "bootstrap-ids": "%s",
-  "http-allowed-hosts": "*"
-}`, dataDir, dataDir, dataDir, publicIP, keysDir, keysDir, keysDir, bootIPs, bootIDs)
+  "http-allowed-hosts": %s
+}`, dataDir, dataDir, dataDir, httpHost, publicIP, keysDir, keysDir, keysDir, bootIPs, bootIDs, allowedHosts)
 }

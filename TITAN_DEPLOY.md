@@ -356,6 +356,22 @@ Happy validating on Titan! (This procedure is now grounded in the actual platfor
 
 ## Security & Firewall (Critical)
 
+### What is public vs private
+
+| Asset | Location | Exposed to internet? |
+|-------|----------|-------------------|
+| `staker.key`, `signer.key` | `/root/keys`, `/root/titan-genesis-backup` | **No** — filesystem only (mode 0700/0600) |
+| `anchor.json` (genesis hash, NodeID) | `:9652` origin server | **Yes** — intentional (public fingerprint) |
+| `genesis_titan.json` | `:9652` origin server | **Yes** — public genesis (addresses, BLS *public* keys only; same as committing genesis to git) |
+| HTTP API | `:9650` | **Optional** — use `--restrict-api` to bind localhost only |
+
+The origin server serves **only** `anchor.json` and `genesis_titan.json` via a whitelist handler. It will refuse to publish if a `.key` file appears in the bundle directory. Private keys never leave the staking/backup directories.
+
+**Remaining risks:**
+- Port **9650** wide open allows anyone to query chain state (validators, balances via API). Use `--restrict-api` + SSH tunnel for production.
+- Origin fetch is **HTTP** (no TLS). Join nodes verify the genesis hash after download; a network MITM could theoretically feed a fake genesis — use a private network or add TLS later for high-threat models.
+- Server root compromise exposes `/root/keys` — keep OS patched, SSH key-only auth, no password login.
+
 Before starting the node on any server (especially after reset):
 
 **Recommended (Ubuntu / DigitalOcean droplets - ufw):**
@@ -383,6 +399,7 @@ ufw disable
 ```
 
 **Production notes:**
+- Bootstrap with `--restrict-api` (or answer yes to “Restrict HTTP API” in `titan-server-bootstrap.sh`) to bind API to localhost and skip opening 9650 in ufw.
 - Run API on 127.0.0.1 and access via SSH tunnel if possible: `ssh -L 9650:localhost:9650 root@server`
 - Or put nginx in front with basic auth / IP allow.
 - Never leave 9650 wide open on the public internet if avoidable.

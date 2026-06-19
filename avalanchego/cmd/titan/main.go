@@ -256,7 +256,7 @@ func setupMain(args []string) {
 		fmt.Println("IMPORTANT: These keys MUST match initialStakers in genesis_titan.json.")
 		fmt.Println()
 
-		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, "", "")
+		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, "", "", "0.0.0.0")
 
 		cfgPath := filepath.Join(*dataDir, "config.json")
 		os.MkdirAll(*dataDir, 0755)
@@ -279,7 +279,7 @@ func setupMain(args []string) {
 		fmt.Println("=== Setting up ADDITIONAL node (will need funding + validator registration) ===")
 		fmt.Printf("Bootstrapping from: %s (id: %s)\n", *joinIP, *joinID)
 
-		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, *joinIP, *joinID)
+		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, *joinIP, *joinID, "0.0.0.0")
 		cfgPath := filepath.Join(*dataDir, "config.json")
 		os.MkdirAll(*dataDir, 0755)
 		if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err == nil {
@@ -318,8 +318,15 @@ func bootstrapMain(args []string) {
 	skipRebuild := fs.Bool("skip-rebuild", false, "skip binary rebuild after genesis update (not recommended)")
 	noWipeData := fs.Bool("no-wipe-data", false, "do not wipe data dir after genesis update")
 	applyFirewall := fs.Bool("apply-firewall", true, "programmatically configure ufw firewall")
+	restrictAPI := fs.Bool("restrict-api", false, "bind HTTP API to 127.0.0.1 only; do not open port 9650 in firewall (recommended for production)")
 	skipSystemd := fs.Bool("skip-systemd", false, "do not install/start systemd")
 	fs.Parse(args)
+
+	httpHost := "0.0.0.0"
+	if *restrictAPI {
+		httpHost = "127.0.0.1"
+		fmt.Println("  API restricted to localhost (use SSH tunnel: ssh -L 9650:127.0.0.1:9650 root@server)")
+	}
 
 	// Interactive fallback for missing critical values
 	if *publicIP == "" {
@@ -363,6 +370,7 @@ func bootstrapMain(args []string) {
 			fmt.Fprintf(os.Stderr, "genesis key backup failed: %v\n", err)
 			os.Exit(1)
 		}
+		_ = secureKeysDir(*keysDir)
 	} else {
 		if !*skipOriginAlign {
 			resolved := resolveOriginURL(*originURL, bootIPs)
@@ -382,12 +390,13 @@ func bootstrapMain(args []string) {
 			fmt.Fprintf(os.Stderr, "failed to ensure staking keys: %v\n", err)
 			os.Exit(1)
 		}
+		_ = secureKeysDir(*keysDir)
 		fmt.Println("Join node keys ready. After bootstrap, register with:")
 		fmt.Println("  titan validator add --from @master.key --uri http://THIS_NODE:9650")
 	}
 
 	cfgPath := filepath.Join(*dataDir, "config.json")
-	cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs)
+	cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs, httpHost)
 
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
 		fmt.Printf("Warning: could not write config: %v\n", err)
@@ -399,11 +408,19 @@ func bootstrapMain(args []string) {
 	if *applyFirewall {
 		fmt.Println("\n=== Applying firewall ===")
 		if *first {
-			fmt.Println("  First node: opening 22, 9651 (staking), 9650 (API), 9652 (origin bundle)")
+			if *restrictAPI {
+				fmt.Println("  First node: opening 22, 9651 (staking), 9652 (origin). API stays localhost-only.")
+			} else {
+				fmt.Println("  First node: opening 22, 9651 (staking), 9650 (API), 9652 (origin bundle)")
+				fmt.Println("  WARNING: port 9650 is open to the world. Use --restrict-api for production.")
+			}
+		} else if *restrictAPI {
+			fmt.Println("  Join node: opening 22, 9651 (staking). API stays localhost-only.")
 		} else {
 			fmt.Println("  Join node: opening 22, 9651 (staking), 9650 (API)")
+			fmt.Println("  WARNING: port 9650 is open to the world. Use --restrict-api for production.")
 		}
-		if err := applyUFWFirewall(true, *first); err != nil {
+		if err := applyUFWFirewall(!*restrictAPI, *first); err != nil {
 			fmt.Printf("Firewall apply had issues (run as root?): %v\n", err)
 		}
 	}
@@ -649,7 +666,13 @@ func installSystemdMain(args []string) {
 	joinIP := fs.String("join", "", "bootstrap IP:port for join nodes")
 	bootstrapID := fs.String("bootstrap-id", "", "bootstrap NodeID for join nodes")
 	user := fs.String("user", "root", "systemd user")
+	restrictAPI := fs.Bool("restrict-api", false, "bind HTTP API to 127.0.0.1 only")
 	fs.Parse(args)
+
+	httpHost := "0.0.0.0"
+	if *restrictAPI {
+		httpHost = "127.0.0.1"
+	}
 
 	bootIPs, bootIDs := bootstrapValues(*isFirst, *joinIP, *bootstrapID)
 	if !*isFirst && (bootIPs == "" || bootIDs == "") {
@@ -659,7 +682,7 @@ func installSystemdMain(args []string) {
 
 	cfgPath := filepath.Join(*dataDir, "config.json")
 	os.MkdirAll(*dataDir, 0755)
-	if err := os.WriteFile(cfgPath, []byte(nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs)), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs, httpHost)), 0644); err != nil {
 		fmt.Printf("Failed to write %s: %v\n", cfgPath, err)
 		os.Exit(1)
 	}
