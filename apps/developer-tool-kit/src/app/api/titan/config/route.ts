@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { discoverTitanNodes, getTitanPublicConfig } from "@/lib/titan/network-config";
+import { getTitanHomePath } from "@/lib/titan/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest) {
     bootstrapUrl: config.bootstrapUrl,
     scheme: config.scheme,
     explorerUrl: `${origin}/dashboard/activity`,
-    dashboardUrl: `${origin}/dashboard/default`,
+    dashboardUrl: `${origin}${getTitanHomePath(config)}`,
+    homePath: getTitanHomePath(config),
     isLocalDev: config.isLocalDev,
     logsEnabled: config.logsEnabled,
     discovery: "Single bootstrap node from TITAN_NETWORK_HOST (or TITAN_BOOTSTRAP_URL).",

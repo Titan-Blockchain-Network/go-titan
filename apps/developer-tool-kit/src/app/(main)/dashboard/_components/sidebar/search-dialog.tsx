@@ -18,8 +18,9 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { getSidebarItems } from "@/lib/titan/nav";
+import { useTitanConfig } from "@/lib/titan/use-titan-config";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
-import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
 type SearchItem = {
   group: string;
@@ -30,42 +31,36 @@ type SearchItem = {
   newTab?: boolean;
 };
 
-const sidebarGroupLabels = new Set(sidebarItems.flatMap((group) => (group.label ? [group.label] : [])));
-
-function getSubItemGroup(groupLabel: string | undefined, itemTitle: string) {
-  return sidebarGroupLabels.has(itemTitle) ? (groupLabel ?? "Other") : itemTitle;
+function buildSearchItems(sidebarGroupLabels: Set<string>, items: ReturnType<typeof getSidebarItems>): SearchItem[] {
+  return items.flatMap((group) =>
+    group.items.flatMap((item) => {
+      if (item.subItems) {
+        return item.subItems.map((sub) => ({
+          group: sidebarGroupLabels.has(item.title) ? (group.label ?? "Other") : item.title,
+          label: sub.title,
+          url: sub.url,
+          icon: item.icon,
+          disabled: sub.comingSoon,
+          newTab: sub.newTab,
+        }));
+      }
+      return [
+        {
+          group: group.label ?? "Other",
+          label: item.title,
+          url: item.url,
+          icon: item.icon,
+          disabled: item.comingSoon,
+          newTab: item.newTab,
+        },
+      ];
+    }),
+  );
 }
-
-const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
-  group.items.flatMap((item) => {
-    if (item.subItems) {
-      return item.subItems.map((sub) => ({
-        group: getSubItemGroup(group.label, item.title),
-        label: sub.title,
-        url: sub.url,
-        icon: item.icon,
-        disabled: sub.comingSoon,
-        newTab: sub.newTab,
-      }));
-    }
-    return [
-      {
-        group: group.label ?? "Other",
-        label: item.title,
-        url: item.url,
-        icon: item.icon,
-        disabled: item.comingSoon,
-        newTab: item.newTab,
-      },
-    ];
-  }),
-);
 
 function getAvailableItems(items: SearchItem[]) {
   return items.filter((item) => !item.disabled && !item.url.includes("coming-soon"));
 }
-
-const recommendations = getAvailableItems(searchItems);
 
 function groupBy(items: SearchItem[]) {
   const groups = [...new Set(items.map((item) => item.group))];
@@ -76,6 +71,14 @@ function groupBy(items: SearchItem[]) {
 }
 
 export function SearchDialog() {
+  const titan = useTitanConfig();
+  const navItems = getSidebarItems(titan);
+  const searchItems = React.useMemo(() => {
+    const sidebarGroupLabels = new Set(navItems.flatMap((group) => (group.label ? [group.label] : [])));
+    return buildSearchItems(sidebarGroupLabels, navItems);
+  }, [navItems]);
+  const recommendations = React.useMemo(() => getAvailableItems(searchItems), [searchItems]);
+
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const router = useRouter();
@@ -147,7 +150,7 @@ export function SearchDialog() {
       </Button>
       <CommandDialog open={open} onOpenChange={handleOpenChange}>
         <Command>
-          <CommandInput placeholder="Search dashboards, users, and more…" value={query} onValueChange={setQuery} />
+          <CommandInput placeholder="Search blocks, nodes, contracts…" value={query} onValueChange={setQuery} />
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
             {query ? renderGroups(searchItems) : renderGroups(recommendations)}

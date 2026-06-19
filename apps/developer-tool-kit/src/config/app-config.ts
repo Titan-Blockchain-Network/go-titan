@@ -21,8 +21,8 @@ export const APP_CONFIG = {
     },
   },
   meta: {
-    title: "Titan Explorer - Modern Next.js Dashboard Starter Template",
+    title: "Titan Explorer — Browse the Titan Blockchain",
     description:
-      "Titan Explorer is a modern, open-source dashboard starter template built with Next.js 16, Tailwind CSS v4, and shadcn/ui. Perfect for SaaS apps, admin panels, and internal tools—fully customizable and production-ready.",
+      "Explore blocks, transactions, and validators on the Titan C-Chain. Search addresses, browse chain history, and connect MetaMask to network 888.",
   },
 };

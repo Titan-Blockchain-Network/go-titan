@@ -1,5 +1,5 @@
 import {
-  Activity,
+  Blocks,
   Code2,
   Container,
   FileJson,
@@ -37,10 +37,15 @@ export interface NavGroup {
 export const sidebarItems: NavGroup[] = [
   {
     id: 1,
-    label: "Titan Network",
+    label: "Blockchain",
     items: [
       {
-        title: "Overview",
+        title: "Chain Explorer",
+        url: "/dashboard/activity",
+        icon: Blocks,
+      },
+      {
+        title: "Network",
         url: "/dashboard/default",
         icon: Network,
       },
@@ -49,27 +54,22 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/nodes",
         icon: Server,
       },
-      {
-        title: "Origin",
-        url: "/dashboard/origin",
-        icon: FileJson,
-      },
-      {
-        title: "Explorer",
-        url: "/dashboard/activity",
-        icon: Activity,
-      },
     ],
   },
   {
     id: 2,
-    label: "Developer",
+    label: "Developers",
     items: [
       {
         title: "Contract Studio",
         url: "/dashboard/contracts",
         icon: Code2,
         isNew: true,
+      },
+      {
+        title: "Origin",
+        url: "/dashboard/origin",
+        icon: FileJson,
       },
       {
         title: "Docker Logs",

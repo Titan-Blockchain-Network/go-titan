@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
+  ArrowRightLeft,
+  Blocks,
   Clock,
   Hash,
   Loader2,
@@ -14,7 +16,10 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTitanConfig } from "@/lib/titan/use-titan-config";
 import {
   AddressDetail,
   ExplorerDetailDrawer,
@@ -155,11 +160,17 @@ function isBlockNumber(s: string) {
   return false;
 }
 
+interface FlatTx extends Tx {
+  blockNum: number;
+}
+
 function ExplorerPageContent() {
+  const titan = useTitanConfig();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const skipUrlSearchRef = useRef(false);
+  const [browseTab, setBrowseTab] = useState<"blocks" | "transactions">("blocks");
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [nodesLoading, setNodesLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -527,94 +538,123 @@ function ExplorerPageContent() {
   const loadedPages = Math.max(1, Math.ceil(blocks.length / BLOCKS_PAGE_SIZE));
   const drawerOpen = Boolean(selectedBlock || selectedTxHash || addressDetail);
 
+  const recentTxs = useMemo(() => {
+    const txs: FlatTx[] = [];
+    for (const block of blocks) {
+      const blockNum = hexToNumber(block.number) ?? 0;
+      const txList = Array.isArray(block.transactions) ? block.transactions : [];
+      for (const entry of txList) {
+        if (typeof entry === "string") continue;
+        txs.push({ ...entry, blockNum });
+      }
+    }
+    return txs.sort((a, b) => b.blockNum - a.blockNum).slice(0, 80);
+  }, [blocks]);
+
+  const totalTxInView = recentTxs.length;
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Hash className="h-6 w-6" /> Explorer
-          </h1>
-          <p className="text-sm text-muted-foreground">Browse the Titan C-Chain · live blocks &amp; transactions</p>
+      {/* Hero */}
+      <div className="rounded-xl border bg-gradient-to-br from-muted/40 via-background to-muted/20 p-5 md:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Blocks className="h-6 w-6" />
+              {titan.networkName} Chain
+            </h1>
+            <p className="text-sm text-muted-foreground max-w-xl">
+              Browse blocks, transactions, and addresses on the C-Chain. Search by number, hash, or wallet — then drill
+              into full block and receipt details.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              loadNodes();
+              loadRecentBlocks(BLOCKS_PAGE_SIZE);
+              closeDrawer();
+            }}
+            disabled={blocksLoading || nodesLoading}
+          >
+            {blocksLoading || nodesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Refresh
+          </Button>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            loadNodes();
-            loadRecentBlocks(BLOCKS_PAGE_SIZE);
-            closeDrawer();
-          }}
-          disabled={blocksLoading || nodesLoading}
-        >
-          {blocksLoading || nodesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={onSearchKey}
+              placeholder="Block #, 0x hash, or 0x address"
+              className="h-11 pl-9 font-mono text-sm"
+              disabled={searchLoading}
+            />
+          </div>
+          <Button className="h-11" onClick={() => performSearch(searchValue)} disabled={searchLoading || !searchValue.trim()}>
+            {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            Search chain
+          </Button>
+        </div>
+        {searchError && <p className="mt-2 text-xs text-amber-600 break-all">{searchError}</p>}
       </div>
 
-      {/* Compact network strip */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
-        <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-muted-foreground" />
-          <span className="text-muted-foreground">Head</span>
-          <span className="font-mono font-semibold tabular-nums">{headBlock ?? "—"}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Chain</span>
-          <span className="font-mono font-semibold">{chainId}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">Gas</span>
-          <span className="font-mono text-xs">{gasPrice}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+      {/* Chain stats */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatMini title="Head block" value={headBlock ?? "—"} icon={<Zap className="h-4 w-4 text-muted-foreground" />} />
+        <StatMini title="Chain ID" value={chainId} sub={titan.chainIdHex} icon={<Hash className="h-4 w-4 text-muted-foreground" />} />
+        <StatMini title="Gas price" value={gasPrice} icon={<Activity className="h-4 w-4 text-muted-foreground" />} mono small />
+        <StatMini
+          title="In view"
+          value={`${blocks.length} blocks`}
+          sub={`${totalTxInView} transactions`}
+          icon={<ArrowRightLeft className="h-4 w-4 text-muted-foreground" />}
+        />
+      </div>
+
+      {!titan.isLocalDev && nodes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span>RPC sync:</span>
           {nodes.map((info) => {
-            const label = info.nodeId ?? info.node;
-            const endpoint = info.displayUrl ?? `${info.host ?? info.node}:${info.port}`;
+            const label = info.nodeId ? shortHash(info.nodeId, 8, 6) : info.node;
             return (
               <Badge
                 key={info.nodeId ?? info.node}
                 variant={info.healthy ? "default" : "secondary"}
                 className={info.healthy ? "bg-green-600" : ""}
               >
-                {label} · {endpoint}
+                {label} · block {info.blockNumber ?? "—"}
               </Badge>
             );
           })}
           {nodesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          {lastUpdated && (
+            <span className="ml-auto">
+              <Clock className="inline h-3 w-3 mr-1" />
+              {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
         </div>
-        {lastUpdated && (
-          <span className="text-xs text-muted-foreground ml-auto">
-            <Clock className="inline h-3 w-3 mr-1" />
-            {lastUpdated.toLocaleTimeString()}
-          </span>
-        )}
-      </div>
+      )}
 
-      {/* Search */}
-      <div className="rounded-lg border px-4 py-3">
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onKeyDown={onSearchKey}
-              placeholder="Block number, block/tx hash (0x...), or address"
-              className="pl-9 font-mono text-sm"
-              disabled={searchLoading}
-            />
-          </div>
-          <Button onClick={() => performSearch(searchValue)} disabled={searchLoading || !searchValue.trim()}>
-            {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Search
-          </Button>
-        </div>
-        {searchError && <p className="mt-2 text-xs text-amber-600 break-all">{searchError}</p>}
-      </div>
+      <Tabs value={browseTab} onValueChange={(v) => setBrowseTab(v as "blocks" | "transactions")}>
+        <TabsList>
+          <TabsTrigger value="blocks" className="gap-1.5">
+            <Blocks className="h-3.5 w-3.5" />
+            Blocks
+          </TabsTrigger>
+          <TabsTrigger value="transactions" className="gap-1.5">
+            <ArrowRightLeft className="h-3.5 w-3.5" />
+            Transactions
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Blocks feed — single column, infinite scroll */}
+        <TabsContent value="blocks" className="mt-4">
       <section className="rounded-lg border overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -711,6 +751,72 @@ function ExplorerPageContent() {
           </div>
         </div>
       </section>
+        </TabsContent>
+
+        <TabsContent value="transactions" className="mt-4">
+          <section className="rounded-lg border overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <ArrowRightLeft className="h-4 w-4" />
+                Recent transactions
+              </div>
+              <div className="text-xs text-muted-foreground">
+                From the last {blocks.length} loaded blocks · click a row for details
+              </div>
+            </div>
+
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-muted-foreground text-xs uppercase tracking-wider border-b">
+                <tr>
+                  <th className="px-4 py-2.5 text-left font-medium">Tx hash</th>
+                  <th className="px-4 py-2.5 text-left font-medium w-24">Block</th>
+                  <th className="px-4 py-2.5 text-left font-medium hidden sm:table-cell">From</th>
+                  <th className="px-4 py-2.5 text-left font-medium hidden md:table-cell">To</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Value</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {blocksLoading && recentTxs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                      <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+                    </td>
+                  </tr>
+                ) : recentTxs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                      No transactions in loaded blocks yet
+                    </td>
+                  </tr>
+                ) : (
+                  recentTxs.map((tx) => {
+                    const isSel = selectedTxHash === tx.hash;
+                    return (
+                      <tr
+                        key={tx.hash}
+                        onClick={() => void loadTx(tx.hash)}
+                        className={`cursor-pointer transition-colors hover:bg-muted/50 ${isSel ? "bg-muted/70" : ""}`}
+                      >
+                        <td className="px-4 py-2.5 font-mono text-xs">{shortHash(tx.hash, 10, 8)}</td>
+                        <td className="px-4 py-2.5 font-mono tabular-nums">#{tx.blockNum.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground hidden sm:table-cell">
+                          {shortHash(tx.from)}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground hidden md:table-cell">
+                          {tx.to ? shortHash(tx.to) : "Contract"}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono tabular-nums">
+                          {formatWeiToTitan(tx.value)} TITAN
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </section>
+        </TabsContent>
+      </Tabs>
 
       <ExplorerDetailDrawer
         open={drawerOpen}
@@ -734,9 +840,42 @@ function ExplorerPageContent() {
       />
 
       <p className="text-[10px] text-muted-foreground px-1">
-        Data is fetched live from local Titan nodes via C-Chain JSON-RPC. Blocks load in batches of {BLOCKS_PAGE_SIZE}.
+        {titan.isLocalDev
+          ? `Live data from local Titan nodes via C-Chain JSON-RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE}.`
+          : `Live data from ${titan.networkName} public RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE} — scroll for history.`}
       </p>
     </div>
+  );
+}
+
+function StatMini({
+  title,
+  value,
+  sub,
+  icon,
+  mono,
+  small,
+}: {
+  title: string;
+  value: string;
+  sub?: string;
+  icon?: React.ReactNode;
+  mono?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <Card size="sm">
+      <CardHeader className="flex flex-row items-center justify-between pb-1">
+        <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className={`font-semibold tabular-nums ${mono ? "font-mono" : ""} ${small ? "text-sm" : "text-lg"}`}>
+          {value}
+        </div>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{sub}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
