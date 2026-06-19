@@ -741,17 +741,17 @@ Next steps:
 		if opts.publicIP != "" {
 			fmt.Printf("  curl -s http://%s:%s/anchor.json | jq .genesisHash\n", opts.publicIP, defaultOriginPort)
 		}
-		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
+		fmt.Println("  titan genesis fingerprint   # must match anchor.json genesisHash")
 	} else if opts.originURL != "" {
 		fmt.Printf("  curl -s %s/anchor.json | jq .genesisHash\n", opts.originURL)
-		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
+		fmt.Println("  titan genesis fingerprint   # must match anchor.json genesisHash")
 	}
 	if opts.isFirst {
-		fmt.Printf("  ./build/titan wallet verify-export --from @%s   # before validator add on ATLAS\n", opts.masterKeyPath)
+		fmt.Printf("  titan wallet verify-export --from @%s   # before validator add on ATLAS\n", opts.masterKeyPath)
 	} else {
-		fmt.Println("  ./build/titan keys show   # re-print ATLAS register command anytime")
+		fmt.Println("  titan keys show   # re-print ATLAS register command anytime")
 	}
-	fmt.Println("\nBootstrap finished. Use: journalctl -u titan-node -f   or   ./build/titan status")
+	fmt.Println("\nBootstrap finished. Use: journalctl -u titan-node -f   or   titan status")
 }
 
 func installSystemdMain(args []string) {

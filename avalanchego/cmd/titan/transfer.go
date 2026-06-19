@@ -13,6 +13,7 @@ import (
 
 	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/vms/avm"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
@@ -177,9 +178,20 @@ func transferCToP(
 		common.WithBaseFee(baseFee),
 	)
 	if err != nil {
+		hint := "run: titan wallet verify-export --from @master.key"
+		if tip, tipErr := fetchCChainTip(ctx, nodeURI); tipErr == nil {
+			up := upgrade.GetConfig(walletCtx.NetworkID)
+			if !up.IsApricotPhase5Activated(time.Unix(int64(tip.timestamp), 0)) {
+				hint = fmt.Sprintf(
+					"C-chain tip timestamp %d is before AP5 (%s) — rebuild titan-node with Titan upgrade config: git pull && ./scripts/build-titan.sh && sudo systemctl restart titan-node",
+					tip.timestamp,
+					up.ApricotPhase5Time.UTC().Format(time.RFC3339),
+				)
+			}
+		}
 		return fmt.Errorf(
-			"export: %w (network=%d C-chain=%s asset=%s — run: titan wallet balances --from @master.key; if P-chain already funded, validator add will skip C→P after rebuild)",
-			err, walletCtx.NetworkID, cChainID, avaxAssetID,
+			"export: %w (network=%d C-chain=%s asset=%s — %s)",
+			err, walletCtx.NetworkID, cChainID, avaxAssetID, hint,
 		)
 	}
 	fmt.Printf("export %s (accepted)\n", exp.ID())

@@ -298,8 +298,8 @@ main() {
     run_bootstrap
 
     log "=== Bootstrap finished ==="
-    log "Recommended next commands:"
-    echo "  ./build/titan status"
+    log "Recommended next commands (titan is on PATH after bootstrap; or: cd $AVALANCHE_DIR):"
+    echo "  titan status"
     echo "  systemctl status $SERVICE_NAME"
     echo "  journalctl -u $SERVICE_NAME -f"
     echo
@@ -307,7 +307,7 @@ main() {
     log "For additional nodes: ensure ATLAS exposes port 9652 (origin bundle), then run this script on join servers."
     log "After join sync: on ATLAS run the 'validator add' command from healthcheck (or: titan keys show on the join node)."
     if $IS_FIRST; then
-        log "On ATLAS before validator add: ./build/titan wallet verify-export --from @${MASTER_KEY:-/root/master.key}"
+        log "On ATLAS before validator add: titan wallet verify-export --from @${MASTER_KEY:-/root/master.key}"
     fi
 }
 

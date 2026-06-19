@@ -172,6 +172,28 @@ var (
 		GraniteTime:                  ZeroTime,
 		GraniteEpochDuration:         5 * time.Minute,
 	}
+	// Titan activates all C-chain forks from genesis (timestamp 0). upgrade.Default
+	// schedules Apricot Phase 5 at 2020-12-05, which blocks C→P atomic export while
+	// the chain tip timestamp is still 0 (genesis) or otherwise before that fork.
+	Titan = Config{
+		ApricotPhase1Time:            ZeroTime,
+		ApricotPhase2Time:            ZeroTime,
+		ApricotPhase3Time:            ZeroTime,
+		ApricotPhase4Time:            ZeroTime,
+		ApricotPhase4MinPChainHeight: 0,
+		ApricotPhase5Time:            ZeroTime,
+		ApricotPhasePre6Time:         ZeroTime,
+		ApricotPhase6Time:            ZeroTime,
+		ApricotPhasePost6Time:        ZeroTime,
+		BanffTime:                    ZeroTime,
+		CortinaTime:                  ZeroTime,
+		CortinaXChainStopVertexID:    ids.Empty,
+		DurangoTime:                  ZeroTime,
+		EtnaTime:                     ZeroTime,
+		FortunaTime:                  ZeroTime,
+		GraniteTime:                  ZeroTime,
+		GraniteEpochDuration:         30 * time.Second,
+	}
 	Default = Config{
 		ApricotPhase1Time:            InitiallyActiveTime,
 		ApricotPhase2Time:            InitiallyActiveTime,
@@ -322,6 +344,8 @@ func GetConfig(networkID uint32) Config {
 		return LocalFlare
 	case constants.LocalID:
 		return Local
+	case constants.TitanID:
+		return Titan
 
 	default:
 		return Default

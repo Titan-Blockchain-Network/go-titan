@@ -1,14 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ava-labs/avalanchego/genesis"
 	"github.com/ava-labs/avalanchego/ids"
+	"github.com/ava-labs/avalanchego/upgrade"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -54,6 +60,23 @@ func verifyExportPath(ctx context.Context, nodeURI, masterKeyPath string) export
 
 	fmt.Printf("  ✓ C-chain ID %s\n", snap.cChainID)
 	fmt.Printf("  ✓ P-chain staking asset %s\n", snap.pStakingID)
+
+	if tip, err := fetchCChainTip(ctx, uri); err != nil {
+		fmt.Printf("  ! C-chain tip lookup failed: %v\n", err)
+	} else {
+		up := upgrade.GetConfig(constants.TitanID)
+		ap5Active := up.IsApricotPhase5Activated(time.Unix(int64(tip.timestamp), 0))
+		fmt.Printf("  ✓ C-chain tip block #%d timestamp %d (%s)\n",
+			tip.number, tip.timestamp, time.Unix(int64(tip.timestamp), 0).UTC().Format(time.RFC3339))
+		if ap5Active {
+			fmt.Println("  ✓ Apricot Phase 5 active at tip — direct C→P export allowed")
+		} else {
+			fmt.Printf("  ✗ Apricot Phase 5 inactive at tip (fork @ %s) — C→P export returns \"wrong chain ID\"\n",
+				up.ApricotPhase5Time.UTC().Format(time.RFC3339))
+			fmt.Println("    Fix: git pull && ./scripts/build-titan.sh && sudo systemctl restart titan-node")
+			report.ok = false
+		}
+	}
 
 	if snap.xAvaxAliasID == ids.Empty {
 		fmt.Println("  ! X-chain AVAX alias lookup failed (wallet uses P-chain staking asset)")
@@ -138,6 +161,72 @@ func verifyExportPath(ctx context.Context, nodeURI, masterKeyPath string) export
 		fmt.Println("  ✗ Export path checks failed — fix issues above, then: git pull && ./scripts/build-titan.sh")
 	}
 	return report
+}
+
+type cChainTip struct {
+	number    uint64
+	timestamp uint64
+}
+
+func fetchCChainTip(ctx context.Context, nodeURI string) (*cChainTip, error) {
+	rpcURL := strings.TrimRight(nodeURI, "/") + "/ext/bc/C/rpc"
+	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",false]}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rpcURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var envelope struct {
+		Result *struct {
+			Number    string `json:"number"`
+			Timestamp string `json:"timestamp"`
+		} `json:"result"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, fmt.Errorf("decode eth_getBlockByNumber: %w", err)
+	}
+	if envelope.Error != nil {
+		return nil, fmt.Errorf("eth_getBlockByNumber: %s", envelope.Error.Message)
+	}
+	if envelope.Result == nil {
+		return nil, fmt.Errorf("eth_getBlockByNumber returned null")
+	}
+
+	parseHexUint := func(s string) (uint64, error) {
+		s = strings.TrimSpace(strings.TrimPrefix(s, "0x"))
+		if s == "" {
+			return 0, nil
+		}
+		var n uint64
+		if _, err := fmt.Sscanf(s, "%x", &n); err != nil {
+			return 0, fmt.Errorf("parse hex %q: %w", s, err)
+		}
+		return n, nil
+	}
+
+	number, err := parseHexUint(envelope.Result.Number)
+	if err != nil {
+		return nil, err
+	}
+	timestamp, err := parseHexUint(envelope.Result.Timestamp)
+	if err != nil {
+		return nil, err
+	}
+	return &cChainTip{number: number, timestamp: timestamp}, nil
 }
 
 func expectedTreasuryEthAddr() (string, error) {
