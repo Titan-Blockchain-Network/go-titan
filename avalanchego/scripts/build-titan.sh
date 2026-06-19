@@ -15,6 +15,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AVAGO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+if ! command -v go >/dev/null 2>&1; then
+  echo "ERROR: Go is not installed." >&2
+  echo "On a fresh server, run the full bootstrap (installs Go + deps + build):" >&2
+  echo "  cd go-titan && ./avalanchego/scripts/titan-server-bootstrap.sh" >&2
+  echo "Or install Go manually, then re-run this script." >&2
+  exit 1
+fi
+
 INSTALL=false
 RESTART=false
 
