@@ -193,6 +193,13 @@ interactive_setup() {
         warn "First node serves PUBLIC genesis files on TCP 9652 (anchor.json + genesis_titan.json)."
         warn "Private staking keys are NOT served — they stay in /root/keys and /root/titan-genesis-backup."
         warn "Open 9652 in your cloud firewall (DigitalOcean/AWS SG) in addition to ufw on this host."
+        prompt "Treasury key file for validator add (operator / master.key)" "/root/master.key" MASTER_KEY
+        if [[ ! -f "$MASTER_KEY" ]]; then
+            warn "Treasury key not found yet at $MASTER_KEY — copy it before running validator add on ATLAS."
+            warn "Healthcheck will verify export path once the key is present."
+        fi
+    else
+        MASTER_KEY=""
     fi
 
     if ! $IS_FIRST; then
@@ -239,6 +246,9 @@ run_bootstrap() {
 
     if $IS_FIRST; then
         BOOT_ARGS+=(--first)
+        if [[ -n "${MASTER_KEY:-}" ]]; then
+            BOOT_ARGS+=(--master-key "$MASTER_KEY")
+        fi
     else
         BOOT_ARGS+=(--join "$BOOTSTRAP_IP" --bootstrap-id "$BOOTSTRAP_ID")
     fi
@@ -296,6 +306,9 @@ main() {
     log "For the first node: make sure getCurrentValidators shows your genesis NodeID."
     log "For additional nodes: ensure ATLAS exposes port 9652 (origin bundle), then run this script on join servers."
     log "After join sync: on ATLAS run the 'validator add' command from healthcheck (or: titan keys show on the join node)."
+    if $IS_FIRST; then
+        log "On ATLAS before validator add: ./build/titan wallet verify-export --from @${MASTER_KEY:-/root/master.key}"
+    fi
 }
 
 main "$@"

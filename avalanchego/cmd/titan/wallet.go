@@ -49,7 +49,8 @@ func walletMain(args []string) {
 		fmt.Println(`titan wallet - one key, all chains
 
   titan wallet addresses --from @master.key   # show C / P / X addresses for a private key
-  titan wallet balances  --from @master.key --uri http://127.0.0.1:9650`)
+  titan wallet balances  --from @master.key --uri http://127.0.0.1:9650
+  titan wallet verify-export [--from @/root/master.key] [--uri http://127.0.0.1:9650]`)
 		return
 	}
 
@@ -58,8 +59,28 @@ func walletMain(args []string) {
 		walletAddressesMain(args[1:])
 	case "balances":
 		walletBalancesMain(args[1:])
+	case "verify-export":
+		walletVerifyExportMain(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown wallet subcommand: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func walletVerifyExportMain(args []string) {
+	fs := flag.NewFlagSet("wallet verify-export", flag.ExitOnError)
+	uri := fs.String("uri", "http://127.0.0.1:9650", "local node API")
+	from := fs.String("from", "@"+defaultMasterKeyPath, "treasury key @file path")
+	fs.Parse(args)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	masterPath := strings.TrimPrefix(strings.TrimSpace(*from), "@")
+
+	fmt.Printf("Verifying C→P export path against %s\n\n", *uri)
+	report := verifyExportPath(ctx, *uri, masterPath)
+	if !report.ok {
 		os.Exit(1)
 	}
 }

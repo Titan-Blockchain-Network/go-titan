@@ -72,6 +72,7 @@ Direct CLI usage:
   titan genesis align --from http://FIRST_NODE:9652
   titan wallet addresses --from @master.key
   titan wallet balances --from @master.key --uri http://127.0.0.1:9650
+  titan wallet verify-export --from @/root/master.key   # C→P / validator-add readiness
   titan node bootstrap --first ...
   titan node firewall --apply
   titan validator add --from @master.key [--node-id ... --bls-pub ... --bls-pop ...]
@@ -371,6 +372,7 @@ func bootstrapMain(args []string) {
 	applyFirewall := fs.Bool("apply-firewall", true, "programmatically configure ufw firewall")
 	restrictAPI := fs.Bool("restrict-api", false, "bind HTTP API to 127.0.0.1 only; do not open port 9650 in firewall (recommended for production)")
 	skipSystemd := fs.Bool("skip-systemd", false, "do not install/start systemd")
+	masterKey := fs.String("master-key", defaultMasterKeyPath, "treasury private key file (ATLAS validator add)")
 	fs.Parse(args)
 
 	httpHost := "0.0.0.0"
@@ -526,6 +528,7 @@ func bootstrapMain(args []string) {
 		publicIP:      *publicIP,
 		keysBackupDir: *keysBackupDir,
 		keysDir:       *keysDir,
+		masterKeyPath: *masterKey,
 	})
 }
 
@@ -536,6 +539,7 @@ type healthcheckOpts struct {
 	publicIP      string
 	keysBackupDir string
 	keysDir       string
+	masterKeyPath string
 }
 
 func installSystemdUnit(name, dataDir, user string) {
@@ -692,7 +696,17 @@ func runHealthcheck(opts healthcheckOpts) {
 		} else {
 			fmt.Printf("  ✗ Node %s NOT in validators yet — check: journalctl -u titan-node -n 50\n", nodeID)
 		}
+		verifyExportPath(ctx, uri, opts.masterKeyPath)
 	} else {
+		// Join nodes: confirm chain/asset IDs match (same binary + genesis as ATLAS).
+		if _, err := info.AwaitBootstrapped(ctx, infoClient, "C", 5*time.Second); err == nil {
+			snap, err := fetchChainAssetSnapshot(ctx, uri)
+			if err != nil {
+				fmt.Printf("  ! export-path asset check: %v\n", err)
+			} else {
+				fmt.Printf("  ✓ Staking asset %s (C-chain %s) — matches ATLAS when genesis aligned\n", snap.pStakingID, snap.cChainID)
+			}
+		}
 		fmt.Printf("  ✓ Join node %s synced — register from ATLAS (treasury), not from this server:\n", nodeID)
 		if joinStaker != nil {
 			printAtlasValidatorAddCommand(joinStaker, defaultValidatorStakeTitan)
@@ -732,7 +746,9 @@ Next steps:
 		fmt.Printf("  curl -s %s/anchor.json | jq .genesisHash\n", opts.originURL)
 		fmt.Println("  ./build/titan genesis fingerprint   # must match anchor.json genesisHash")
 	}
-	if !opts.isFirst {
+	if opts.isFirst {
+		fmt.Printf("  ./build/titan wallet verify-export --from @%s   # before validator add on ATLAS\n", opts.masterKeyPath)
+	} else {
 		fmt.Println("  ./build/titan keys show   # re-print ATLAS register command anytime")
 	}
 	fmt.Println("\nBootstrap finished. Use: journalctl -u titan-node -f   or   ./build/titan status")
