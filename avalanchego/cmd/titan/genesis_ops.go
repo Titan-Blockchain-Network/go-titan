@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ava-labs/avalanchego/genesis"
@@ -21,6 +22,8 @@ import (
 const (
 	defaultGenesisRewardAddress = "P-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn"
 	genesisStartLookback        = 2 * time.Hour
+	// operatorCChainBalanceWei funds each genesis allocation ethAddr on C-chain (100M TITAN @ 18 decimals).
+	operatorCChainBalanceWei = "0x152d02c7e14af6800000000"
 )
 
 func genesisValidatorEndTime(cfg *genesis.Config) time.Time {
@@ -49,6 +52,58 @@ func applyGenesisStartTime(cfg map[string]json.RawMessage) (uint64, error) {
 	return startUnix, nil
 }
 
+func ensureAllocationCChainFunding(cfg map[string]json.RawMessage) error {
+	rawAlloc, ok := cfg["allocations"]
+	if !ok {
+		return nil
+	}
+	var allocations []struct {
+		EthAddr string `json:"ethAddr"`
+	}
+	if err := json.Unmarshal(rawAlloc, &allocations); err != nil {
+		return fmt.Errorf("parse allocations: %w", err)
+	}
+	rawCChain, ok := cfg["cChainGenesis"]
+	if !ok {
+		return fmt.Errorf("genesis missing cChainGenesis")
+	}
+	var cChainStr string
+	if err := json.Unmarshal(rawCChain, &cChainStr); err != nil {
+		return fmt.Errorf("parse cChainGenesis string: %w", err)
+	}
+	var cChain map[string]interface{}
+	if err := json.Unmarshal([]byte(cChainStr), &cChain); err != nil {
+		return fmt.Errorf("parse cChainGenesis JSON: %w", err)
+	}
+	alloc, ok := cChain["alloc"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("cChainGenesis.alloc missing or invalid")
+	}
+	added := 0
+	for _, a := range allocations {
+		eth := strings.TrimSpace(a.EthAddr)
+		if eth == "" {
+			continue
+		}
+		key := strings.ToLower(eth)
+		if _, exists := alloc[key]; exists {
+			continue
+		}
+		alloc[key] = map[string]interface{}{"balance": operatorCChainBalanceWei}
+		fmt.Printf("  C-chain prefund added for operator %s\n", eth)
+		added++
+	}
+	if added == 0 {
+		return nil
+	}
+	updated, err := json.Marshal(cChain)
+	if err != nil {
+		return err
+	}
+	cfg["cChainGenesis"], err = json.Marshal(string(updated))
+	return err
+}
+
 func writeGenesisConfigMap(genesisPath string, cfg map[string]json.RawMessage) error {
 	out, err := json.MarshalIndent(cfg, "", "    ")
 	if err != nil {
@@ -73,6 +128,9 @@ func refreshGenesisStartTimeInFile(genesisPath string) error {
 	}
 	startUnix, err := applyGenesisStartTime(cfg)
 	if err != nil {
+		return err
+	}
+	if err := ensureAllocationCChainFunding(cfg); err != nil {
 		return err
 	}
 	var stakeDuration uint64 = 31536000
@@ -248,6 +306,9 @@ func updateGenesisJSON(staker *genesisStakerExpectation, rewardAddress string) e
 
 	startUnix, err := applyGenesisStartTime(cfg)
 	if err != nil {
+		return err
+	}
+	if err := ensureAllocationCChainFunding(cfg); err != nil {
 		return err
 	}
 	var stakeDuration uint64 = 31536000

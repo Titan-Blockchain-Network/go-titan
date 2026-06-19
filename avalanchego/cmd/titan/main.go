@@ -44,6 +44,8 @@ func main() {
 		keysMain(os.Args[2:])
 	case "genesis":
 		genesisMain(os.Args[2:])
+	case "wallet":
+		walletMain(os.Args[2:])
 	case "validator":
 		validatorMain(os.Args[2:])
 	case "status":
@@ -68,6 +70,8 @@ For a fresh server (recommended):
 Direct CLI usage:
   titan keys generate [--dir DIR] [--genesis]
   titan genesis align --from http://FIRST_NODE:9652
+  titan wallet addresses --from @master.key
+  titan wallet balances --from @master.key --uri http://127.0.0.1:9650
   titan node bootstrap --first ...
   titan node firewall --apply
   titan validator add --from <hex|@file> [--uri http://...]
