@@ -1,68 +1,27 @@
-import { APP_CONFIG } from "@/config/app-config";
-import { getTitanRuntimeConfig } from "@/lib/titan/network-runtime";
+export type { EthereumProvider, WalletKind } from "@/lib/titan/wallet-providers";
+export {
+  connectWallet,
+  getActiveEvmProvider,
+  getActiveWalletKind,
+  getCoreProvider,
+  getMetaMaskProvider,
+  getProviderForKind,
+  isCoreInstalled,
+  peekCoreAddress,
+  setActiveWalletKind,
+  switchToTitanNetwork,
+  walletKindLabel,
+} from "@/lib/titan/wallet-providers";
 
-export type EthereumProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  on?: (event: string, handler: (...args: unknown[]) => void) => void;
-  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
-};
+import { connectWallet, getActiveEvmProvider } from "@/lib/titan/wallet-providers";
 
-export function getEthereumProvider(): EthereumProvider | undefined {
-  return (window as Window & { ethereum?: EthereumProvider }).ethereum;
+/** Connected wallet provider (MetaMask or Core), falling back to MetaMask. */
+export function getEthereumProvider() {
+  return getActiveEvmProvider();
 }
 
-export async function switchToTitanNetwork(provider: EthereumProvider) {
-  const runtime = await getTitanRuntimeConfig();
-
-  try {
-    await provider.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: runtime.chainIdHex }],
-    });
-  } catch (error) {
-    const shouldAddChain =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      Number((error as { code?: unknown }).code) === 4902;
-
-    if (!shouldAddChain) {
-      throw error;
-    }
-
-    await provider.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: runtime.chainIdHex,
-          chainName: runtime.networkName,
-          nativeCurrency: {
-            name: APP_CONFIG.titan.nativeToken.name,
-            symbol: APP_CONFIG.titan.nativeToken.symbol,
-            decimals: APP_CONFIG.titan.nativeToken.decimals,
-          },
-          rpcUrls: [runtime.rpcUrl],
-          blockExplorerUrls: [runtime.explorerUrl],
-        },
-      ],
-    });
-  }
-}
-
-export async function connectMetaMask(): Promise<{ address: string; chainId: string }> {
-  const provider = getEthereumProvider();
-  if (!provider) {
-    throw new Error("MetaMask not found. Install MetaMask and refresh the page.");
-  }
-
-  await switchToTitanNetwork(provider);
-  const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
-  const address = accounts?.[0];
-
-  if (!address) {
-    throw new Error("No wallet account returned by MetaMask.");
-  }
-
-  const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+/** @deprecated Use connectWallet("metamask") */
+export async function connectMetaMask() {
+  const { address, chainId } = await connectWallet("metamask");
   return { address, chainId };
 }

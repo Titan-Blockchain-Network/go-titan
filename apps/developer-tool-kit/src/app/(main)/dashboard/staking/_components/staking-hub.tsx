@@ -19,11 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { shortAddress } from "@/lib/titan/format";
-import {
-  hasAvalancheWallet,
-  issueAtomicTx,
-  listenForAvalancheWallet,
-} from "@/lib/titan/staking-client";
+import { issueAtomicTx } from "@/lib/titan/staking-client";
+import { walletKindLabel } from "@/lib/titan/wallet-providers";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 
 interface ValidatorRow {
@@ -56,12 +53,20 @@ interface StakingSnapshot {
 export function StakingHub() {
   const address = useWalletStore((s) => s.address);
   const chainId = useWalletStore((s) => s.chainId);
+  const walletKind = useWalletStore((s) => s.walletKind);
+  const coreInstalled = useWalletStore((s) => s.coreInstalled);
+  const coreAddress = useWalletStore((s) => s.coreAddress);
   const cBalance = useWalletStore((s) => s.titanBalance);
   const connect = useWalletStore((s) => s.connect);
   const refreshBalance = useWalletStore((s) => s.refreshBalance);
 
   const walletReady = isWalletConnected({ address });
   const onTitan = isOnTitanChain(chainId);
+  const coreReady =
+    coreInstalled &&
+    Boolean(coreAddress) &&
+    coreAddress.toLowerCase() === address.toLowerCase();
+  const coreDetected = coreInstalled;
 
   const [data, setData] = useState<StakingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +74,6 @@ export function StakingHub() {
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
-  const [coreDetected, setCoreDetected] = useState(false);
 
   const [transferAmount, setTransferAmount] = useState("1");
   const [delegateAmount, setDelegateAmount] = useState("1");
@@ -101,30 +105,23 @@ export function StakingHub() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const refreshCore = () => setCoreDetected(hasAvalancheWallet());
-    refreshCore();
-    const stop = listenForAvalancheWallet();
-    const timer = window.setInterval(refreshCore, 2000);
-    return () => {
-      stop();
-      window.clearInterval(timer);
-    };
-  }, []);
-
   async function runTransfer(step: "export" | "import") {
     setTransferStatus("");
     if (!walletReady) {
-      setTransferStatus("Connect MetaMask first (top-right wallet button).");
+      setTransferStatus("Connect a wallet first (sidebar or below).");
       return;
     }
     if (!onTitan) {
-      setTransferStatus("Switch MetaMask to Titan network (chain 888), then try again.");
+      setTransferStatus("Switch your wallet to Titan network (chain 888), then try again.");
       return;
     }
-    if (!coreDetected) {
+    if (!coreReady) {
       setTransferStatus(
-        "Open and unlock Avalanche Core on this browser — export/import are signed in Core, not MetaMask.",
+        coreInstalled
+          ? coreAddress
+            ? `Core is on ${shortAddress(coreAddress)} but C-chain is ${shortAddress(address)} — use the same account in both, or connect Core from the sidebar.`
+            : "Unlock Avalanche Core and authorize this site (sidebar → Connect wallet → Core)."
+          : "Install Avalanche Core (core.app) — export/import/delegate sign in Core.",
       );
       return;
     }
@@ -247,21 +244,75 @@ export function StakingHub() {
         </Card>
       )}
 
-      {walletReady && onTitan && !coreDetected && (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Wallet status</CardTitle>
+          <CardDescription>
+            C-chain connect via sidebar or below. P-chain export/import/delegate always sign in Core.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2 text-sm">
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-xs text-muted-foreground">C-chain (balance + address)</p>
+            <p className="font-medium mt-0.5">
+              {walletReady ? (
+                <>
+                  {walletKindLabel(walletKind)} · {shortAddress(address)}
+                  {onTitan ? (
+                    <Badge className="ml-2 bg-green-600">Titan 888</Badge>
+                  ) : (
+                    <Badge variant="outline" className="ml-2">
+                      wrong network
+                    </Badge>
+                  )}
+                </>
+              ) : (
+                "Not connected"
+              )}
+            </p>
+          </div>
+          <div className="rounded-md border px-3 py-2">
+            <p className="text-xs text-muted-foreground">Core (P-chain signing)</p>
+            <p className="font-medium mt-0.5">
+              {!coreInstalled && "Extension not detected"}
+              {coreInstalled && !coreAddress && "Installed — unlock & authorize"}
+              {coreInstalled && coreAddress && coreReady && (
+                <>
+                  Ready · {shortAddress(coreAddress)}
+                  <Badge className="ml-2 bg-green-600">matched</Badge>
+                </>
+              )}
+              {coreInstalled && coreAddress && !coreReady && (
+                <>
+                  {shortAddress(coreAddress)}
+                  <Badge variant="outline" className="ml-2">
+                    different from C-chain
+                  </Badge>
+                </>
+              )}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {walletReady && onTitan && !coreReady && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="py-4 text-sm">
-            <p className="font-medium text-amber-900 dark:text-amber-200">Avalanche Core required for P-chain</p>
+            <p className="font-medium text-amber-900 dark:text-amber-200">Core required for P-chain steps</p>
             <p className="mt-1 text-muted-foreground">
-              MetaMask covers C-chain balances and export signing. Import and delegation need{" "}
-              <a
-                href="https://core.app"
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
-              >
-                Avalanche Core <ExternalLink className="h-3 w-3" />
-              </a>{" "}
-              on the same address — unlock Core on this page, then retry export / import / delegate.
+              {walletKind === "core"
+                ? "You're connected via Core for C-chain — unlock Core if P-chain signing still fails."
+                : "Connect Core from the sidebar (same address as MetaMask) or install"}{" "}
+              {walletKind !== "core" && (
+                <a
+                  href="https://core.app"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  Avalanche Core <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </p>
           </CardContent>
         </Card>
@@ -306,10 +357,20 @@ export function StakingHub() {
           </CardHeader>
           <CardContent className="space-y-4">
             {!walletReady ? (
-              <Button onClick={() => void connect()} className="w-full sm:w-auto">
-                <Wallet className="h-4 w-4" />
-                Connect wallet
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void connect("metamask")} className="w-full sm:w-auto">
+                  <Wallet className="h-4 w-4" />
+                  Connect MetaMask
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void connect("core")}
+                  className="w-full sm:w-auto"
+                >
+                  <Wallet className="h-4 w-4" />
+                  Connect Core
+                </Button>
+              </div>
             ) : (
               <>
                 {data?.derivedPAddress && (
