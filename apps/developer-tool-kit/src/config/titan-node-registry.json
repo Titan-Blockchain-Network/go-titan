@@ -22,7 +22,7 @@
       "role": "validator",
       "region": "nyc1",
       "ip": "162.243.171.19",
-      "nodeId": null,
+      "nodeId": "NodeID-6B9JzYjZrgKtDt4PkVTpQ2CmaG8zBzYx1",
       "hostnames": ["rpc.titan-network.xyz", "prometheus.titan-network.xyz"],
       "spec": "8 GB / 160 GB",
       "tags": ["titan", "validator", "public-rpc"]
@@ -46,7 +46,7 @@
       "role": "validator",
       "region": "nyc1",
       "ip": "134.209.70.79",
-      "nodeId": null,
+      "nodeId": "NodeID-FkNzM8NLHzeEsud9FxWedZEo8e6VyBrgu",
       "hostnames": ["theia.titan-network.xyz"],
       "spec": "8 GB / 160 GB",
       "tags": ["titan", "validator"]
