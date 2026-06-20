@@ -5,26 +5,24 @@ Human vs Stockfish wagers on Titan C-Chain using native TITAN.
 ## Architecture
 
 ```
-Player wallet                    Escrow contract                 Operator wallet
-     |                                 |                              |
-     | joinQueue{value: stake}         |                              |
-     |------------------------------->|  holds player stake          |
-     |                                 |                              |
-     |                                 | startNextMatch{value: stake} |
-     |                                 |<-----------------------------|
-     |                                 |  holds both stakes (pot)     |
-     |                                 |                              |
-     |        Titan Chess app (Stockfish off-chain)                   |
-     |                                 |                              |
-     |                                 | reportResult(gameId, outcome)|
-     |                                 |<-----------------------------|
-     |<-------------------------------|  pays winner (2× stake)       |
+Owner                         Escrow contract                    Operator wallet
+  | depositHouse()  --------->|  houseBankroll (house pool)      |
+  |                             |                                  |
+Player                          |                                  |
+  | joinQueue{stake} ---------->|  holds player stake              |
+  |                             |  startNextMatch() (no ETH sent)  |
+  |                             |<---------------------------------|
+  |                             |  matches stake from houseBankroll|
+  |        Titan Chess (Stockfish off-chain)                       |
+  |                             |  reportResult(gameId, outcome)   |
+  |                             |<---------------------------------|
+  |<----------------------------|  player paid OR pot → house pool |
 ```
 
-- **Player** stakes via `joinQueue()` — funds sit in the contract.
-- **Operator** (`stockfishOperator`) matches the stake with `startNextMatch()` — opens the active game.
-- **Operator** resolves with `reportResult()` after the off-chain chess match ends.
-- **Draw** refunds each side their original stake.
+- **Owner** funds `houseBankroll` via `depositHouse()` (or payable constructor).
+- **Player** stakes via `joinQueue()` — player funds sit in the contract.
+- **Operator** only signs `startNextMatch()` / `reportResult()` (gas only) — house stake comes from the contract pool.
+- **Player wins** → paid from contract. **Stockfish wins** → pot stays in `houseBankroll`. **Draw** → player refund + house stake back to pool.
 
 ## 1. Deploy the contract (Contract Studio)
 
@@ -54,14 +52,22 @@ pnpm install
 pnpm dev
 ```
 
-## 3. Run the house (operator)
+## 3. Fund the house bankroll
 
-The operator wallet must:
+After deploy, send TITAN to the contract's house pool (owner only):
 
-1. Hold enough TITAN to **match** each queued stake (plus gas).
-2. Stay connected in the Titan Chess UI (or run a custom bot calling the same functions).
+```bash
+# Via Contract Studio playground, or cast/curl:
+# depositHouse() with value = e.g. 10 TITAN
+```
 
-When connected as `stockfishOperator`, the app **automatically** calls `startNextMatch()` when the queue has a player and no game is active.
+Keep `houseBankroll >= maxStake` (or at least the largest expected wager). The constructor can also be **payable** to seed the pool on deploy.
+
+## 4. Run the house (operator)
+
+The operator wallet only needs **gas** — not per-match stake.
+
+Stay connected in Titan Chess as `stockfishOperator` (or run a bot). The app **automatically** calls `startNextMatch()` when the queue has a player, the house pool can cover the stake, and no game is active.
 
 After checkmate or draw, the operator wallet calls `reportResult(gameId, outcome)`:
 
@@ -71,7 +77,7 @@ After checkmate or draw, the operator wallet calls `reportResult(gameId, outcome
 | Stockfish wins | `2` (StockfishWins) |
 | Draw | `3` (Draw) |
 
-## 4. Player flow
+## 5. Player flow
 
 1. Connect wallet → **New Wagered Game** → **vs Stockfish** → pick stake.
 2. Confirm `joinQueue` in MetaMask.
@@ -79,7 +85,7 @@ After checkmate or draw, the operator wallet calls `reportResult(gameId, outcome
 4. Play chess; on game end, operator settles on-chain.
 5. Winner receives **both stakes** (2× stake).
 
-## 5. Manual operator (curl)
+## 6. Manual operator (curl)
 
 For scripting without the UI:
 

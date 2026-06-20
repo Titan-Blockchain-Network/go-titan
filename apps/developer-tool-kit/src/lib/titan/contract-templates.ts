@@ -91,7 +91,7 @@ contract SimpleStorage {
     id: "titan-chess-escrow",
     name: "TitanChessEscrow",
     description:
-      "FIFO wager queue: player stakes TITAN, Stockfish operator matches stake, winner takes the pot. For apps/titan-chess.",
+      "House bankroll escrow: fund depositHouse(), players queue stakes, operator signs start/report. For apps/titan-chess.",
     fileName: "TitanChessEscrow.sol",
     source: TITAN_CHESS_ESCROW_SOURCE,
     constructorDefaults: {

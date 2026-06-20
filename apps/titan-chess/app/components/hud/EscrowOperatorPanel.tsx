@@ -24,7 +24,13 @@ export function EscrowOperatorPanel({ operator }: EscrowOperatorPanelProps) {
       <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
         Auto-starts queued matches and settles payouts on-chain.
       </p>
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <span style={{ color: 'var(--text-secondary)' }}>House pool</span>
+          <p className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {formatEther(operator.houseBankroll)} T
+          </p>
+        </div>
         <div>
           <span style={{ color: 'var(--text-secondary)' }}>Queue</span>
           <p className="font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>

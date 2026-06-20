@@ -5,17 +5,20 @@ pragma solidity ^0.8.19;
  * @title TitanChessEscrow
  * @notice Escrow + FIFO queue for human vs Stockfish (house) chess wagers on Titan C-Chain.
  *
+ * The **contract** holds player stakes and a **house bankroll** (`houseBankroll`).
+ * The operator wallet only starts matches and reports results — it does not post
+ * per-game stake (only pays gas).
+ *
  * Flow:
- *   1. Player calls `joinQueue()` with stake (native TITAN).
- *   2. `stockfishOperator` calls `startNextMatch()` with a matching stake to open the game.
- *   3. Off-chain Titan Chess app plays the match (Stockfish wallet = house side).
- *   4. Operator reports `reportResult(gameId, outcome)`; winner receives both stakes (draw refunds each side).
+ *   1. Owner funds the house: `depositHouse()` (or send TITAN in constructor).
+ *   2. Player calls `joinQueue()` with stake (native TITAN).
+ *   3. Operator calls `startNextMatch()` — house stake is taken from `houseBankroll`.
+ *   4. Operator calls `reportResult(gameId, outcome)` after the off-chain game.
  *
- * Deploy via Contract Studio (developer-tool-kit) with constructor:
- *   - stockfishOperator: wallet that stakes for Stockfish and reports results
- *   - minStake / maxStake: per-match bounds in wei
- *
- * Integration (titan-chess app): after checkmate, operator wallet calls `reportResult`.
+ * Payouts:
+ *   - Player wins: player receives both stakes.
+ *   - Stockfish wins: pot returns to `houseBankroll`.
+ *   - Draw: player refunded; house stake returns to `houseBankroll`.
  */
 contract TitanChessEscrow {
     enum GameStatus {
@@ -55,6 +58,9 @@ contract TitanChessEscrow {
     uint256 public minStake;
     uint256 public maxStake;
 
+    /// @notice TITAN reserved to match player wagers (not queued player funds).
+    uint256 public houseBankroll;
+
     uint256 public queueLength;
     uint256 public activeGames;
     uint256 public nextGameId;
@@ -64,6 +70,8 @@ contract TitanChessEscrow {
     mapping(address => bool) public playerInActiveGame;
     mapping(address => bool) public playerInQueue;
 
+    event HouseFunded(address indexed from, uint256 amount, uint256 newBalance);
+    event HouseWithdrawn(address indexed to, uint256 amount, uint256 newBalance);
     event PlayerQueued(address indexed player, uint256 stake, uint256 position);
     event PlayerLeftQueue(address indexed player, uint256 stake);
     event MatchStarted(uint256 indexed gameId, address indexed player, uint256 stake);
@@ -72,7 +80,7 @@ contract TitanChessEscrow {
         Outcome outcome,
         address indexed winner,
         uint256 playerPayout,
-        uint256 stockfishPayout
+        uint256 houseReturn
     );
     event StakesConfigUpdated(uint256 minStake, uint256 maxStake);
 
@@ -86,7 +94,7 @@ contract TitanChessEscrow {
         _;
     }
 
-    constructor(address _stockfishOperator, uint256 _minStake, uint256 _maxStake) {
+    constructor(address _stockfishOperator, uint256 _minStake, uint256 _maxStake) payable {
         require(_stockfishOperator != address(0), "TitanChessEscrow: invalid operator");
         require(_minStake > 0, "TitanChessEscrow: min stake required");
         require(_maxStake >= _minStake, "TitanChessEscrow: invalid stake bounds");
@@ -95,6 +103,27 @@ contract TitanChessEscrow {
         owner = msg.sender;
         minStake = _minStake;
         maxStake = _maxStake;
+
+        if (msg.value > 0) {
+            houseBankroll = msg.value;
+            emit HouseFunded(msg.sender, msg.value, houseBankroll);
+        }
+    }
+
+    /// @notice Fund the house bankroll (contract-held escrow for Stockfish side).
+    function depositHouse() external payable onlyOwner {
+        require(msg.value > 0, "TitanChessEscrow: zero deposit");
+        houseBankroll += msg.value;
+        emit HouseFunded(msg.sender, msg.value, houseBankroll);
+    }
+
+    /// @notice Withdraw excess house bankroll (not while a match is active).
+    function withdrawHouse(uint256 amount) external onlyOwner {
+        require(activeGames == 0, "TitanChessEscrow: match active");
+        require(amount > 0 && amount <= houseBankroll, "TitanChessEscrow: insufficient house");
+        houseBankroll -= amount;
+        _pay(owner, amount);
+        emit HouseWithdrawn(owner, amount, houseBankroll);
     }
 
     /// @notice Join the FIFO queue with a native TITAN stake.
@@ -132,13 +161,15 @@ contract TitanChessEscrow {
         revert("TitanChessEscrow: queue entry missing");
     }
 
-    /// @notice Operator opens the next queued match by posting a matching house stake.
-    function startNextMatch() external payable onlyOperator returns (uint256 gameId) {
+    /// @notice Operator opens the next match; house stake comes from `houseBankroll`.
+    function startNextMatch() external onlyOperator returns (uint256 gameId) {
         require(_queue.length > 0, "TitanChessEscrow: queue empty");
         require(activeGames == 0, "TitanChessEscrow: match in progress");
 
         QueuedPlayer memory nextPlayer = _queue[0];
-        require(msg.value == nextPlayer.stake, "TitanChessEscrow: stake mismatch");
+        require(houseBankroll >= nextPlayer.stake, "TitanChessEscrow: house underfunded");
+
+        houseBankroll -= nextPlayer.stake;
 
         _shiftQueue();
         playerInQueue[nextPlayer.player] = false;
@@ -151,7 +182,7 @@ contract TitanChessEscrow {
             id: gameId,
             player: nextPlayer.player,
             playerStake: nextPlayer.stake,
-            stockfishStake: msg.value,
+            stockfishStake: nextPlayer.stake,
             status: GameStatus.Active,
             outcome: Outcome.None,
             winner: address(0),
@@ -181,30 +212,30 @@ contract TitanChessEscrow {
         playerInActiveGame[game.player] = false;
 
         uint256 playerPayout;
-        uint256 stockfishPayout;
+        uint256 houseReturn;
 
         if (outcome == Outcome.PlayerWins) {
             game.winner = game.player;
             playerPayout = game.playerStake + game.stockfishStake;
-            stockfishPayout = 0;
+            houseReturn = 0;
             _pay(game.player, playerPayout);
         } else if (outcome == Outcome.StockfishWins) {
-            game.winner = stockfishOperator;
+            game.winner = address(0);
             playerPayout = 0;
-            stockfishPayout = game.playerStake + game.stockfishStake;
-            _pay(stockfishOperator, stockfishPayout);
+            houseReturn = game.playerStake + game.stockfishStake;
+            houseBankroll += houseReturn;
         } else {
             game.winner = address(0);
             playerPayout = game.playerStake;
-            stockfishPayout = game.stockfishStake;
+            houseReturn = game.stockfishStake;
             _pay(game.player, playerPayout);
-            _pay(stockfishOperator, stockfishPayout);
+            houseBankroll += houseReturn;
         }
 
-        emit MatchResolved(gameId, outcome, game.winner, playerPayout, stockfishPayout);
+        emit MatchResolved(gameId, outcome, game.winner, playerPayout, houseReturn);
     }
 
-    /// @notice Owner can refund both sides if a match is stuck (operator mistake / outage).
+    /// @notice Owner refunds a stuck match; stakes return to player and house bankroll.
     function cancelActiveGame(uint256 gameId) external onlyOwner {
         Game storage game = games[gameId];
         require(game.status == GameStatus.Active, "TitanChessEscrow: not active");
@@ -215,7 +246,7 @@ contract TitanChessEscrow {
         playerInActiveGame[game.player] = false;
 
         _pay(game.player, game.playerStake);
-        _pay(stockfishOperator, game.stockfishStake);
+        houseBankroll += game.stockfishStake;
 
         emit MatchResolved(gameId, Outcome.Draw, address(0), game.playerStake, game.stockfishStake);
     }

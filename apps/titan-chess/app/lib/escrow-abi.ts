@@ -79,6 +79,27 @@ export const TITAN_CHESS_ESCROW_ABI = [
   },
   {
     type: 'function',
+    name: 'houseBankroll',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'depositHouse',
+    stateMutability: 'payable',
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdrawHouse',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'stockfishOperator',
     stateMutability: 'view',
     inputs: [],

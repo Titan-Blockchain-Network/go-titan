@@ -76,18 +76,28 @@ export function useEscrowOperator() {
 
   const startingRef = useRef(false);
 
+  const { data: houseBankrollRaw, refetch: refetchBankroll } = useReadContract({
+    address: ESCROW_ADDRESS,
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName: 'houseBankroll',
+    chainId: titanSubnet.id,
+    query: { enabled: ESCROW_ENABLED, refetchInterval: 6_000 },
+  });
+
+  const houseBankroll = houseBankrollRaw ?? BigInt(0);
+
   const startNextMatch = useCallback(() => {
     if (!ESCROW_ENABLED || !ESCROW_ADDRESS || !isOperator || !nextStake) return;
+    if (houseBankroll < nextStake) return;
     startingRef.current = true;
     writeContract({
       address: ESCROW_ADDRESS,
       abi: TITAN_CHESS_ESCROW_ABI,
       functionName: 'startNextMatch',
-      value: nextStake,
       chain: titanSubnet,
       account: address,
     });
-  }, [isOperator, nextStake, writeContract, address]);
+  }, [isOperator, nextStake, houseBankroll, writeContract, address]);
 
   const reportResult = useCallback(
     (gameId: bigint, outcome: EscrowOutcome) => {
@@ -109,12 +119,14 @@ export function useEscrowOperator() {
     refetchQueue();
     refetchActive();
     refetchPeek();
-  }, [refetchOperator, refetchQueue, refetchActive, refetchPeek]);
+    refetchBankroll();
+  }, [refetchOperator, refetchQueue, refetchActive, refetchPeek, refetchBankroll]);
 
   // House wallet: auto-open the next queued match when idle.
   useEffect(() => {
     if (!isOperator || isWritePending || isConfirming) return;
     if (queueLength === 0 || activeGames > 0 || !nextStake) return;
+    if (houseBankroll < nextStake) return;
     if (startingRef.current) return;
 
     startNextMatch();
@@ -125,6 +137,7 @@ export function useEscrowOperator() {
     queueLength,
     activeGames,
     nextStake,
+    houseBankroll,
     startNextMatch,
   ]);
 
@@ -143,6 +156,7 @@ export function useEscrowOperator() {
     activeGames,
     nextPlayer: peekNext?.[0] as `0x${string}` | undefined,
     nextStake,
+    houseBankroll,
     startNextMatch,
     reportResult,
     txHash,

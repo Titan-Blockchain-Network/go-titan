@@ -43,7 +43,11 @@ NEXT_PUBLIC_TITAN_CHAIN_ID_HEX=${APP_CONFIG.titan.chainIdHex}`;
             <span className="block mt-0.5 font-mono text-foreground">{shortAddress(operatorAddress)}</span>
           )}
         </li>
-        <li>Fund the operator wallet with enough TITAN to match player stakes (up to maxStake per game).</li>
+        <li>
+          Fund the <strong>contract house pool</strong>: call <span className="font-mono">depositHouse()</span> with
+          TITAN (owner), or send value in the payable constructor. Needs ≥ maxStake to open games.
+        </li>
+        <li>Operator wallet only pays gas — stakes come from <span className="font-mono">houseBankroll</span>.</li>
         <li>
           Add env to titan-chess <span className="font-mono">.env.local</span> and redeploy the chess app.
         </li>
