@@ -1,4 +1,4 @@
-import { Context, evm, networkIDs, pvm, utils } from "@flarenetwork/flarejs";
+import { Context, evm, networkIDs, pvm, utils, type UnsignedTx } from "@flarenetwork/flarejs";
 import { isAddress } from "viem";
 
 import { cChainRpc } from "@/lib/titan/c-chain-rpc";
@@ -10,6 +10,14 @@ const MIN_DELEGATION_DAYS = 1;
 
 function serializeUnsignedTx(tx: { toBytes(): Uint8Array }): string {
   return utils.bufferToHex(tx.toBytes());
+}
+
+/** Metadata Core / personal_sign need to finish signing on custom L1 (network 888). */
+export function walletSigningMeta(tx: UnsignedTx) {
+  return {
+    unsignedTxJson: JSON.stringify(tx.toJSON()),
+    utxoIds: tx.utxos.map((utxo) => utxo.ID()),
+  };
 }
 
 async function loadContext(baseUrl: string) {
@@ -69,6 +77,7 @@ export async function buildCtoPTransfer(cAddress: string, amountTitan: number) {
   return {
     pAddress,
     exportTxHex: serializeUnsignedTx(exportTx),
+    ...walletSigningMeta(exportTx),
     exportChain: "C" as const,
     importChain: "P" as const,
     feeTitan: EXPORT_FEE_TITAN,
@@ -129,6 +138,7 @@ export async function buildPChainImport(cAddress: string) {
   return {
     pAddress,
     importTxHex: serializeUnsignedTx(importTx),
+    ...walletSigningMeta(importTx),
     importChain: "P" as const,
   };
 }
@@ -185,6 +195,7 @@ export async function buildDelegatorStake(input: {
   return {
     pAddress,
     delegateTxHex: serializeUnsignedTx(tx),
+    ...walletSigningMeta(tx),
     chain: "P" as const,
     startTime: Number(start),
     endTime: Number(end),

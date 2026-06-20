@@ -162,6 +162,8 @@ export function StakingHub() {
         importTxHex?: string;
         exportChain?: "C";
         importChain?: "P";
+        unsignedTxJson?: string;
+        utxoIds?: string[];
       };
       if (!res.ok) throw new Error(json.error ?? "Transfer build failed");
 
@@ -172,10 +174,14 @@ export function StakingHub() {
       setTransferStatus(
         step === "export"
           ? "Check the Core extension icon in your browser toolbar — approve the C-chain export there…"
-          : "Check the Core extension icon — approve the P-chain import there…",
+          : "Check the Core extension icon — approve the P-chain import there (message signature if Core cannot sign P on L1 888)…",
       );
 
-      const txId = await issueAtomicTx(txHex, chain);
+      const txId = await issueAtomicTx(txHex, chain, {
+        unsignedTxJson: json.unsignedTxJson,
+        utxoIds: json.utxoIds,
+        cAddress: address,
+      });
       const message =
         step === "export"
           ? `Export submitted (${txId.slice(0, 12)}…). Wait ~30s until “ready to import” shows, then click Import.`
@@ -208,11 +214,21 @@ export function StakingHub() {
           days: Number(delegateDays),
         }),
       });
-      const json = (await res.json()) as { error?: string; delegateTxHex?: string; chain?: "P" };
+      const json = (await res.json()) as {
+        error?: string;
+        delegateTxHex?: string;
+        chain?: "P";
+        unsignedTxJson?: string;
+        utxoIds?: string[];
+      };
       if (!res.ok) throw new Error(json.error ?? "Delegate build failed");
       if (!json.delegateTxHex || !json.chain) throw new Error("Missing delegate transaction");
 
-      const txId = await issueAtomicTx(json.delegateTxHex, json.chain);
+      const txId = await issueAtomicTx(json.delegateTxHex, json.chain, {
+        unsignedTxJson: json.unsignedTxJson,
+        utxoIds: json.utxoIds,
+        cAddress: address,
+      });
       setStatus(`Delegation submitted (${txId.slice(0, 12)}…). Rewards unlock when the period ends.`);
       await load();
     } catch (e) {
