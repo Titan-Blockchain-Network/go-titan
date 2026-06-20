@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getTitanEcosystemConfig } from "@/lib/titan/ecosystem-config";
 import { discoverTitanNodes, getTitanPublicConfig } from "@/lib/titan/network-config";
 import { getTitanHomePath } from "@/lib/titan/nav";
 import { getRegistryNodes } from "@/lib/titan/node-registry";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const config = getTitanPublicConfig(origin);
+  const ecosystem = getTitanEcosystemConfig();
   const nodes = await discoverTitanNodes();
 
   return NextResponse.json({
@@ -24,6 +26,13 @@ export async function GET(request: NextRequest) {
     homePath: getTitanHomePath(config),
     isLocalDev: config.isLocalDev,
     logsEnabled: config.logsEnabled,
+    ecosystem: {
+      launchpadUrl: `${origin}/dashboard/ecosystem`,
+      statusApiUrl: `${origin}/api/titan/status`,
+      chessAppUrl: ecosystem.chessAppUrl,
+      chessEscrowAddress: ecosystem.chessEscrowAddress,
+      docsRepoUrl: ecosystem.docsRepoUrl,
+    },
     discovery: "Single bootstrap node from TITAN_NETWORK_HOST (or TITAN_BOOTSTRAP_URL).",
     nodeRegistry: getRegistryNodes(),
     nodes: nodes.map((n) => ({

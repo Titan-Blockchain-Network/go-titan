@@ -5,6 +5,7 @@ import {
   FileJson,
   type LucideIcon,
   Network,
+  Rocket,
   ScrollText,
   Server,
 } from "lucide-react";
@@ -35,6 +36,18 @@ export interface NavGroup {
 }
 
 export const sidebarItems: NavGroup[] = [
+  {
+    id: 0,
+    label: "Ecosystem",
+    items: [
+      {
+        title: "Launchpad",
+        url: "/dashboard/ecosystem",
+        icon: Rocket,
+        isNew: true,
+      },
+    ],
+  },
   {
     id: 1,
     label: "Blockchain",
