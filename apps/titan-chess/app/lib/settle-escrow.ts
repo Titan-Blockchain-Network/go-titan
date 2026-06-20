@@ -1,11 +1,8 @@
 import { Chess, type Color } from 'chess.js';
 import {
-  createPublicClient,
-  createWalletClient,
   decodeFunctionResult,
   defineChain,
   encodeFunctionData,
-  http,
   type Address,
   type Hex,
 } from 'viem';
@@ -39,31 +36,37 @@ const titanChain = defineChain({
   },
 });
 
-async function ethCall(data: Hex): Promise<Hex> {
+type RpcResult<T> = {
+  result?: T;
+  error?: { message?: string };
+};
+
+async function rpcCall<T>(method: string, params: unknown[]): Promise<T> {
   const res = await fetch(TITAN_NETWORK.rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
-      method: 'eth_call',
-      params: [{ to: ESCROW_ADDRESS, data }, 'latest'],
+      method,
+      params,
     }),
   });
 
-  const json = (await res.json()) as {
-    result?: Hex;
-    error?: { message?: string };
-  };
+  const json = (await res.json()) as RpcResult<T>;
 
   if (json.error) {
-    throw new Error(json.error.message ?? 'eth_call failed');
+    throw new Error(json.error.message ?? `${method} failed`);
   }
-  if (!json.result) {
-    throw new Error('eth_call returned empty data');
+  if (json.result === undefined) {
+    throw new Error(`${method} returned empty data`);
   }
 
   return json.result;
+}
+
+async function ethCall(data: Hex): Promise<Hex> {
+  return rpcCall<Hex>('eth_call', [{ to: ESCROW_ADDRESS, data }, 'latest']);
 }
 
 type GetGameResult = readonly [
@@ -104,6 +107,58 @@ async function readStockfishOperator(): Promise<Address> {
   }) as Address;
 }
 
+function parseHexBigInt(value: Hex): bigint {
+  return BigInt(value);
+}
+
+async function sendSignedTransaction(input: {
+  account: ReturnType<typeof privateKeyToAccount>;
+  to: Address;
+  data: Hex;
+}): Promise<Hex> {
+  const [nonceHex, gasPriceHex, gasHex] = await Promise.all([
+    rpcCall<Hex>('eth_getTransactionCount', [input.account.address, 'pending']),
+    rpcCall<Hex>('eth_gasPrice', []),
+    rpcCall<Hex>('eth_estimateGas', [
+      {
+        from: input.account.address,
+        to: input.to,
+        data: input.data,
+      },
+    ]),
+  ]);
+
+  const signed = await input.account.signTransaction({
+    chainId: titanChain.id,
+    nonce: Number(parseHexBigInt(nonceHex)),
+    gas: parseHexBigInt(gasHex),
+    gasPrice: parseHexBigInt(gasPriceHex),
+    to: input.to,
+    data: input.data,
+    value: BigInt(0),
+    type: 'legacy',
+  });
+
+  return rpcCall<Hex>('eth_sendRawTransaction', [signed]);
+}
+
+async function waitForTransactionReceipt(hash: Hex): Promise<void> {
+  const deadline = Date.now() + 120_000;
+
+  while (Date.now() < deadline) {
+    const receipt = await rpcCall<null | { status: Hex }>('eth_getTransactionReceipt', [hash]);
+    if (receipt) {
+      if (receipt.status !== '0x1') {
+        throw new Error('Transaction reverted');
+      }
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+
+  throw new Error('Transaction confirmation timed out');
+}
+
 export async function settleEscrowOnChain(input: {
   gameId: bigint;
   outcome: EscrowOutcome;
@@ -125,10 +180,7 @@ export async function settleEscrowOnChain(input: {
     throw new Error('Operator key not configured on server');
   }
 
-  const transport = http(TITAN_NETWORK.rpcUrl);
-  const publicClient = createPublicClient({ chain: titanChain, transport });
   const account = privateKeyToAccount(pk as Hex);
-  const walletClient = createWalletClient({ account, chain: titanChain, transport });
 
   const [player, , , status] = await readGetGame(input.gameId);
 
@@ -152,14 +204,13 @@ export async function settleEscrowOnChain(input: {
     args: [input.gameId, input.outcome],
   });
 
-  const hash = await walletClient.sendTransaction({
+  const hash = await sendSignedTransaction({
     account,
-    chain: titanChain,
     to: ESCROW_ADDRESS,
     data: calldata,
   });
 
-  await publicClient.waitForTransactionReceipt({ hash });
+  await waitForTransactionReceipt(hash);
 
   return { txHash: hash };
 }
