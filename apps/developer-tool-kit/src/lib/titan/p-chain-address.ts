@@ -5,7 +5,7 @@ import { APP_CONFIG } from "@/config/app-config";
 
 /** flarejs maps unknown network IDs to HRP "custom"; Titan chain 888 uses "titan". */
 export function resolveNetworkHrp(networkId: number, flareHrp: string): string {
-  if (networkId === APP_CONFIG.titan.networkId) {
+  if (networkId === APP_CONFIG.titan.networkId || flareHrp === "custom") {
     return "titan";
   }
   return flareHrp;

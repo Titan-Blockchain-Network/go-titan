@@ -86,8 +86,17 @@ export async function GET(request: NextRequest) {
     );
 
     let wallet: Awaited<ReturnType<typeof getPChainBalance>> | null = null;
+    let walletError: string | undefined;
+
     if (cAddress && isAddress(cAddress)) {
-      wallet = await getPChainBalance(cAddress);
+      try {
+        wallet = await getPChainBalance(cAddress);
+      } catch (walletLookupError) {
+        walletError =
+          walletLookupError instanceof Error
+            ? walletLookupError.message
+            : "Failed to load P-chain balance";
+      }
     } else if (cAddress) {
       return NextResponse.json({ error: "Invalid cAddress" }, { status: 400 });
     }
@@ -102,6 +111,7 @@ export async function GET(request: NextRequest) {
       validators,
       addressLabels,
       wallet,
+      walletError,
       derivedPAddress:
         cAddress && isAddress(cAddress)
           ? cAddressToPChainAddress(cAddress, context.hrp)

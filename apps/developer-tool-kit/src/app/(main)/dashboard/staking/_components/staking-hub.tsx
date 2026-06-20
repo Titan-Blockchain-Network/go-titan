@@ -48,6 +48,7 @@ interface StakingSnapshot {
     pAddress: string;
     balanceTitan: number;
   } | null;
+  walletError?: string;
   derivedPAddress: string | null;
 }
 
@@ -82,6 +83,7 @@ export function StakingHub() {
       const json = (await res.json()) as StakingSnapshot & { error?: string };
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setData(json);
+      setError(json.walletError ?? "");
       if (!selectedNode && json.validators[0]?.nodeID) {
         setSelectedNode(json.validators[0].nodeID);
       }
@@ -249,7 +251,9 @@ export function StakingHub() {
             data?.wallet
               ? shortAddress(data.wallet.pAddress)
               : walletReady
-                ? error || "Loading P-chain…"
+                ? data?.derivedPAddress
+                  ? shortAddress(data.derivedPAddress)
+                  : error || "Loading P-chain…"
                 : "Connect wallet"
           }
           mono
@@ -392,7 +396,10 @@ export function StakingHub() {
             </div>
           ) : error && !data ? (
             <p className="text-sm text-destructive py-4">{error}</p>
-          ) : (
+          ) : error && data ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400 py-2 mb-2">{error}</p>
+          ) : null}
+          {data ? (
             <div className="divide-y rounded-lg border">
               {(data?.validators ?? []).map((v) => (
                 <div
@@ -422,7 +429,7 @@ export function StakingHub() {
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
