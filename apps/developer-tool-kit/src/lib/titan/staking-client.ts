@@ -29,6 +29,9 @@ export type AtomicTxSignMeta = {
   cAddress?: string;
 };
 
+const EMPTY_SIG_HEX =
+  "0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
 function ensure0xHex(txHex: string): Hex {
   const trimmed = txHex.trim();
   return (trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`) as Hex;
@@ -58,6 +61,10 @@ function isUnrecognizedNetworkError(message: string): boolean {
   return /unrecognized network|eip155:888/i.test(message);
 }
 
+function loadUnsignedTx(unsignedTxJson: string): UnsignedTx {
+  return UnsignedTx.fromJSON(unsignedTxJson);
+}
+
 function ethSignatureToAvaxBytes(signature: Hex): Uint8Array {
   const { r, s, yParity } = parseSignature(signature);
   const out = new Uint8Array(65);
@@ -72,20 +79,46 @@ function ethMessageDigestHex(message: string): Hex {
   return keccak256(toBytes(prefix));
 }
 
+function ethMessageDigestForBytes(message: Uint8Array): Hex {
+  const prefix = new TextEncoder().encode(
+    `\x19Ethereum Signed Message:\n${message.length}`,
+  );
+  const combined = new Uint8Array(prefix.length + message.length);
+  combined.set(prefix);
+  combined.set(message, prefix.length);
+  return keccak256(combined);
+}
+
 function utf8HexParam(message: string): Hex {
   return bytesToHex(new TextEncoder().encode(message));
 }
 
-function applyEthSignature(unsignedTx: UnsignedTx, signature: Hex, digest: Hex): void {
+function hasWalletSignatures(unsignedTx: UnsignedTx): boolean {
+  return unsignedTx.getCredentials().some((cred) =>
+    cred.getSignatures().some((sig) => sig.toLowerCase() !== EMPTY_SIG_HEX),
+  );
+}
+
+function applyRecoveredSignature(
+  unsignedTx: UnsignedTx,
+  signature: Hex,
+  digestForRecover: Hex,
+): boolean {
   const sigBytes = ethSignatureToAvaxBytes(signature);
-  const publicKey = secp256k1.recoverPublicKey(flareUtils.hexToBuffer(digest), sigBytes);
+  const publicKey = secp256k1.recoverPublicKey(flareUtils.hexToBuffer(digestForRecover), sigBytes);
   const coordinates = unsignedTx.getSigIndicesForPubKey(publicKey);
   if (!coordinates?.length) {
-    throw new Error("Signed key does not match any input on this transaction.");
+    return false;
   }
   for (const [index, subIndex] of coordinates) {
     unsignedTx.addSignatureAt(sigBytes, index, subIndex);
   }
+  return hasWalletSignatures(unsignedTx);
+}
+
+function applySha256Signature(unsignedTx: UnsignedTx, signature: Hex): boolean {
+  unsignedTx.addSignature(ethSignatureToAvaxBytes(signature));
+  return hasWalletSignatures(unsignedTx);
 }
 
 function signedTxHexFromUnsigned(unsignedTx: UnsignedTx): string {
@@ -149,48 +182,66 @@ async function signWithCore(
   return { signedHex: null, errors };
 }
 
+type DigestAttempt = {
+  label: string;
+  request: { method: string; params: unknown };
+  apply: (unsignedTx: UnsignedTx, signature: Hex) => boolean;
+};
+
 /**
- * Flare TX SDK pattern: Core cannot avalanche_signTransaction on custom L1 P-chain,
- * but personal_sign / eth_sign over the tx digest works with the same XP key.
+ * Flare TX SDK pattern for MetaMask/Core on custom L1s: sign the sha256 digest
+ * via personal_sign or eth_sign, attach to the unsigned tx, broadcast ourselves.
  */
 async function signViaDigest(
   wallet: EthereumProvider,
   cAddress: string,
   unsignedTxJson: string,
 ): Promise<string> {
-  const unsignedTx = UnsignedTx.fromJSON(unsignedTxJson);
-  const digest = flareUtils.bufferToHex(messageHashFromUnsignedTx(unsignedTx)) as Hex;
+  const digest = flareUtils.bufferToHex(
+    messageHashFromUnsignedTx(loadUnsignedTx(unsignedTxJson)),
+  ) as Hex;
   const digestNoPrefix = digest.slice(2);
   const errors: string[] = [];
 
-  const digestAttempts: Array<{ label: string; digestForRecover: Hex; request: { method: string; params: unknown } }> =
-    [
-      {
-        label: "personal_sign",
-        digestForRecover: ethMessageDigestHex(digestNoPrefix),
-        request: {
-          method: "personal_sign",
-          params: [utf8HexParam(digestNoPrefix), cAddress],
-        },
+  const attempts: DigestAttempt[] = [
+    {
+      label: "personal_sign",
+      request: {
+        method: "personal_sign",
+        params: [utf8HexParam(digestNoPrefix), cAddress],
       },
-      {
-        label: "eth_sign",
-        digestForRecover: digest,
-        request: {
-          method: "eth_sign",
-          params: [cAddress, digest],
-        },
+      apply: (unsignedTx, signature) =>
+        applyRecoveredSignature(unsignedTx, signature, ethMessageDigestHex(digestNoPrefix)),
+    },
+    {
+      label: "eth_sign",
+      request: {
+        method: "eth_sign",
+        params: [cAddress, digest],
       },
-    ];
+      apply: (unsignedTx, signature) =>
+        applySha256Signature(unsignedTx, signature) ||
+        applyRecoveredSignature(unsignedTx, signature, digest),
+    },
+    {
+      label: "personal_sign (raw hash)",
+      request: {
+        method: "personal_sign",
+        params: [digest, cAddress],
+      },
+      apply: (unsignedTx, signature) =>
+        applyRecoveredSignature(unsignedTx, signature, ethMessageDigestForBytes(toBytes(digest))),
+    },
+  ];
 
-  for (const attempt of digestAttempts) {
+  for (const attempt of attempts) {
+    const unsignedTx = loadUnsignedTx(unsignedTxJson);
     try {
       const signature = ensure0xHex((await wallet.request(attempt.request)) as string);
-      applyEthSignature(unsignedTx, signature, attempt.digestForRecover);
-      if (!unsignedTx.hasAllSignatures()) {
-        throw new Error("Incomplete signatures after wallet approval.");
+      if (attempt.apply(unsignedTx, signature)) {
+        return signedTxHexFromUnsigned(unsignedTx);
       }
-      return signedTxHexFromUnsigned(unsignedTx);
+      errors.push(`${attempt.label}: signature did not match transaction inputs`);
     } catch (error) {
       errors.push(`${attempt.label}: ${formatAttemptError(error)}`);
     }
@@ -198,7 +249,7 @@ async function signViaDigest(
 
   throw new Error(
     errors.length
-      ? `Core could not sign via message digest. ${errors.slice(0, 2).join(" · ")}`
+      ? `Core could not sign via message digest. ${errors.slice(0, 3).join(" · ")}`
       : "Core could not sign via message digest.",
   );
 }
@@ -248,7 +299,7 @@ export async function issueAtomicTx(
         digestError instanceof Error ? digestError.message : "Digest signing failed";
       const coreDetail = signErrors.filter(Boolean).slice(0, 2).join(" · ");
       throw new Error(
-        `Core could not sign the ${chain}-chain transaction for Titan (network 888). ${coreDetail} — Fallback: ${digestMessage} — Approve the Core popup; amount may show as "0 AVAX" but the value is TITAN.`,
+        `Core could not sign the ${chain}-chain transaction for Titan (network 888). ${coreDetail} — Fallback: ${digestMessage} — Use the same Core account that exported; the popup signs a hash, not a transfer amount.`,
       );
     }
   }
