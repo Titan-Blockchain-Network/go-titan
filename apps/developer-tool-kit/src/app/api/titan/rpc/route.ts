@@ -135,7 +135,7 @@ export async function GET() {
           : [];
       const peers =
         peersRes.status === "fulfilled"
-          ? Number(peersRes.value?.result?.numPeers ?? peerList.length)
+          ? (normalizePeerCount(peersRes.value?.result?.numPeers ?? peerList.length) ?? 0)
           : 0;
       const chainIdHex =
         chainIdRes.status === "fulfilled"
