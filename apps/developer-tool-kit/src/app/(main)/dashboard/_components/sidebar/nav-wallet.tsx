@@ -13,7 +13,7 @@ import {
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { shortAddress } from "@/lib/titan/format";
-import { walletKindLabel } from "@/lib/titan/wallet-providers";
+import { isOnTitanChainId, walletKindLabel } from "@/lib/titan/wallet-providers";
 import { cn } from "@/lib/utils";
 import { isOnTitanChain, useWalletStore } from "@/stores/wallet/wallet-store";
 
@@ -31,6 +31,8 @@ export function NavWallet() {
   const connect = useWalletStore((s) => s.connect);
   const disconnect = useWalletStore((s) => s.disconnect);
   const refreshBalance = useWalletStore((s) => s.refreshBalance);
+  const addTitanToActiveWallet = useWalletStore((s) => s.addTitanToActiveWallet);
+  const networkWarning = useWalletStore((s) => s.networkWarning);
 
   async function handleCopyAddress() {
     if (!address) return;
@@ -89,7 +91,7 @@ export function NavWallet() {
     );
   }
 
-  const onTitanChain = isOnTitanChain(chainId);
+  const onTitanChain = isOnTitanChain(chainId) || isOnTitanChainId(chainId);
   const connectedLabel = walletKindLabel(walletKind);
   const walletTooltip = `${connectedLabel} · ${shortAddress(address)} · ${titanBalance} ${APP_CONFIG.titan.nativeToken.symbol}`;
   const coreMatches =
@@ -187,6 +189,16 @@ export function NavWallet() {
             <DropdownMenuItem onClick={() => void connect("core")} disabled={isLoading}>
               Switch to Core
             </DropdownMenuItem>
+            {walletKind === "core" && !onTitanChain && (
+              <DropdownMenuItem onClick={() => void addTitanToActiveWallet()} disabled={isLoading}>
+                Add Titan network to Core
+              </DropdownMenuItem>
+            )}
+            {networkWarning && (
+              <DropdownMenuItem disabled className="text-xs text-amber-600 dark:text-amber-400">
+                {networkWarning}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={disconnect}>
               <LogOut />

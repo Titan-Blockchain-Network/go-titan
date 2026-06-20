@@ -2,16 +2,20 @@ import { create } from "zustand";
 
 import { APP_CONFIG } from "@/config/app-config";
 import {
+  addTitanNetwork,
   connectWallet,
   getActiveEvmProvider,
   getActiveWalletKind,
+  getProviderForKind,
   isCoreInstalled,
+  isOnTitanChainId,
   peekCoreAddress,
   setActiveWalletKind,
   switchToTitanNetwork,
   type WalletKind,
   walletKindLabel,
 } from "@/lib/titan/wallet-providers";
+import { parseWalletError } from "@/lib/titan/wallet-errors";
 import { formatWeiToTitan } from "@/lib/titan/format";
 import { titanRpc } from "@/lib/titan/rpc";
 
@@ -27,8 +31,10 @@ type WalletState = {
   isLoading: boolean;
   isRefreshingBalance: boolean;
   error: string;
+  networkWarning: string;
   isHydrated: boolean;
   connect: (kind?: WalletKind) => Promise<void>;
+  addTitanToActiveWallet: () => Promise<void>;
   disconnect: () => void;
   signIn: () => Promise<void>;
   refreshBalance: () => Promise<void>;
@@ -58,6 +64,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   isLoading: false,
   isRefreshingBalance: false,
   error: "",
+  networkWarning: "",
   isHydrated: false,
 
   refreshCoreStatus: async () => {
@@ -129,7 +136,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   connect: async (kind = "metamask") => {
-    set({ error: "", isLoading: true });
+    set({ error: "", networkWarning: "", isLoading: true });
     try {
       const result = await connectWallet(kind);
       const balance = await fetchBalanceForAddress(result.address);
@@ -138,14 +145,52 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         chainId: result.chainId,
         walletKind: result.kind,
         titanBalance: balance,
+        networkWarning: result.networkWarning ?? "",
+        error: "",
       });
       await get().refreshCoreStatus();
     } catch (connectError) {
       set({
-        error:
-          connectError instanceof Error
-            ? connectError.message
-            : `${walletKindLabel(kind)} connection failed.`,
+        error: parseWalletError(
+          connectError,
+          `${walletKindLabel(kind)} connection failed.`,
+        ),
+        networkWarning: "",
+      });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  addTitanToActiveWallet: async () => {
+    const kind = get().walletKind || "core";
+    const provider = getProviderForKind(kind);
+    if (!provider) {
+      set({ error: `${walletKindLabel(kind)} not found.` });
+      return;
+    }
+
+    set({ error: "", isLoading: true });
+    try {
+      await addTitanNetwork(provider);
+      const warning = await switchToTitanNetwork(provider, { kind, softFail: true });
+      const chainId = (await provider.request({ method: "eth_chainId" })) as string;
+      set({
+        chainId,
+        networkWarning: warning ?? "",
+        error: isOnTitanChainId(chainId)
+          ? ""
+          : "Titan network add was submitted — approve in Core, then click again if still on wrong chain.",
+      });
+      if (get().address) {
+        await get().refreshBalance();
+      }
+    } catch (error) {
+      set({
+        error: parseWalletError(
+          error,
+          "Core did not add Titan. Unlock Core and approve the Add Network prompt.",
+        ),
       });
     } finally {
       set({ isLoading: false });
@@ -162,6 +207,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       signedIn: false,
       signMessage: "",
       error: "",
+      networkWarning: "",
     });
   },
 
@@ -214,5 +260,5 @@ export function isWalletConnected(state: Pick<WalletState, "address">): boolean 
 }
 
 export function isOnTitanChain(chainId: string): boolean {
-  return chainId.toLowerCase() === APP_CONFIG.titan.chainIdHex.toLowerCase();
+  return isOnTitanChainId(chainId);
 }

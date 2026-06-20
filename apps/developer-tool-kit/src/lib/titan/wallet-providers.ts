@@ -1,5 +1,6 @@
 import { APP_CONFIG } from "@/config/app-config";
 import { getTitanRuntimeConfig } from "@/lib/titan/network-runtime";
+import { parseWalletError } from "@/lib/titan/wallet-errors";
 
 export type WalletKind = "metamask" | "core";
 
@@ -68,48 +69,85 @@ export function walletKindLabel(kind: WalletKind | ""): string {
   return "Wallet";
 }
 
-export async function switchToTitanNetwork(provider: EthereumProvider) {
+async function titanChainParams() {
   const runtime = await getTitanRuntimeConfig();
+  return {
+    chainIdHex: runtime.chainIdHex,
+    params: {
+      chainId: runtime.chainIdHex,
+      chainName: runtime.networkName,
+      nativeCurrency: {
+        name: APP_CONFIG.titan.nativeToken.name,
+        symbol: APP_CONFIG.titan.nativeToken.symbol,
+        decimals: APP_CONFIG.titan.nativeToken.decimals,
+      },
+      rpcUrls: [runtime.rpcUrl],
+      blockExplorerUrls: runtime.explorerUrl ? [runtime.explorerUrl] : [],
+    },
+  };
+}
+
+/** Prompt Core / MetaMask to add Titan (chain 888) as a custom EVM network. */
+export async function addTitanNetwork(provider: EthereumProvider): Promise<void> {
+  const { params } = await titanChainParams();
+  await provider.request({
+    method: "wallet_addEthereumChain",
+    params: [params],
+  });
+}
+
+export async function switchToTitanNetwork(
+  provider: EthereumProvider,
+  options?: { kind?: WalletKind; softFail?: boolean },
+): Promise<string | undefined> {
+  const { chainIdHex, params } = await titanChainParams();
 
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: runtime.chainIdHex }],
+      params: [{ chainId: chainIdHex }],
     });
-  } catch (error) {
-    const shouldAddChain =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      Number((error as { code?: unknown }).code) === 4902;
+    return undefined;
+  } catch (switchError) {
+    try {
+      await provider.request({
+        method: "wallet_addEthereumChain",
+        params: [params],
+      });
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: chainIdHex }],
+      });
+      return undefined;
+    } catch (addError) {
+      const message = parseWalletError(
+        addError,
+        parseWalletError(switchError, "Could not switch to Titan network (888)."),
+      );
 
-    if (!shouldAddChain) {
-      throw error;
+      if (options?.softFail || options?.kind === "core") {
+        return message;
+      }
+      throw new Error(message);
     }
-
-    await provider.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: runtime.chainIdHex,
-          chainName: runtime.networkName,
-          nativeCurrency: {
-            name: APP_CONFIG.titan.nativeToken.name,
-            symbol: APP_CONFIG.titan.nativeToken.symbol,
-            decimals: APP_CONFIG.titan.nativeToken.decimals,
-          },
-          rpcUrls: [runtime.rpcUrl],
-          blockExplorerUrls: [runtime.explorerUrl],
-        },
-      ],
-    });
   }
+}
+
+export function isOnTitanChainId(chainId: string): boolean {
+  return chainId.toLowerCase() === APP_CONFIG.titan.chainIdHex.toLowerCase();
+}
+
+/** Staking reads balances via explorer RPC; Core only needs an address + extension for atomic txs. */
+export function isStakingNetworkReady(chainId: string, kind: WalletKind | ""): boolean {
+  if (isOnTitanChainId(chainId)) return true;
+  return kind === "core" && Boolean(chainId);
 }
 
 export async function connectWallet(kind: WalletKind): Promise<{
   address: string;
   chainId: string;
   kind: WalletKind;
+  networkWarning?: string;
 }> {
   const provider = getProviderForKind(kind);
   if (!provider) {
@@ -120,17 +158,37 @@ export async function connectWallet(kind: WalletKind): Promise<{
     );
   }
 
-  await switchToTitanNetwork(provider);
-  const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
-  const address = accounts?.[0];
-
-  if (!address) {
-    throw new Error(`No account returned by ${walletKindLabel(kind)}.`);
+  let accounts: string[];
+  try {
+    accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
+  } catch (error) {
+    throw new Error(
+      parseWalletError(
+        error,
+        kind === "core"
+          ? "Core connection rejected. Unlock Core, click Connect Core again, and approve site access."
+          : "MetaMask connection rejected.",
+      ),
+    );
   }
 
+  const address = accounts?.[0];
+  if (!address) {
+    throw new Error(`No account returned by ${walletKindLabel(kind)}. Unlock the wallet and try again.`);
+  }
+
+  const networkWarning = await switchToTitanNetwork(provider, { kind, softFail: kind === "core" });
   const chainId = (await provider.request({ method: "eth_chainId" })) as string;
   setActiveWalletKind(kind);
-  return { address, chainId, kind };
+
+  let warning = networkWarning;
+  if (kind === "core" && !isOnTitanChainId(chainId)) {
+    warning =
+      warning ??
+      `Core is connected as ${address.slice(0, 6)}… but not on Titan (888) yet. Click "Add Titan to Core" — Core has no manual network UI; the explorer will prompt Core to add chain 888.`;
+  }
+
+  return { address, chainId, kind, networkWarning: warning };
 }
 
 /** Read Core's current account without prompting (if already authorized). */

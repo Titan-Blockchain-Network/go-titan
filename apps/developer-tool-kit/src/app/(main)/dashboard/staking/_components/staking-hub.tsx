@@ -20,7 +20,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { shortAddress } from "@/lib/titan/format";
 import { issueAtomicTx } from "@/lib/titan/staking-client";
-import { walletKindLabel } from "@/lib/titan/wallet-providers";
+import {
+  isOnTitanChainId,
+  isStakingNetworkReady,
+  walletKindLabel,
+} from "@/lib/titan/wallet-providers";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 
 interface ValidatorRow {
@@ -59,14 +63,19 @@ export function StakingHub() {
   const cBalance = useWalletStore((s) => s.titanBalance);
   const connect = useWalletStore((s) => s.connect);
   const refreshBalance = useWalletStore((s) => s.refreshBalance);
+  const addTitanToActiveWallet = useWalletStore((s) => s.addTitanToActiveWallet);
+  const walletConnectError = useWalletStore((s) => s.error);
+  const networkWarning = useWalletStore((s) => s.networkWarning);
+  const walletIsLoading = useWalletStore((s) => s.isLoading);
 
   const walletReady = isWalletConnected({ address });
   const onTitan = isOnTitanChain(chainId);
+  const stakingReady = isStakingNetworkReady(chainId, walletKind);
   const coreReady =
     coreInstalled &&
-    Boolean(coreAddress) &&
-    coreAddress.toLowerCase() === address.toLowerCase();
-  const coreDetected = coreInstalled;
+    walletReady &&
+    (walletKind === "core" ||
+      Boolean(coreAddress && coreAddress.toLowerCase() === address.toLowerCase()));
 
   const [data, setData] = useState<StakingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,8 +120,12 @@ export function StakingHub() {
       setTransferStatus("Connect a wallet first (sidebar or below).");
       return;
     }
-    if (!onTitan) {
-      setTransferStatus("Switch your wallet to Titan network (chain 888), then try again.");
+    if (!stakingReady) {
+      setTransferStatus(
+        walletKind === "core"
+          ? "Connect Core first, then click “Add Titan to Core” if Core is not on chain 888."
+          : "Switch your wallet to Titan network (chain 888), then try again.",
+      );
       return;
     }
     if (!coreReady) {
@@ -181,7 +194,7 @@ export function StakingHub() {
   }
 
   async function runDelegate() {
-    if (!walletReady || !onTitan || !selectedNode) return;
+    if (!walletReady || !stakingReady || !coreReady || !selectedNode) return;
     setBusy("delegate");
     setStatus("");
     try {
@@ -232,16 +245,37 @@ export function StakingHub() {
         </Button>
       </div>
 
-      {walletReady && !onTitan && (
+      {walletReady && !isOnTitanChainId(chainId) && (
         <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardContent className="py-4 text-sm">
-            <p className="font-medium text-amber-900 dark:text-amber-200">Switch to Titan network</p>
-            <p className="mt-1 text-muted-foreground">
-              C-chain is connected, but your wallet is on the wrong network. Approve the Titan network
-              switch in MetaMask to fund P-chain and delegate.
+          <CardContent className="py-4 text-sm space-y-3">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              {walletKind === "core" ? "Add Titan to Core" : "Switch to Titan network"}
             </p>
+            <p className="text-muted-foreground">
+              {walletKind === "core"
+                ? "Core has no manual “custom network” screen like MetaMask. Use the button below — Core will show an Add Network prompt for Titan (chain 888, RPC rpc.titan-network.xyz)."
+                : "Your wallet is on the wrong network. Approve the Titan network switch to fund P-chain and delegate."}
+            </p>
+            {walletKind === "core" && (
+              <Button size="sm" variant="outline" onClick={() => void addTitanToActiveWallet()} disabled={walletIsLoading}>
+                {walletIsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Add Titan to Core (chain 888)
+              </Button>
+            )}
           </CardContent>
         </Card>
+      )}
+
+      {networkWarning && (
+        <p className="text-sm rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-amber-900 dark:text-amber-200">
+          {networkWarning}
+        </p>
+      )}
+
+      {walletConnectError && (
+        <p className="text-sm rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-destructive">
+          {walletConnectError}
+        </p>
       )}
 
       <Card>
@@ -275,14 +309,20 @@ export function StakingHub() {
             <p className="text-xs text-muted-foreground">Core (P-chain signing)</p>
             <p className="font-medium mt-0.5">
               {!coreInstalled && "Extension not detected"}
-              {coreInstalled && !coreAddress && "Installed — unlock & authorize"}
-              {coreInstalled && coreAddress && coreReady && (
+              {coreInstalled && !coreAddress && walletKind !== "core" && "Installed — unlock & authorize"}
+              {coreInstalled && walletKind === "core" && walletReady && (
+                <>
+                  Connected · {shortAddress(address)}
+                  <Badge className="ml-2 bg-green-600">signing wallet</Badge>
+                </>
+              )}
+              {coreInstalled && coreAddress && coreReady && walletKind !== "core" && (
                 <>
                   Ready · {shortAddress(coreAddress)}
                   <Badge className="ml-2 bg-green-600">matched</Badge>
                 </>
               )}
-              {coreInstalled && coreAddress && !coreReady && (
+              {coreInstalled && coreAddress && !coreReady && walletKind !== "core" && (
                 <>
                   {shortAddress(coreAddress)}
                   <Badge variant="outline" className="ml-2">
@@ -357,19 +397,29 @@ export function StakingHub() {
           </CardHeader>
           <CardContent className="space-y-4">
             {!walletReady ? (
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void connect("metamask")} className="w-full sm:w-auto">
-                  <Wallet className="h-4 w-4" />
-                  Connect MetaMask
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void connect("core")}
-                  className="w-full sm:w-auto"
-                >
-                  <Wallet className="h-4 w-4" />
-                  Connect Core
-                </Button>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => void connect("core")}
+                    disabled={walletIsLoading || !coreInstalled}
+                    className="w-full sm:w-auto"
+                  >
+                    {walletIsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                    Connect Core (recommended)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void connect("metamask")}
+                    disabled={walletIsLoading}
+                    className="w-full sm:w-auto"
+                  >
+                    Connect MetaMask
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Core opens a site-access prompt in the extension toolbar (not a page popup). Approve
+                  there, then approve Add Network for Titan if asked.
+                </p>
               </div>
             ) : (
               <>
@@ -415,7 +465,7 @@ export function StakingHub() {
                   <Button
                     size="sm"
                     onClick={() => void runTransfer("export")}
-                    disabled={!onTitan || busy !== ""}
+                    disabled={!stakingReady || !coreReady || busy !== ""}
                   >
                     {busy === "export" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     1. Export to P-chain
@@ -424,7 +474,7 @@ export function StakingHub() {
                     size="sm"
                     variant="outline"
                     onClick={() => void runTransfer("import")}
-                    disabled={!onTitan || busy !== ""}
+                    disabled={!stakingReady || !coreReady || busy !== ""}
                   >
                     {busy === "import" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     2. Import on P-chain
@@ -495,7 +545,7 @@ export function StakingHub() {
             )}
             <Button
               onClick={() => void runDelegate()}
-              disabled={!walletReady || !onTitan || busy !== "" || needsTransfer}
+              disabled={!walletReady || !stakingReady || !coreReady || busy !== "" || needsTransfer}
               className="w-full sm:w-auto"
             >
               {busy === "delegate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

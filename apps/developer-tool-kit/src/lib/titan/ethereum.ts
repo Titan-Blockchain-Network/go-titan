@@ -1,5 +1,6 @@
 export type { EthereumProvider, WalletKind } from "@/lib/titan/wallet-providers";
 export {
+  addTitanNetwork,
   connectWallet,
   getActiveEvmProvider,
   getActiveWalletKind,
@@ -7,6 +8,8 @@ export {
   getMetaMaskProvider,
   getProviderForKind,
   isCoreInstalled,
+  isOnTitanChainId,
+  isStakingNetworkReady,
   peekCoreAddress,
   setActiveWalletKind,
   switchToTitanNetwork,
