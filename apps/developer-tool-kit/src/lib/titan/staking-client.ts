@@ -20,14 +20,18 @@ function ensure0xHex(txHex: string): string {
   return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
 }
 
-function extractTxId(result: unknown): string | null {
-  if (typeof result === "string" && result.length > 0) return result;
+function extractSignedHex(result: unknown): string | null {
+  if (typeof result === "string" && result.length > 2) {
+    return ensure0xHex(result);
+  }
   if (!result || typeof result !== "object") return null;
 
   const record = result as Record<string, unknown>;
-  for (const key of ["txHash", "txID", "txId", "hash"] as const) {
+  for (const key of ["signedTransactionHex", "signedTx", "tx", "transactionHex"] as const) {
     const value = record[key];
-    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "string" && value.length > 2) {
+      return ensure0xHex(value);
+    }
   }
   return null;
 }
@@ -44,15 +48,53 @@ async function broadcastViaExplorer(txHex: string, chain: "C" | "P"): Promise<st
   });
   const json = (await res.json()) as { txID?: string; error?: string };
   if (!res.ok) {
-    throw new Error(json.error ?? "Node refused to broadcast the signed transaction.");
+    throw new Error(json.error ?? "Titan node refused to broadcast the signed transaction.");
   }
   if (!json.txID) {
-    throw new Error("Node broadcast succeeded but returned no transaction ID.");
+    throw new Error("Titan node accepted the broadcast but returned no transaction ID.");
   }
   return json.txID;
 }
 
-/** Issue a signed or wallet-signable atomic tx via Avalanche Core (or compatible extension). */
+async function signWithCore(
+  wallet: EthereumProvider,
+  transactionHex: string,
+  chain: "C" | "P" | "X",
+): Promise<{ signedHex: string | null; errors: string[] }> {
+  const errors: string[] = [];
+  const base = { transactionHex, chainAlias: chain };
+
+  const attempts: Array<{ method: string; params: unknown }> = [
+    { method: "avalanche_signTransaction", params: base },
+    { method: "avalanche_signTransaction", params: [transactionHex, chain] },
+    { method: "avalanche_signTransaction", params: [{ ...base, externalIndices: [0] }] },
+    {
+      method: "avalanche_signTransaction",
+      params: [{ ...base, externalIndices: [0], internalIndices: [] }],
+    },
+    { method: "avalanche_signTransaction", params: [{ transactionHex, chainAlias: chain }] },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const result = await wallet.request(attempt);
+      const signedHex = extractSignedHex(result);
+      if (signedHex) {
+        return { signedHex, errors };
+      }
+      errors.push(`${attempt.method}: missing signedTransactionHex`);
+    } catch (error) {
+      errors.push(`${attempt.method}: ${formatAttemptError(error)}`);
+    }
+  }
+
+  return { signedHex: null, errors };
+}
+
+/**
+ * Sign in Core, broadcast via Titan RPC.
+ * Core cannot broadcast atomic txs to custom L1 network 888 (eip155:888) — only mainnet/Fuji.
+ */
 export async function issueAtomicTx(txHex: string, chain: "C" | "P" | "X"): Promise<string> {
   const wallet = getAvalancheWallet();
   if (!wallet) {
@@ -62,73 +104,17 @@ export async function issueAtomicTx(txHex: string, chain: "C" | "P" | "X"): Prom
   }
 
   const transactionHex = ensure0xHex(txHex);
-  const errors: string[] = [];
+  const broadcastChain: "C" | "P" = chain === "X" ? "P" : chain;
 
-  const sendAttempts: Array<{ method: string; params: unknown }> = [
-    {
-      method: "avalanche_sendTransaction",
-      params: { transactionHex, chainAlias: chain },
-    },
-    {
-      method: "avalanche_sendTransaction",
-      params: [transactionHex, chain],
-    },
-    {
-      method: "avalanche_sendTransaction",
-      params: [{ transactionHex, chainAlias: chain }],
-    },
-    { method: "wallet_issueTx", params: { tx: transactionHex, chainAlias: chain } },
-    { method: "wallet_issueTx", params: [{ tx: transactionHex, chainAlias: chain }] },
-    { method: "avax_issueTx", params: { tx: transactionHex, chainAlias: chain } },
-  ];
-
-  for (const attempt of sendAttempts) {
-    try {
-      const result = await wallet.request(attempt);
-      const txId = extractTxId(result);
-      if (txId) return txId;
-      errors.push(`${attempt.method}: empty response (${JSON.stringify(result)})`);
-    } catch (error) {
-      errors.push(`${attempt.method}: ${formatAttemptError(error)}`);
-    }
+  const { signedHex, errors: signErrors } = await signWithCore(wallet, transactionHex, chain);
+  if (signedHex) {
+    return broadcastViaExplorer(signedHex, broadcastChain);
   }
 
-  if (chain === "P" || chain === "X") {
-    const signAttempts: Array<{ method: string; params: unknown }> = [
-      {
-        method: "avalanche_signTransaction",
-        params: { transactionHex, chainAlias: chain },
-      },
-      {
-        method: "avalanche_signTransaction",
-        params: [transactionHex, chain],
-      },
-    ];
-
-    for (const attempt of signAttempts) {
-      try {
-        const result = await wallet.request(attempt);
-        const signed =
-          result && typeof result === "object" && "signedTransactionHex" in result
-            ? String((result as { signedTransactionHex: string }).signedTransactionHex)
-            : typeof result === "string"
-              ? result
-              : null;
-
-        if (signed) {
-          return broadcastViaExplorer(ensure0xHex(signed), chain === "X" ? "P" : chain);
-        }
-        errors.push(`${attempt.method}: missing signedTransactionHex`);
-      } catch (error) {
-        errors.push(`${attempt.method}: ${formatAttemptError(error)}`);
-      }
-    }
-  }
-
-  const detail = errors.filter(Boolean).slice(0, 4).join(" · ");
+  const detail = signErrors.filter(Boolean).slice(0, 3).join(" · ");
   throw new Error(
     detail
-      ? `Core could not issue the ${chain}-chain transaction. ${detail}`
-      : "Core refused to issue the transaction. Unlock Core and approve the popup in the extension toolbar.",
+      ? `Core could not sign the ${chain}-chain transaction for Titan (network 888). ${detail} — Core may show "0 AVAX" in the prompt; the real amount is TITAN. If signing is unsupported for custom L1s, use the Avalanche CLI against rpc.titan-network.xyz.`
+      : `Core could not sign the ${chain}-chain transaction. Unlock Core and approve the popup in the extension toolbar.`,
   );
 }

@@ -431,7 +431,8 @@ export function StakingHub() {
                 <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                   <li>
                     <strong>Export</strong> — Core popup approves moving TITAN off C-chain (small fee
-                    ~0.01 T).
+                    ~0.01 T). Core may label the amount as AVAX — that is cosmetic; Titan broadcasts
+                    via the explorer node after you sign.
                   </li>
                   <li>
                     <strong>Wait ~30s</strong> — network accepts the export and queues funds for import
