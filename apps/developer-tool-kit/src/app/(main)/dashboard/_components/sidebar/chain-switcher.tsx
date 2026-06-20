@@ -61,9 +61,9 @@ export function ChainSwitcher() {
                 {meta.label}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px] text-center">
-              <p className="font-medium">{meta.name}</p>
-              <p className="text-xs text-muted-foreground">{meta.description}</p>
+            <TooltipContent side="bottom" sideOffset={6} className="max-w-[260px] px-3 py-2 text-center">
+              <p className="text-sm font-semibold">{meta.name}</p>
+              <p className="mt-1 text-xs leading-relaxed opacity-90">{meta.description}</p>
             </TooltipContent>
           </Tooltip>
         );

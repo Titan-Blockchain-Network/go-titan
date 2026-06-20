@@ -7,7 +7,6 @@ import {
   ArrowRightLeft,
   BarChart3,
   Blocks,
-  Clock,
   Hash,
   Layers,
   Loader2,
@@ -37,6 +36,7 @@ import {
   AddressDetail,
   ExplorerDetailDrawer,
 } from "@/app/(main)/dashboard/activity/_components/explorer-detail-drawer";
+import { RpcSyncPanel } from "@/app/(main)/dashboard/activity/_components/rpc-sync-panel";
 import { ValidatorsPanel } from "@/app/(main)/dashboard/activity/_components/validators-panel";
 
 interface NodeInfo {
@@ -52,6 +52,8 @@ interface NodeInfo {
   chainId?: string;
   blockNumber?: string;
   gasPrice?: string;
+  discoveryMethod?: "bootstrap" | "p2p-gossip" | "direct-probe";
+  inMesh?: boolean;
 }
 
 interface Tx {
@@ -177,7 +179,7 @@ function ExplorerPageContent() {
   const [addressLabels, setAddressLabels] = useState<Record<string, string>>({});
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [nodesLoading, setNodesLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
 
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [blocksLoading, setBlocksLoading] = useState(true);
@@ -250,7 +252,6 @@ function ExplorerPageContent() {
       const r = await fetch("/api/titan/rpc");
       const j = await r.json();
       setNodes(j.nodes ?? []);
-      setLastUpdated(new Date());
     } catch {
       setNodes([]);
     } finally {
@@ -722,28 +723,7 @@ function ExplorerPageContent() {
       </div>
 
       {activeChain === "C" && !titan.isLocalDev && nodes.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <span>RPC sync:</span>
-          {nodes.map((info) => {
-            const label = info.displayName ?? info.node;
-            return (
-              <Badge
-                key={info.nodeId ?? info.node}
-                variant={info.healthy ? "default" : "secondary"}
-                className={info.healthy ? "bg-green-600" : ""}
-              >
-                {label} · block {info.blockNumber ?? "—"}
-              </Badge>
-            );
-          })}
-          {nodesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-          {lastUpdated && (
-            <span className="ml-auto">
-              <Clock className="inline h-3 w-3 mr-1" />
-              {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
+        <RpcSyncPanel nodes={nodes} loading={nodesLoading} headBlock={headBlock ?? null} />
       )}
 
       {activeChain === "X" ? (
