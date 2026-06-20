@@ -9,6 +9,7 @@ import {
   Radio,
   Rocket,
   Server,
+  Shield,
 } from "lucide-react";
 
 import { APP_CONFIG } from "@/config/app-config";
@@ -62,6 +63,13 @@ const sections = [
         description: "Blocks, transactions, validators, and analytics.",
         href: "/dashboard/activity",
         icon: Blocks,
+        internal: true,
+      },
+      {
+        title: "Wallet staking",
+        description: "Delegate TITAN to validators on the P-chain from your connected wallet.",
+        href: "/dashboard/staking",
+        icon: Shield,
         internal: true,
       },
       {

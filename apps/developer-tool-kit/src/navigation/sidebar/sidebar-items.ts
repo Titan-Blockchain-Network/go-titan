@@ -10,6 +10,7 @@ import {
   Rocket,
   ScrollText,
   Server,
+  Shield,
 } from "lucide-react";
 
 export interface NavSubItem {
@@ -58,6 +59,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Chain Explorer",
         url: "/dashboard/activity",
         icon: Blocks,
+      },
+      {
+        title: "Staking",
+        url: "/dashboard/staking",
+        icon: Shield,
+        isNew: true,
       },
       {
         title: "Network",

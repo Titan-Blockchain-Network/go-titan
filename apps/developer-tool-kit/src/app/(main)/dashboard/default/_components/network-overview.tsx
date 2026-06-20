@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Blocks, Network, Rocket, Server } from "lucide-react";
+import { ArrowRight, Blocks, Network, Rocket, Server, Shield } from "lucide-react";
 
 import { APP_CONFIG } from "@/config/app-config";
 import { blockLabelForNode, meshLabelForNode } from "@/lib/titan/node-display";
@@ -13,6 +13,7 @@ import { useNetworkStatusStore } from "@/stores/titan/network-status-store";
 const QUICK_LINKS = [
   { href: "/dashboard/activity", label: "Chain Explorer", icon: Blocks, desc: "Blocks & transactions" },
   { href: "/dashboard/nodes", label: "Nodes", icon: Server, desc: "RPC sync & validators" },
+  { href: "/dashboard/staking", label: "Staking", icon: Shield, desc: "Delegate TITAN on P-chain" },
   { href: "/dashboard/ecosystem", label: "Launchpad", icon: Rocket, desc: "Apps & escrow" },
 ] as const;
 
