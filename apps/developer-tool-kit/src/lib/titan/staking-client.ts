@@ -79,18 +79,25 @@ function ethMessageDigestHex(message: string): Hex {
   return keccak256(toBytes(prefix));
 }
 
-function ethMessageDigestForBytes(message: Uint8Array): Hex {
-  const prefix = new TextEncoder().encode(
-    `\x19Ethereum Signed Message:\n${message.length}`,
-  );
-  const combined = new Uint8Array(prefix.length + message.length);
-  combined.set(prefix);
-  combined.set(message, prefix.length);
-  return keccak256(combined);
-}
-
 function utf8HexParam(message: string): Hex {
   return bytesToHex(new TextEncoder().encode(message));
+}
+
+/** Mirrors go-titan secp256k1fx.VerifyCredentials (TextHash + EVM owner). */
+function titanAcceptsEthPrefixedSignature(
+  unsignedTx: UnsignedTx,
+  signature: Hex,
+  cAddress: string,
+): boolean {
+  const txHash = messageHashFromUnsignedTx(unsignedTx);
+  const txHashStr = bytesToHex(txHash).slice(2);
+  const txHashEth = ethMessageDigestHex(txHashStr);
+  const sigBytes = ethSignatureToAvaxBytes(signature);
+  const publicKey = secp256k1.recoverPublicKey(flareUtils.hexToBuffer(txHashEth), sigBytes);
+  const ethAddr = secp256k1.publicKeyToEthAddress(publicKey);
+  const expected = flareUtils.hexToBuffer(cAddress.toLowerCase());
+  if (ethAddr.length !== expected.length) return false;
+  return ethAddr.every((byte, i) => byte === expected[i]);
 }
 
 function hasWalletSignatures(unsignedTx: UnsignedTx): boolean {
@@ -113,11 +120,6 @@ function applyRecoveredSignature(
   for (const [index, subIndex] of coordinates) {
     unsignedTx.addSignatureAt(sigBytes, index, subIndex);
   }
-  return hasWalletSignatures(unsignedTx);
-}
-
-function applySha256Signature(unsignedTx: UnsignedTx, signature: Hex): boolean {
-  unsignedTx.addSignature(ethSignatureToAvaxBytes(signature));
   return hasWalletSignatures(unsignedTx);
 }
 
@@ -182,76 +184,43 @@ async function signWithCore(
   return { signedHex: null, errors };
 }
 
-type DigestAttempt = {
-  label: string;
-  request: { method: string; params: unknown };
-  apply: (unsignedTx: UnsignedTx, signature: Hex) => boolean;
-};
-
 /**
- * Flare TX SDK pattern for MetaMask/Core on custom L1s: sign the sha256 digest
- * via personal_sign or eth_sign, attach to the unsigned tx, broadcast ourselves.
+ * Titan/Flare P-chain: personal_sign over hex(sha256(tx)) — matches TextHash verification.
+ * Requires go-titan nodes with EVM-owner support in secp256k1fx (ownerMatchesPubKey).
  */
 async function signViaDigest(
   wallet: EthereumProvider,
   cAddress: string,
   unsignedTxJson: string,
 ): Promise<string> {
-  const digest = flareUtils.bufferToHex(
-    messageHashFromUnsignedTx(loadUnsignedTx(unsignedTxJson)),
-  ) as Hex;
-  const digestNoPrefix = digest.slice(2);
-  const errors: string[] = [];
+  const unsignedTx = loadUnsignedTx(unsignedTxJson);
+  const digestNoPrefix = bytesToHex(messageHashFromUnsignedTx(unsignedTx)).slice(2);
 
-  const attempts: DigestAttempt[] = [
-    {
-      label: "personal_sign",
-      request: {
+  let signature: Hex;
+  try {
+    signature = ensure0xHex(
+      (await wallet.request({
         method: "personal_sign",
         params: [utf8HexParam(digestNoPrefix), cAddress],
-      },
-      apply: (unsignedTx, signature) =>
-        applyRecoveredSignature(unsignedTx, signature, ethMessageDigestHex(digestNoPrefix)),
-    },
-    {
-      label: "eth_sign",
-      request: {
-        method: "eth_sign",
-        params: [cAddress, digest],
-      },
-      apply: (unsignedTx, signature) =>
-        applySha256Signature(unsignedTx, signature) ||
-        applyRecoveredSignature(unsignedTx, signature, digest),
-    },
-    {
-      label: "personal_sign (raw hash)",
-      request: {
-        method: "personal_sign",
-        params: [digest, cAddress],
-      },
-      apply: (unsignedTx, signature) =>
-        applyRecoveredSignature(unsignedTx, signature, ethMessageDigestForBytes(toBytes(digest))),
-    },
-  ];
-
-  for (const attempt of attempts) {
-    const unsignedTx = loadUnsignedTx(unsignedTxJson);
-    try {
-      const signature = ensure0xHex((await wallet.request(attempt.request)) as string);
-      if (attempt.apply(unsignedTx, signature)) {
-        return signedTxHexFromUnsigned(unsignedTx);
-      }
-      errors.push(`${attempt.label}: signature did not match transaction inputs`);
-    } catch (error) {
-      errors.push(`${attempt.label}: ${formatAttemptError(error)}`);
-    }
+      })) as string,
+    );
+  } catch (error) {
+    throw new Error(`personal_sign: ${formatAttemptError(error)}`);
   }
 
-  throw new Error(
-    errors.length
-      ? `Core could not sign via message digest. ${errors.slice(0, 3).join(" · ")}`
-      : "Core could not sign via message digest.",
-  );
+  if (!titanAcceptsEthPrefixedSignature(unsignedTx, signature, cAddress)) {
+    throw new Error(
+      "personal_sign returned a signature for a different account than this transaction. Use the same Core wallet that performed the export.",
+    );
+  }
+
+  if (
+    !applyRecoveredSignature(unsignedTx, signature, ethMessageDigestHex(digestNoPrefix))
+  ) {
+    throw new Error("Could not attach wallet signature to the P-chain transaction inputs.");
+  }
+
+  return signedTxHexFromUnsigned(unsignedTx);
 }
 
 /**
@@ -299,7 +268,7 @@ export async function issueAtomicTx(
         digestError instanceof Error ? digestError.message : "Digest signing failed";
       const coreDetail = signErrors.filter(Boolean).slice(0, 2).join(" · ");
       throw new Error(
-        `Core could not sign the ${chain}-chain transaction for Titan (network 888). ${coreDetail} — Fallback: ${digestMessage} — Use the same Core account that exported; the popup signs a hash, not a transfer amount.`,
+        `Core could not sign the ${chain}-chain transaction for Titan (network 888). ${coreDetail} — Fallback: ${digestMessage} — P-chain import needs Titan nodes running the latest go-titan (EVM-owner verify fix). Use the same Core account that exported.`,
       );
     }
   }

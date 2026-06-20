@@ -152,6 +152,53 @@ func TestFxVerifyTransferEthSignature(t *testing.T) {
 	require.NoError(fx.VerifyTransfer(tx, in, cred, out))
 }
 
+// Titan / Flare C→P atomic imports use EVM-derived 20-byte owners on P-chain.
+func TestFxVerifyTransferEthSignatureEvmOwner(t *testing.T) {
+	require := require.New(t)
+	vm := TestVM{
+		Codec: linearcodec.NewDefault(),
+		Log:   logging.NoLog{},
+	}
+	date := time.Date(2019, time.January, 19, 16, 25, 17, 3, time.UTC)
+	vm.Clk.Set(date)
+	fx := Fx{}
+	require.NoError(fx.Initialize(&vm))
+	require.NoError(fx.Bootstrapping())
+	require.NoError(fx.Bootstrapped())
+
+	key := secp256k1.TestKeys()[0]
+	tx := &TestTx{UnsignedBytes: txBytes}
+
+	txHash := hashing.ComputeHash256(tx.Bytes())
+	txHashEth := accounts.TextHash([]byte(hex.EncodeToString(txHash)))
+	sigSlice, err := key.SignHash(txHashEth)
+	require.NoError(err)
+	var sig [secp256k1.SignatureLen]byte
+	copy(sig[:], sigSlice)
+
+	var ethOwner ids.ShortID
+	copy(ethOwner[:], key.EthAddress().Bytes())
+
+	out := &TransferOutput{
+		Amt: 1,
+		OutputOwners: OutputOwners{
+			Threshold: 1,
+			Addrs:     []ids.ShortID{ethOwner},
+		},
+	}
+	in := &TransferInput{
+		Amt: 1,
+		Input: Input{
+			SigIndices: []uint32{0},
+		},
+	}
+	cred := &Credential{
+		Sigs: [][secp256k1.SignatureLen]byte{sig},
+	}
+
+	require.NoError(fx.VerifyTransfer(tx, in, cred, out))
+}
+
 // Flare-specific: an eth-prefixed signature from the wrong signer must still
 // be rejected — both recovery branches in VerifyCredentials should miss.
 func TestFxVerifyTransferEthSignatureWrongSigner(t *testing.T) {

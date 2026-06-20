@@ -8,10 +8,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/hashing"
 	"github.com/ava-labs/avalanchego/vms/components/verify"
 	"github.com/ava-labs/libevm/accounts"
+	"github.com/ava-labs/libevm/common"
 )
 
 const defaultCacheSize = 256
@@ -167,6 +169,21 @@ func (fx *Fx) VerifySpend(utx UnsignedTx, in *TransferInput, cred *Credential, u
 	return fx.VerifyCredentials(utx, &in.Input, cred, &utxo.OutputOwners)
 }
 
+// ownerMatchesPubKey accepts both Avalanche (RIPEMD160) and EVM-derived owners.
+// C→P atomic UTXOs use the same 20-byte EVM address as the exporting C-chain key.
+func ownerMatchesPubKey(owner ids.ShortID, pk *secp256k1.PublicKey) bool {
+	if owner == pk.Address() {
+		return true
+	}
+	return owner == ethShortID(pk.EthAddress())
+}
+
+func ethShortID(addr common.Address) ids.ShortID {
+	var id ids.ShortID
+	copy(id[:], addr[:])
+	return id
+}
+
 // VerifyCredentials ensures that the output can be spent by the input with the
 // credential. A nil return values means the output can be spent.
 func (fx *Fx) VerifyCredentials(utx UnsignedTx, in *Input, cred *Credential, out *OutputOwners) error {
@@ -203,7 +220,7 @@ func (fx *Fx) VerifyCredentials(utx UnsignedTx, in *Input, cred *Credential, out
 
 		// Try to recover the address from the signature of the transaction hash without a prefix
 		// (Standard Avalanche approach, but unsupported/deprecated by most signing tools)
-		if expectedAddress == pk.Address() {
+		if ownerMatchesPubKey(expectedAddress, pk) {
 			continue
 		}
 
@@ -213,7 +230,7 @@ func (fx *Fx) VerifyCredentials(utx UnsignedTx, in *Input, cred *Credential, out
 		if err != nil {
 			return err
 		}
-		if expectedAddress == pk.Address() {
+		if ownerMatchesPubKey(expectedAddress, pk) {
 			continue
 		}
 
