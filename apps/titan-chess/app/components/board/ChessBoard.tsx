@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, type PointerEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Chess } from 'chess.js';
 import type { Square, Color } from 'chess.js';
@@ -80,12 +80,22 @@ export function ChessBoard({
   const rankLabels = flipped ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
   const fileLabels = flipped ? [...FILES].reverse() : FILES;
 
+  const handleSquarePress = useCallback(
+    (sq: Square) => (e: PointerEvent) => {
+      e.preventDefault();
+      onSquareClick(sq);
+    },
+    [onSquareClick]
+  );
+
   return (
-    <div className="relative select-none" style={{ touchAction: 'none' }}>
+    <div className="chess-board-shell relative w-full aspect-square max-w-[min(100%,600px)] mx-auto">
       <svg
         viewBox={`0 0 ${BOARD + LABEL} ${BOARD + LABEL}`}
-        className="w-full max-w-[640px]"
-        style={{ filter: 'drop-shadow(0 20px 60px rgba(0,0,0,0.6))' }}
+        className="absolute inset-0 h-full w-full"
+        style={{ filter: 'drop-shadow(0 12px 40px rgba(0,0,0,0.55))' }}
+        role="img"
+        aria-label="Chess board"
       >
         {/* Board squares */}
         {squares.map(({ sq, col, row, piece }) => {
@@ -109,16 +119,16 @@ export function ChessBoard({
                 x={x} y={y}
                 width={CELL} height={CELL}
                 fill={fillColor}
-                onClick={() => onSquareClick(sq)}
-                style={{ cursor: 'pointer' }}
+                onPointerUp={handleSquarePress(sq)}
+                style={{ cursor: 'pointer', touchAction: 'manipulation' }}
               />
               {legal && !capture && (
                 <circle
                   cx={x + CELL / 2} cy={y + CELL / 2}
                   r={CELL * 0.15}
                   fill="rgba(0,0,0,0.2)"
-                  onClick={() => onSquareClick(sq)}
-                  style={{ cursor: 'pointer', animation: 'legalPulse 1.4s ease-in-out infinite' }}
+                  onPointerUp={handleSquarePress(sq)}
+                  style={{ cursor: 'pointer', touchAction: 'manipulation', animation: 'legalPulse 1.4s ease-in-out infinite' }}
                 />
               )}
               {legal && capture && (
@@ -128,8 +138,8 @@ export function ChessBoard({
                   fill="none"
                   stroke="rgba(0,0,0,0.2)"
                   strokeWidth={CELL * 0.12}
-                  onClick={() => onSquareClick(sq)}
-                  style={{ cursor: 'pointer', animation: 'legalPulse 1.4s ease-in-out infinite' }}
+                  onPointerUp={handleSquarePress(sq)}
+                  style={{ cursor: 'pointer', touchAction: 'manipulation', animation: 'legalPulse 1.4s ease-in-out infinite' }}
                 />
               )}
               {selected && (
@@ -168,8 +178,8 @@ export function ChessBoard({
               key={`${sq}-${piece.color}${piece.type}`}
               x={x} y={y}
               width={CELL} height={CELL}
-              onClick={() => onSquareClick(sq)}
-              style={{ cursor: 'pointer', overflow: 'visible' }}
+              onPointerUp={handleSquarePress(sq)}
+              style={{ cursor: 'pointer', overflow: 'visible', touchAction: 'manipulation' }}
             >
               <div style={{ width: CELL, height: CELL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div

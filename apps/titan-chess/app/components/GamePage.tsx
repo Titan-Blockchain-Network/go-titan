@@ -7,7 +7,7 @@ import { ChessBoard } from '@/components/board/ChessBoard';
 import { GameHUD } from '@/components/hud/GameHUD';
 import { GameOverOverlay } from '@/components/ui/GameOverOverlay';
 import { NewGameModal } from '@/components/ui/NewGameModal';
-import { WagerBanner } from '@/components/ui/WagerBanner';
+import { WalletButton } from '@/components/wallet/WalletButton';
 import { useChessGame } from '@/hooks/useChessGame';
 import { useEscrowOperator } from '@/hooks/useEscrowOperator';
 import { useWagerSession } from '@/hooks/useWagerSession';
@@ -205,12 +205,12 @@ export function GamePage() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex items-center justify-between px-6 py-4 border-b"
+        className="flex items-center justify-between gap-2 px-safe py-3 sm:px-6 sm:py-4 border-b pt-safe shrink-0"
         style={{ borderColor: 'var(--bg-glass-border)' }}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
+            className="w-9 h-9 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-lg font-bold shrink-0"
             style={{
               background: 'linear-gradient(135deg, var(--gold-primary), var(--bronze))',
               color: '#0f0f11',
@@ -218,9 +218,9 @@ export function GamePage() {
           >
             ♟
           </div>
-          <div>
+          <div className="min-w-0">
             <h1
-              className="text-lg font-bold tracking-tight leading-none"
+              className="text-base sm:text-lg font-bold tracking-tight leading-none truncate"
               style={{
                 background: 'linear-gradient(135deg, var(--gold-primary), var(--gold-secondary))',
                 WebkitBackgroundClip: 'text',
@@ -229,37 +229,45 @@ export function GamePage() {
             >
               TITAN CHESS
             </h1>
-            <p className="text-xs leading-none" style={{ color: 'var(--text-secondary)' }}>
-              Decentralized · On-Chain · Avalanche L1
+            <p
+              className="text-[10px] sm:text-xs leading-none mt-0.5 truncate hidden sm:block"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              {TITAN_NETWORK.name} · On-Chain
             </p>
           </div>
         </div>
 
-        <div
-          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
-          style={{
-            background: 'var(--gold-dim)',
-            border: '1px solid rgba(201,168,76,0.2)',
-            color: 'var(--gold-secondary)',
-          }}
-        >
+        <div className="flex items-center gap-2 shrink-0">
           <div
-            className="w-1.5 h-1.5 rounded-full"
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
             style={{
-              background: 'var(--gold-primary)',
-              boxShadow: '0 0 4px var(--gold-primary)',
+              background: 'var(--gold-dim)',
+              border: '1px solid rgba(201,168,76,0.2)',
+              color: 'var(--gold-secondary)',
             }}
-          />
-          {TITAN_NETWORK.name}
+          >
+            <div
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: 'var(--gold-primary)',
+                boxShadow: '0 0 4px var(--gold-primary)',
+              }}
+            />
+            {TITAN_NETWORK.name}
+          </div>
+          <div className="lg:hidden max-w-[9.5rem] sm:max-w-none">
+            <WalletButton compact />
+          </div>
         </div>
       </motion.header>
 
-      <main className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 p-4 lg:p-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6 px-safe py-3 sm:p-4 lg:p-6 max-w-7xl mx-auto w-full min-h-0">
         <motion.div
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1 flex items-center justify-center"
+          className="flex-1 flex items-start lg:items-center justify-center w-full min-w-0"
         >
           <div className="relative w-full max-w-[600px]">
             {!isMatchActive && wager.session.phase !== 'waiting' && (
@@ -269,7 +277,7 @@ export function GamePage() {
               >
                 <button
                   onClick={() => wager.startStockfishPractice()}
-                  className="px-6 py-3 rounded-xl font-semibold text-sm w-full max-w-xs"
+                  className="px-6 py-3.5 rounded-xl font-semibold text-sm w-full max-w-xs min-h-[48px]"
                   style={{
                     background: 'var(--bg-glass)',
                     border: '1px solid var(--bg-glass-border)',
@@ -280,7 +288,7 @@ export function GamePage() {
                 </button>
                 <button
                   onClick={handleNewGame}
-                  className="px-6 py-3 rounded-xl font-semibold text-sm w-full max-w-xs"
+                  className="px-6 py-3.5 rounded-xl font-semibold text-sm w-full max-w-xs min-h-[48px]"
                   style={{
                     background: 'linear-gradient(135deg, var(--gold-primary), var(--gold-secondary))',
                     color: '#0f0f11',

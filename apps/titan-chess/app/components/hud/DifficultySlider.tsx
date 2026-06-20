@@ -6,6 +6,7 @@ interface DifficultySliderProps {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
+  embedded?: boolean;
 }
 
 const LEVEL_LABELS: Record<number, string> = {
@@ -21,9 +22,9 @@ const LEVEL_LABELS: Record<number, string> = {
   10: 'Grandmaster',
 };
 
-export function DifficultySlider({ value, onChange, disabled }: DifficultySliderProps) {
+export function DifficultySlider({ value, onChange, disabled, embedded = false }: DifficultySliderProps) {
   return (
-    <div className="glass rounded-xl p-4">
+    <div className={embedded ? 'p-0' : 'glass rounded-xl p-4'}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
           AI Difficulty

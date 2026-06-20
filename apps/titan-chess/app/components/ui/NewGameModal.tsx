@@ -49,7 +49,7 @@ export function NewGameModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 px-safe pb-safe"
           style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
           onClick={onClose}
         >
@@ -58,7 +58,7 @@ export function NewGameModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="glass rounded-2xl p-6 w-full max-w-md"
+            className="glass rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full max-w-md max-h-[92dvh] overflow-y-auto"
             style={{ borderColor: 'rgba(201,168,76,0.25)' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -162,14 +162,14 @@ export function NewGameModal({
                   onPlayPractice();
                   onClose();
                 }}
-                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40"
+                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40 min-h-[56px]"
                 style={{
                   background: 'var(--bg-glass)',
                   border: '1px solid var(--bg-glass-border)',
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
                       Practice vs Stockfish
                     </div>
@@ -184,13 +184,13 @@ export function NewGameModal({
               <button
                 disabled={!isConnected || isLoading}
                 onClick={() => onPlayStockfish(effectiveStake)}
-                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40"
+                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40 min-h-[56px]"
                 style={{
                   background: 'var(--gold-dim)',
                   border: '1px solid rgba(201,168,76,0.35)',
                 }}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold text-sm" style={{ color: 'var(--gold-secondary)' }}>
                       Wager vs Stockfish
@@ -230,14 +230,14 @@ export function NewGameModal({
               <button
                 disabled={!isConnected || isLoading}
                 onClick={() => onPlayHuman(effectiveStake)}
-                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40"
+                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40 min-h-[56px]"
                 style={{
                   background: 'var(--bg-glass)',
                   border: '1px solid var(--bg-glass-border)',
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
                       vs Player from Queue
                     </div>

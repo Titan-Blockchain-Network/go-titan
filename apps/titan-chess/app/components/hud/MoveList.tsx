@@ -6,6 +6,7 @@ import type { MoveHistory } from '@/types/chess';
 
 interface MoveListProps {
   moves: MoveHistory[];
+  mobile?: boolean;
 }
 
 // Group moves into pairs (white + black)
@@ -50,7 +51,7 @@ function MoveCell({ move, isLatest }: { move?: MoveHistory; isLatest: boolean })
   );
 }
 
-export function MoveList({ moves }: MoveListProps) {
+export function MoveList({ moves, mobile = false }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pairs = groupMoves(moves);
 
@@ -61,12 +62,17 @@ export function MoveList({ moves }: MoveListProps) {
   }, [moves.length]);
 
   return (
-    <div className="glass rounded-xl overflow-hidden flex flex-col" style={{ height: '260px' }}>
-      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--bg-glass-border)' }}>
-        <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-          Move History
-        </span>
-      </div>
+    <div
+      className={`overflow-hidden flex flex-col ${mobile ? '' : 'glass rounded-xl'}`}
+      style={{ height: mobile ? '180px' : '260px' }}
+    >
+      {!mobile && (
+        <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--bg-glass-border)' }}>
+          <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+            Move History
+          </span>
+        </div>
+      )}
 
       <div
         ref={scrollRef}

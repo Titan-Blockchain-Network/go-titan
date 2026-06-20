@@ -22,13 +22,13 @@ function useTitanBalance() {
   return { balance, isConnected, isLoading, isError };
 }
 
-export function TitanBalance() {
+export function TitanBalance({ embedded = false }: { embedded?: boolean }) {
   const { balance, isConnected, isLoading, isError } = useTitanBalance();
 
   return (
     <div
-      className="glass rounded-xl p-4"
-      style={{ borderColor: 'rgba(201, 168, 76, 0.2)' }}
+      className={embedded ? 'p-0' : 'glass rounded-xl p-4'}
+      style={embedded ? undefined : { borderColor: 'rgba(201, 168, 76, 0.2)' }}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>

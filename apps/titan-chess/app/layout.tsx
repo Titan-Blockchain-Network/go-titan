@@ -1,10 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Web3Provider } from './lib/web3';
 
 export const metadata: Metadata = {
   title: 'Titan Chess — Decentralized Chess on Avalanche L1',
   description: 'Play chess and earn TITAN tokens on a custom Avalanche subnet.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#0f0f11',
 };
 

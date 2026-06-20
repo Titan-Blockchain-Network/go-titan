@@ -23,12 +23,12 @@ export function WagerBanner({ session, houseUnderfunded, onCancel }: WagerBanner
         borderColor: isWaiting ? 'rgba(201,168,76,0.25)' : 'rgba(34,197,94,0.25)',
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-xs uppercase tracking-widest mb-0.5" style={{ color: 'var(--text-secondary)' }}>
             {isWaiting ? 'Waiting for match' : session.phase === 'settled' ? 'Wager settled' : 'Active wager'}
           </div>
-          <div className="text-sm font-medium" style={{ color: 'var(--gold-secondary)' }}>
+          <div className="text-sm font-medium break-words" style={{ color: 'var(--gold-secondary)' }}>
             {session.opponentType === 'stockfish' ? '🤖' : '👤'} vs {session.opponentLabel}
             {' · '}
             {session.stake} TITAN
@@ -51,7 +51,7 @@ export function WagerBanner({ session, houseUnderfunded, onCancel }: WagerBanner
         {isWaiting && onCancel && (
           <button
             onClick={onCancel}
-            className="text-xs px-3 py-1.5 rounded-lg shrink-0"
+            className="text-xs px-3 py-2.5 rounded-lg shrink-0 min-h-[44px] sm:min-h-0 sm:py-1.5 w-full sm:w-auto"
             style={{
               background: 'rgba(255,107,107,0.1)',
               border: '1px solid rgba(255,107,107,0.25)',

@@ -64,7 +64,7 @@ export function GameOverOverlay({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="glass rounded-2xl p-8 text-center max-w-xs mx-4"
+            className="glass rounded-2xl p-6 sm:p-8 text-center max-w-xs mx-3 sm:mx-4"
             style={{ borderColor: 'rgba(201,168,76,0.3)' }}
           >
             <motion.div

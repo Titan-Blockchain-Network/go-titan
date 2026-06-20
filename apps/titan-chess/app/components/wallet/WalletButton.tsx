@@ -3,7 +3,11 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion } from 'framer-motion';
 
-export function WalletButton() {
+interface WalletButtonProps {
+  compact?: boolean;
+}
+
+export function WalletButton({ compact = false }: WalletButtonProps) {
   return (
     <ConnectButton.Custom>
       {({
@@ -34,7 +38,9 @@ export function WalletButton() {
                 onClick={openConnectModal}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="relative px-4 py-2 rounded-lg text-sm font-semibold overflow-hidden"
+                className={`relative rounded-lg text-sm font-semibold overflow-hidden min-h-[44px] ${
+                  compact ? 'px-3 py-2 w-full' : 'px-4 py-2'
+                }`}
                 style={{
                   background: 'linear-gradient(135deg, #c9a84c, #e8c97a)',
                   color: '#0f0f11',
@@ -58,30 +64,34 @@ export function WalletButton() {
                 Wrong Network
               </motion.button>
             ) : (
-              <div className="flex items-center gap-2">
-                <motion.button
-                  onClick={openChainModal}
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-                  style={{
-                    background: 'var(--bg-glass)',
-                    border: '1px solid var(--bg-glass-border)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {chain.hasIcon && chain.iconUrl && (
-                    <img
-                      alt={chain.name ?? 'Chain icon'}
-                      src={chain.iconUrl}
-                      className="w-3.5 h-3.5 rounded-full"
-                    />
-                  )}
-                  <span>{chain.name}</span>
-                </motion.button>
+              <div className={`flex items-center gap-2 ${compact ? 'w-full flex-col sm:flex-row' : ''}`}>
+                {!compact && (
+                  <motion.button
+                    onClick={openChainModal}
+                    whileHover={{ scale: 1.02 }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs min-h-[40px]"
+                    style={{
+                      background: 'var(--bg-glass)',
+                      border: '1px solid var(--bg-glass-border)',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    {chain.hasIcon && chain.iconUrl && (
+                      <img
+                        alt={chain.name ?? 'Chain icon'}
+                        src={chain.iconUrl}
+                        className="w-3.5 h-3.5 rounded-full"
+                      />
+                    )}
+                    <span className="truncate max-w-[8rem]">{chain.name}</span>
+                  </motion.button>
+                )}
                 <motion.button
                   onClick={openAccountModal}
                   whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono min-h-[44px] ${
+                    compact ? 'w-full justify-center' : ''
+                  }`}
                   style={{
                     background: 'var(--bg-glass)',
                     border: '1px solid var(--gold-primary)',
@@ -89,11 +99,13 @@ export function WalletButton() {
                   }}
                 >
                   <div
-                    className="w-2 h-2 rounded-full"
+                    className="w-2 h-2 rounded-full shrink-0"
                     style={{ background: 'var(--gold-primary)' }}
                   />
-                  {account.displayName}
-                  {account.displayBalance ? ` · ${account.displayBalance}` : ''}
+                  <span className="truncate">{account.displayName}</span>
+                  {!compact && account.displayBalance ? (
+                    <span className="shrink-0"> · {account.displayBalance}</span>
+                  ) : null}
                 </motion.button>
               </div>
             )}
