@@ -26,6 +26,8 @@ import { shortAddress } from "@/lib/titan/format";
 import { parseWalletError } from "@/lib/titan/wallet-errors";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 
+import { ChessEscrowSandbox } from "./chess-escrow-sandbox";
+
 type ContractPlaygroundProps = {
   record: DeployedContractRecord;
 };
@@ -96,7 +98,7 @@ function SandboxPanel({
           functionName: "count",
         });
         setCount(value.toString());
-      } else {
+      } else if (templateId === "simple-storage") {
         const value = await readContractFunction<bigint>({
           contractAddress,
           abi,
@@ -233,6 +235,10 @@ function SandboxPanel({
             </Button>
           </div>
         </div>
+      )}
+
+      {templateId === "titan-chess-escrow" && (
+        <ChessEscrowSandbox contractAddress={contractAddress} recordId={record.id} abi={abi} />
       )}
 
       {templateId === "simple-storage" && (

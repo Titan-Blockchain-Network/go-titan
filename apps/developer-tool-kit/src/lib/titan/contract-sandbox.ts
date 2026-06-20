@@ -3,7 +3,7 @@ import type { Abi } from "viem";
 import { CONTRACT_TEMPLATES } from "@/lib/titan/contract-templates";
 import type { DeployedContractRecord } from "@/lib/titan/deployed-contracts-storage";
 
-export type SandboxTemplateId = "greeter" | "counter" | "simple-storage";
+export type SandboxTemplateId = "greeter" | "counter" | "simple-storage" | "titan-chess-escrow";
 
 export const SANDBOX_ABIS: Record<SandboxTemplateId, Abi> = {
   greeter: [
@@ -61,6 +61,71 @@ export const SANDBOX_ABIS: Record<SandboxTemplateId, Abi> = {
       outputs: [],
     },
   ],
+  "titan-chess-escrow": [
+    {
+      type: "function",
+      name: "owner",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "address" }],
+    },
+    {
+      type: "function",
+      name: "stockfishOperator",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "address" }],
+    },
+    {
+      type: "function",
+      name: "houseBankroll",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "queueLength",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "activeGames",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "minStake",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "maxStake",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "depositHouse",
+      stateMutability: "payable",
+      inputs: [],
+      outputs: [],
+    },
+    {
+      type: "function",
+      name: "startNextMatch",
+      stateMutability: "nonpayable",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+  ],
 };
 
 export function templateIdForContractName(contractName: string): SandboxTemplateId | null {
@@ -85,5 +150,10 @@ export function sandboxLabel(templateId: SandboxTemplateId): string {
 }
 
 function isSandboxTemplateId(value: string): value is SandboxTemplateId {
-  return value === "greeter" || value === "counter" || value === "simple-storage";
+  return (
+    value === "greeter" ||
+    value === "counter" ||
+    value === "simple-storage" ||
+    value === "titan-chess-escrow"
+  );
 }

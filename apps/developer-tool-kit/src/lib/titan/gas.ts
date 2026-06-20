@@ -27,11 +27,16 @@ export async function fetchTitanGasPriceWei(): Promise<bigint> {
   }
 }
 
-export async function estimateGasViaRpc(from: string, data: string, to?: string): Promise<bigint> {
+export async function estimateGasViaRpc(
+  from: string,
+  data: string,
+  to?: string,
+  valueWei?: bigint,
+): Promise<bigint> {
   const tx: Record<string, string> = {
     from,
     data,
-    value: "0x0",
+    value: valueWei != null && valueWei > BigInt(0) ? toHex(valueWei) : "0x0",
   };
   // Contract calls must include `to`; omitting it makes the node treat calldata as
   // contract-creation bytecode and fail with "invalid opcode 0xd0".

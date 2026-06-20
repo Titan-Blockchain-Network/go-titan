@@ -69,6 +69,8 @@ export async function writeContractFunction(input: {
   abi: Abi;
   functionName: string;
   args?: readonly unknown[];
+  /** Native TITAN to send with the call (wei). Required for payable functions like depositHouse(). */
+  valueWei?: bigint;
 }): Promise<string> {
   const provider = getEthereumProvider();
   if (!provider) {
@@ -86,7 +88,8 @@ export async function writeContractFunction(input: {
   let gasLimit: bigint;
   try {
     gasLimit =
-      (await estimateGasViaRpc(input.from, data, input.contractAddress)) + BigInt(50_000);
+      (await estimateGasViaRpc(input.from, data, input.contractAddress, input.valueWei)) +
+      BigInt(50_000);
   } catch (error) {
     throw new Error(parseWalletError(error, "Gas estimation failed."));
   }
@@ -102,7 +105,10 @@ export async function writeContractFunction(input: {
           from: input.from,
           to: input.contractAddress,
           data,
-          value: "0x0",
+          value:
+            input.valueWei != null && input.valueWei > BigInt(0)
+              ? toHex(input.valueWei)
+              : "0x0",
           gas: toHex(gasLimit),
           gasPrice: toHex(gasPrice),
         },

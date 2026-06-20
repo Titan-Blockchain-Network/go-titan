@@ -164,12 +164,26 @@ export function ContractStudio() {
 
       setDeployedContracts(
         addDeployedContract({
-          contractName: "Tracked contract",
+          contractName: selectedTemplate.name,
           contractAddress: candidate,
           transactionHash: null,
           deployer: null,
+          templateId: selectedTemplate.id,
         }),
       );
+      if (
+        isSandboxContract({
+          id: "track",
+          contractName: selectedTemplate.name,
+          contractAddress: candidate,
+          transactionHash: null,
+          deployer: null,
+          deployedAt: new Date().toISOString(),
+          templateId: selectedTemplate.id,
+        })
+      ) {
+        setActivePlayground(candidate);
+      }
       setTrackAddress("");
     } catch (error) {
       setTrackError(error instanceof Error ? error.message : "Could not verify contract address.");
@@ -688,6 +702,9 @@ export function ContractStudio() {
                   <Label htmlFor="track-contract" className="text-xs">
                     Track an existing contract address
                   </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    Select the matching template in step 1 (e.g. TitanChessEscrow) before adding.
+                  </p>
                   <Input
                     id="track-contract"
                     value={trackAddress}
