@@ -9,7 +9,9 @@ import { GameOverOverlay } from '@/components/ui/GameOverOverlay';
 import { NewGameModal } from '@/components/ui/NewGameModal';
 import { WagerBanner } from '@/components/ui/WagerBanner';
 import { useChessGame } from '@/hooks/useChessGame';
+import { useEscrowOperator } from '@/hooks/useEscrowOperator';
 import { useWagerSession } from '@/hooks/useWagerSession';
+import { EscrowOutcome } from '@/lib/escrow-abi';
 import type { Color } from 'chess.js';
 
 export function GamePage() {
@@ -42,6 +44,12 @@ export function GamePage() {
     onMatchStart: (type, color) => wagerCallbacks.current.onMatchStart(type, color),
     onMatchEnd: () => wagerCallbacks.current.onMatchEnd(),
   });
+
+  const operator = useEscrowOperator();
+  const [settlementStatus, setSettlementStatus] = useState<
+    'none' | 'pending' | 'submitting' | 'done'
+  >('none');
+  const settledGameIdRef = useRef<bigint | null>(null);
 
   const [boardFlipped, setBoardFlipped] = useState(false);
   const lastRoomFenRef = useRef('');
@@ -108,14 +116,63 @@ export function GamePage() {
     wager.settleSession,
   ]);
 
-  // Settle Stockfish wagers on game over
+  // Settle Stockfish wagers on game over + operator payout
   useEffect(() => {
     if (!isMatchActive || opponentType !== 'stockfish') return;
     if (!gameState.isGameOver) return;
+
     wager.settleSession();
-  }, [isMatchActive, opponentType, gameState.isGameOver, wager.settleSession]);
+
+    const gameId = wager.session.escrowGameId;
+    if (!wager.escrow.enabled || gameId == null || wager.session.isPractice) {
+      setSettlementStatus('none');
+      return;
+    }
+
+    if (settledGameIdRef.current === gameId) return;
+
+    const playerWon =
+      gameState.isCheckmate &&
+      ((gameState.turn === 'w' && playerColor === 'b') ||
+        (gameState.turn === 'b' && playerColor === 'w'));
+
+    let outcome = EscrowOutcome.Draw;
+    if (gameState.isCheckmate) {
+      outcome = playerWon ? EscrowOutcome.PlayerWins : EscrowOutcome.StockfishWins;
+    }
+
+    if (operator.isOperator) {
+      settledGameIdRef.current = gameId;
+      setSettlementStatus('submitting');
+      operator.reportResult(gameId, outcome);
+    } else {
+      setSettlementStatus('pending');
+    }
+  }, [
+    isMatchActive,
+    opponentType,
+    gameState.isGameOver,
+    gameState.isCheckmate,
+    gameState.isDraw,
+    gameState.turn,
+    playerColor,
+    wager.settleSession,
+    wager.session.escrowGameId,
+    wager.session.isPractice,
+    wager.escrow.enabled,
+    operator.isOperator,
+    operator.reportResult,
+  ]);
+
+  useEffect(() => {
+    if (operator.isConfirmed && settlementStatus === 'submitting') {
+      setSettlementStatus('done');
+    }
+  }, [operator.isConfirmed, settlementStatus]);
 
   const handleNewGame = useCallback(() => {
+    settledGameIdRef.current = null;
+    setSettlementStatus('none');
     wager.resetSession();
     endMatch();
     wager.openNewGameModal();
@@ -224,6 +281,7 @@ export function GamePage() {
                   gameState={gameState}
                   playerColor={playerColor}
                   wagerSession={wager.session}
+                  settlementStatus={settlementStatus}
                   onRematch={handleNewGame}
                 />
               )}
@@ -239,6 +297,7 @@ export function GamePage() {
           opponentType={opponentType}
           isMatchActive={isMatchActive}
           wagerSession={wager.session}
+          escrowOperator={operator}
           onDifficultyChange={updateDifficulty}
           onNewGame={handleNewGame}
           onFlipBoard={handleFlipBoard}

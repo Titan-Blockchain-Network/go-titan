@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { Abi, AbiParameter } from "viem";
 
+import { ChessEscrowGuide } from "@/app/(main)/dashboard/contracts/_components/chess-escrow-guide";
 import { ContractPlayground } from "@/app/(main)/dashboard/contracts/_components/contract-playground";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -128,13 +129,14 @@ export function ContractStudio() {
 
   function rememberDeployment(result: DeployResult, contractName: string) {
     const sandboxTemplateId = templateIdForContractName(contractName);
+    const templateKey = sandboxTemplateId ?? selectedTemplate.id;
     setDeployedContracts(
       addDeployedContract({
         contractName,
         contractAddress: result.contractAddress,
         transactionHash: result.transactionHash,
         deployer: address,
-        templateId: sandboxTemplateId,
+        templateId: templateKey,
       }),
     );
     if (sandboxTemplateId) {
@@ -183,12 +185,16 @@ export function ContractStudio() {
   function applyTemplate(nextTemplateId: string) {
     const template = CONTRACT_TEMPLATES.find((t) => t.id === nextTemplateId);
     if (!template) return;
+    const defaults = { ...(template.constructorDefaults ?? {}) };
+    if (template.id === "titan-chess-escrow" && address) {
+      defaults._stockfishOperator = address;
+    }
     setTemplateId(template.id);
     setSource(template.source);
     setCompiled(null);
     setCompileErrors([]);
     setHasCompiledOnce(false);
-    setConstructorArgValues(template.constructorDefaults ?? {});
+    setConstructorArgValues(defaults);
     setDeployError("");
     setDeployResult(null);
     setActiveStep("edit");
@@ -611,19 +617,27 @@ export function ContractStudio() {
                 {deployError && <p className="text-xs text-red-600 break-all">{deployError}</p>}
 
                 {deployResult && (
-                  <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm space-y-2">
-                    <p className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Contract deployed
-                    </p>
-                    <p className="text-xs break-all">
-                      <span className="text-muted-foreground">Address:</span>{" "}
-                      <span className="font-mono">{deployResult.contractAddress}</span>
-                    </p>
-                    <Button size="sm" onClick={() => setActiveStep("deployed")}>
-                      View in Deployed tab
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm space-y-2">
+                      <p className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Contract deployed
+                      </p>
+                      <p className="text-xs break-all">
+                        <span className="text-muted-foreground">Address:</span>{" "}
+                        <span className="font-mono">{deployResult.contractAddress}</span>
+                      </p>
+                      <Button size="sm" onClick={() => setActiveStep("deployed")}>
+                        View in Deployed tab
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {selectedTemplate.id === "titan-chess-escrow" && (
+                      <ChessEscrowGuide
+                        contractAddress={deployResult.contractAddress}
+                        operatorAddress={constructorArgValues._stockfishOperator}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -675,6 +689,7 @@ export function ContractStudio() {
                   {deployedContracts.map((record) => {
                     const sandboxReady = isSandboxContract(record);
                     const playgroundOpen = activePlayground === record.contractAddress;
+                    const isChessEscrow = record.templateId === "titan-chess-escrow";
 
                     return (
                       <div key={record.id}>
@@ -741,6 +756,11 @@ export function ContractStudio() {
                         {playgroundOpen && (
                           <div className="border-t bg-muted/10 px-3 py-3">
                             <ContractPlayground record={record} />
+                          </div>
+                        )}
+                        {isChessEscrow && (
+                          <div className="border-t bg-muted/10 px-3 py-3">
+                            <ChessEscrowGuide contractAddress={record.contractAddress} />
                           </div>
                         )}
                       </div>

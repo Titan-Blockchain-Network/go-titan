@@ -60,19 +60,32 @@ export function NewGameModal({
             style={{ borderColor: 'rgba(201,168,76,0.25)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2
-              className="text-xl font-bold mb-1"
-              style={{
-                background: 'linear-gradient(135deg, var(--gold-primary), var(--gold-secondary))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              New Wagered Game
-            </h2>
-            <p className="text-sm mb-5" style={{ color: 'var(--text-secondary)' }}>
-              Choose your opponent and stake TITAN to play for the pot.
-            </p>
+            <div className="flex items-center gap-3 mb-4">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, var(--gold-primary), var(--bronze))',
+                  color: '#0f0f11',
+                }}
+              >
+                ♟
+              </div>
+              <div>
+                <h2
+                  className="text-xl font-bold leading-tight"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--gold-primary), var(--gold-secondary))',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  Wager a match
+                </h2>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Stake TITAN · winner takes the pot
+                </p>
+              </div>
+            </div>
 
             {!isConnected && (
               <div

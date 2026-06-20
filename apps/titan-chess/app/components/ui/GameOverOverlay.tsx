@@ -5,10 +5,13 @@ import type { GameState } from '@/types/chess';
 import type { WagerSession } from '@/hooks/useWagerSession';
 import type { Color } from 'chess.js';
 
+type SettlementStatus = 'none' | 'pending' | 'submitting' | 'done';
+
 interface GameOverOverlayProps {
   gameState: GameState;
   playerColor: Color;
   wagerSession: WagerSession;
+  settlementStatus?: SettlementStatus;
   onRematch: () => void;
 }
 
@@ -16,6 +19,7 @@ export function GameOverOverlay({
   gameState,
   playerColor,
   wagerSession,
+  settlementStatus = 'none',
   onRematch,
 }: GameOverOverlayProps) {
   const { isCheckmate, isDraw, turn } = gameState;
@@ -29,11 +33,21 @@ export function GameOverOverlay({
 
   const payoutText = wagerSession.isPractice
     ? 'Practice game — no on-chain payout'
-    : youWon
-      ? `You won ${wagerSession.potTitan} TITAN`
-      : isDraw
-        ? `Draw — ${wagerSession.stake} TITAN refunded`
-        : `You lost ${wagerSession.stake} TITAN`;
+    : settlementStatus === 'pending'
+      ? `Outcome recorded — house operator will settle ${wagerSession.potTitan} TITAN on-chain`
+      : settlementStatus === 'submitting'
+        ? 'Settling wager on Titan…'
+        : settlementStatus === 'done'
+          ? youWon
+            ? `Paid out ${wagerSession.potTitan} TITAN on-chain`
+            : isDraw
+              ? `Draw — stakes refunded on-chain`
+              : `House won ${wagerSession.potTitan} TITAN on-chain`
+          : youWon
+            ? `You won ${wagerSession.potTitan} TITAN`
+            : isDraw
+              ? `Draw — ${wagerSession.stake} TITAN refunded`
+              : `You lost ${wagerSession.stake} TITAN`;
 
   return (
     <AnimatePresence>

@@ -7,8 +7,10 @@ import { MoveList } from './MoveList';
 import { StatusBar } from './StatusBar';
 import { WalletButton } from '@/components/wallet/WalletButton';
 import { WagerBanner } from '@/components/ui/WagerBanner';
+import { EscrowOperatorPanel } from '@/components/hud/EscrowOperatorPanel';
 import type { GameState } from '@/types/chess';
 import type { OpponentType, WagerSession } from '@/hooks/useWagerSession';
+import type { useEscrowOperator } from '@/hooks/useEscrowOperator';
 
 interface GameHUDProps {
   gameState: GameState;
@@ -18,6 +20,7 @@ interface GameHUDProps {
   opponentType: OpponentType | null;
   isMatchActive: boolean;
   wagerSession: WagerSession;
+  escrowOperator: ReturnType<typeof useEscrowOperator>;
   onDifficultyChange: (v: number) => void;
   onNewGame: () => void;
   onFlipBoard: () => void;
@@ -32,6 +35,7 @@ export function GameHUD({
   opponentType,
   isMatchActive,
   wagerSession,
+  escrowOperator,
   onDifficultyChange,
   onNewGame,
   onFlipBoard,
@@ -64,6 +68,8 @@ export function GameHUD({
       <TitanBalance />
 
       <WagerBanner session={wagerSession} onCancel={onCancelWager} />
+
+      <EscrowOperatorPanel operator={escrowOperator} />
 
       <div className="glass rounded-xl px-4 py-3">
         <StatusBar

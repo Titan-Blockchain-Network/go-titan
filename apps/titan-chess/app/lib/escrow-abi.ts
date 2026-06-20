@@ -79,6 +79,37 @@ export const TITAN_CHESS_ESCROW_ABI = [
   },
   {
     type: 'function',
+    name: 'stockfishOperator',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'nextGameId',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'startNextMatch',
+    stateMutability: 'payable',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'reportResult',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'gameId', type: 'uint256' },
+      { name: 'outcome', type: 'uint8' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'getGame',
     stateMutability: 'view',
     inputs: [{ name: 'gameId', type: 'uint256' }],

@@ -95,7 +95,7 @@ contract SimpleStorage {
     fileName: "TitanChessEscrow.sol",
     source: TITAN_CHESS_ESCROW_SOURCE,
     constructorDefaults: {
-      _stockfishOperator: "0x49077293fe7049400A91D14395dbCad16A98Ea47",
+      _stockfishOperator: "",
       _minStake: "10000000000000000",
       _maxStake: "1000000000000000000",
     },
