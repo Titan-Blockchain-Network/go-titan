@@ -66,21 +66,42 @@ async function ethCall(data: Hex): Promise<Hex> {
   return json.result;
 }
 
-async function readEscrowContract<T>(
-  functionName: 'getGame' | 'stockfishOperator',
-  args: readonly unknown[] = [],
-): Promise<T> {
+type GetGameResult = readonly [
+  Address,
+  bigint,
+  bigint,
+  number,
+  number,
+  Address,
+  bigint,
+  bigint,
+];
+
+async function readGetGame(gameId: bigint): Promise<GetGameResult> {
   const data = encodeFunctionData({
     abi: TITAN_CHESS_ESCROW_ABI,
-    functionName,
-    args,
+    functionName: 'getGame',
+    args: [gameId],
   });
   const result = await ethCall(data);
   return decodeFunctionResult({
     abi: TITAN_CHESS_ESCROW_ABI,
-    functionName,
+    functionName: 'getGame',
     data: result,
-  }) as T;
+  }) as GetGameResult;
+}
+
+async function readStockfishOperator(): Promise<Address> {
+  const data = encodeFunctionData({
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName: 'stockfishOperator',
+  });
+  const result = await ethCall(data);
+  return decodeFunctionResult({
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName: 'stockfishOperator',
+    data: result,
+  }) as Address;
 }
 
 export async function settleEscrowOnChain(input: {
@@ -109,9 +130,7 @@ export async function settleEscrowOnChain(input: {
   const account = privateKeyToAccount(pk as Hex);
   const walletClient = createWalletClient({ account, chain: titanChain, transport });
 
-  const [player, , , status] = await readEscrowContract<
-    readonly [Address, bigint, bigint, number, number, Address, bigint, bigint]
-  >('getGame', [input.gameId]);
+  const [player, , , status] = await readGetGame(input.gameId);
 
   if (Number(status) !== GAME_STATUS_ACTIVE) {
     throw new Error('Game is not active');
@@ -121,7 +140,7 @@ export async function settleEscrowOnChain(input: {
     throw new Error('Player does not own this game');
   }
 
-  const operator = await readEscrowContract<Address>('stockfishOperator');
+  const operator = await readStockfishOperator();
 
   if (operator.toLowerCase() !== account.address.toLowerCase()) {
     throw new Error('Server operator key does not match contract operator');
