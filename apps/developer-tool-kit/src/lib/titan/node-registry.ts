@@ -1,4 +1,4 @@
-import registry from "@/data/titan-node-registry.json";
+import registry from "@/config/titan-node-registry.json";
 
 export interface TitanRegistryNode {
   id: string;
