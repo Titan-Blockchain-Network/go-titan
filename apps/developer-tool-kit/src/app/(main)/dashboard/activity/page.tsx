@@ -36,25 +36,7 @@ import {
   AddressDetail,
   ExplorerDetailDrawer,
 } from "@/app/(main)/dashboard/activity/_components/explorer-detail-drawer";
-import { RpcSyncPanel } from "@/app/(main)/dashboard/activity/_components/rpc-sync-panel";
 import { ValidatorsPanel } from "@/app/(main)/dashboard/activity/_components/validators-panel";
-
-interface NodeInfo {
-  node: string;
-  nodeId?: string;
-  displayName?: string;
-  registryDroplet?: string;
-  host?: string;
-  port: number;
-  displayUrl?: string;
-  healthy: boolean;
-  peers: number;
-  chainId?: string;
-  blockNumber?: string;
-  gasPrice?: string;
-  discoveryMethod?: "bootstrap" | "p2p-gossip" | "direct-probe";
-  inMesh?: boolean;
-}
 
 interface Tx {
   blockHash?: string;
@@ -177,9 +159,7 @@ function ExplorerPageContent() {
   const skipUrlSearchRef = useRef(false);
   const [browseTab, setBrowseTab] = useState<"blocks" | "transactions" | "analytics" | "validators">("blocks");
   const [addressLabels, setAddressLabels] = useState<Record<string, string>>({});
-  const [nodes, setNodes] = useState<NodeInfo[]>([]);
-  const [nodesLoading, setNodesLoading] = useState(true);
-
+  const [gasPrice, setGasPrice] = useState<string>("—");
 
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [blocksLoading, setBlocksLoading] = useState(true);
@@ -245,17 +225,14 @@ function ExplorerPageContent() {
     syncUrlParam(null);
   }
 
-  // Load node overview (reused from old activity)
-  async function loadNodes() {
-    setNodesLoading(true);
+  async function loadGasPrice() {
     try {
-      const r = await fetch("/api/titan/rpc");
-      const j = await r.json();
-      setNodes(j.nodes ?? []);
+      const hex = (await rpc("eth_gasPrice", [], "node1", "C")) as string;
+      if (hex) {
+        setGasPrice(`${(BigInt(hex) / BigInt(1e9)).toString()} gwei`);
+      }
     } catch {
-      setNodes([]);
-    } finally {
-      setNodesLoading(false);
+      setGasPrice("—");
     }
   }
 
@@ -537,12 +514,14 @@ function ExplorerPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChain]);
 
-  // Auto-refresh nodes + detect new head and refresh blocks
   useEffect(() => {
-    loadNodes();
-    const id = setInterval(loadNodes, 10000);
-    return () => clearInterval(id);
-  }, []);
+    if (activeChain === "C") {
+      void loadGasPrice();
+      const id = setInterval(() => void loadGasPrice(), 30_000);
+      return () => clearInterval(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChain]);
 
   useEffect(() => {
     fetch("/api/titan/validators")
@@ -599,9 +578,8 @@ function ExplorerPageContent() {
     return () => observer.disconnect();
   }, [blocks.length, blocksLoading, hasMoreBlocks, loadOlder, loadingMore]);
 
-  const headBlock = blocks[0]?.number ? hexToNumber(blocks[0].number)?.toLocaleString() : nodes.find((n) => n.blockNumber)?.blockNumber;
-  const chainId = nodes.find((n) => n.chainId)?.chainId ?? "—";
-  const gasPrice = nodes.find((n) => n.gasPrice)?.gasPrice ?? "—";
+  const headBlock = blocks[0]?.number ? hexToNumber(blocks[0].number)?.toLocaleString() : undefined;
+  const chainId = String(titan.chainIdDec);
   const highestBlock = blocks[0]?.number ? hexToNumber(blocks[0].number) : null;
   const lowestBlock = blocks[blocks.length - 1]?.number ? hexToNumber(blocks[blocks.length - 1].number) : null;
   const loadedPages = Math.max(1, Math.ceil(blocks.length / BLOCKS_PAGE_SIZE));
@@ -644,13 +622,15 @@ function ExplorerPageContent() {
             size="sm"
             className="shrink-0"
             onClick={() => {
-              loadNodes();
-              if (activeChain === "C") loadRecentBlocks(BLOCKS_PAGE_SIZE);
+              if (activeChain === "C") {
+                void loadGasPrice();
+                loadRecentBlocks(BLOCKS_PAGE_SIZE);
+              }
               closeDrawer();
             }}
-            disabled={(activeChain === "C" && blocksLoading) || nodesLoading}
+            disabled={activeChain === "C" && blocksLoading}
           >
-            {blocksLoading || nodesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {blocksLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
         </div>
@@ -721,10 +701,6 @@ function ExplorerPageContent() {
           </>
         )}
       </div>
-
-      {activeChain === "C" && !titan.isLocalDev && nodes.length > 0 && (
-        <RpcSyncPanel nodes={nodes} loading={nodesLoading} headBlock={headBlock ?? null} />
-      )}
 
       {activeChain === "X" ? (
         <XChainPanel />

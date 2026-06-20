@@ -219,18 +219,11 @@ export async function GET() {
   const bootstrapNode = allNodes.find((n) => n.discoveryMethod === "bootstrap");
   const meshCount = normalizePeerCount(bootstrapNode?.peers) ?? 4;
 
-  const meshNodes = allNodes.map((n) => {
-    if (!n.inMesh && n.discoveryMethod !== "bootstrap") return n;
-    const count = normalizePeerCount(n.peers);
-    if (count != null && count > 0) return n;
-    return { ...n, peers: meshCount };
-  });
-
   return NextResponse.json({
     meshPeerCount: meshCount,
     networkHeadBlock: bootstrapNode?.blockNumber ?? null,
     rpcProbeNode: bootstrapNode?.displayName ?? bootstrapNode?.node ?? null,
-    nodes: meshNodes,
+    nodes: allNodes,
   });
 }
 

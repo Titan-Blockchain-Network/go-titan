@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 
-import { Activity, Loader2, RefreshCw, Server, Users } from "lucide-react";
+import { Loader2, Server, Users } from "lucide-react";
 
+import { RpcSyncPanel } from "@/app/(main)/dashboard/activity/_components/rpc-sync-panel";
+import { meshLabelForNode } from "@/lib/titan/node-display";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface NodeInfo {
@@ -38,9 +39,10 @@ interface NodeInfo {
 
 export default function NodesPage() {
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [meshPeerCount, setMeshPeerCount] = useState<number | null>(null);
+  const [networkHeadBlock, setNetworkHeadBlock] = useState<string | null>(null);
   const [publicRpcUrl, setPublicRpcUrl] = useState<string | null>(null);
-  const [bootstrapUrl, setBootstrapUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
@@ -51,10 +53,11 @@ export default function NodesPage() {
       ]);
       const j = await nodesRes.json();
       setNodes(j.nodes ?? []);
+      setMeshPeerCount(typeof j.meshPeerCount === "number" ? j.meshPeerCount : null);
+      setNetworkHeadBlock(typeof j.networkHeadBlock === "string" ? j.networkHeadBlock : null);
       if (configRes.ok) {
-        const cfg = (await configRes.json()) as { rpcUrl?: string; bootstrapUrl?: string };
+        const cfg = (await configRes.json()) as { rpcUrl?: string };
         setPublicRpcUrl(cfg.rpcUrl ?? null);
-        setBootstrapUrl(cfg.bootstrapUrl ?? null);
       }
     } finally {
       setLoading(false);
@@ -67,98 +70,46 @@ export default function NodesPage() {
     return () => clearInterval(id);
   }, []);
 
-  const apiNodes = nodes.filter((n) => n.source !== "peer" && n.blockNumber);
-  const blockHeights = apiNodes
-    .map((n) => Number.parseInt(n.blockNumber ?? "0", 10))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const maxBlock = blockHeights.length ? Math.max(...blockHeights) : null;
+  const headDisplay = networkHeadBlock
+    ? Number(networkHeadBlock).toLocaleString()
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Nodes</h1>
-          <p className="text-sm text-muted-foreground">
-            Configured nodes with full API metrics, plus P2P peers discovered via{" "}
-            <code className="font-mono text-xs">info.peers</code>
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          Refresh
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Server className="size-6 text-primary" />
+          Nodes
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Validator mesh, RPC endpoints, and C-Chain sync
+          {headDisplay ? ` · head #${headDisplay}` : ""}
+          {meshPeerCount != null ? ` · ${meshPeerCount} P2P peers` : ""}
+        </p>
       </div>
 
-      {maxBlock != null && apiNodes.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">C-chain sync</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground border-b">
-                <tr>
-                  <th className="py-2 text-left font-medium">Node</th>
-                  <th className="py-2 text-right font-medium">Block</th>
-                  <th className="py-2 text-right font-medium">Lag</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {apiNodes.map((info) => {
-                  const height = Number.parseInt(info.blockNumber ?? "0", 10);
-                  const lag = Number.isFinite(height) ? Math.max(0, maxBlock - height) : null;
-                  const label = info.displayName ?? info.nodeId ?? info.node;
-                  return (
-                    <tr key={info.nodeId ?? info.node}>
-                      <td className="py-2 text-xs">
-                        <span className="font-semibold">{label}</span>
-                        {info.nodeId && info.displayName && (
-                          <span className="block font-mono text-[10px] text-muted-foreground">
-                            {info.nodeId.replace(/^NodeID-/, "").slice(0, 16)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right font-mono tabular-nums">
-                        {info.blockNumber ?? "—"}
-                      </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {lag === 0 ? (
-                          <Badge className="bg-green-600">Synced</Badge>
-                        ) : lag != null ? (
-                          <span className="text-amber-600">{lag} behind</span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <p className="text-xs text-muted-foreground mt-3">
-              Head across probed API nodes: #{maxBlock.toLocaleString()}. P2P peers below are not HTTP-probed for block
-              height in production.
-            </p>
-          </CardContent>
-        </Card>
+      {nodes.length > 0 && (
+        <RpcSyncPanel
+          nodes={nodes}
+          loading={loading}
+          headBlock={networkHeadBlock ?? headDisplay}
+          meshPeerCount={meshPeerCount}
+        />
+      )}
+
+      {loading && nodes.length === 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading node mesh…
+        </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {nodes.length === 0 && !loading ? (
           <Card>
-            <CardContent className="py-8 text-sm text-muted-foreground space-y-2">
-              <p>
-                No nodes discovered. On Vercel set{" "}
-                <code className="font-mono">TITAN_NETWORK_HOST=167.99.239.111</code>,{" "}
-                <code className="font-mono">TITAN_NETWORK_SCHEME=https</code>,{" "}
-                <code className="font-mono">TITAN_NETWORK_PORT=443</code>, and{" "}
-                <code className="font-mono">TITAN_TLS_INSECURE_SKIP_VERIFY=1</code> (self-signed), then
-                redeploy.
-              </p>
+            <CardContent className="py-8 text-sm text-muted-foreground">
+              No nodes discovered. Check Explorer env vars (<code className="font-mono text-xs">TITAN_BOOTSTRAP_URL</code>
+              ) and redeploy.
             </CardContent>
           </Card>
         ) : null}
@@ -167,36 +118,23 @@ export default function NodesPage() {
           const label = info.displayName ?? info.nodeId ?? info.node;
           const endpoint =
             info.registryIp ?? info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`;
-          const sourceLabel =
-            info.source === "seed"
-              ? "bootstrap"
-              : info.source === "local"
-                ? "local"
-                : info.source === "peer"
-                  ? "P2P peer"
-                  : info.source;
           return (
             <Card key={info.nodeId ?? info.node}>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-3">
-                  <Server className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
+                  <Server className="size-5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
                     <CardTitle className="text-base break-all">{label}</CardTitle>
                     <p className="text-xs text-muted-foreground break-all">
                       {info.registryDroplet && <span className="font-mono">{info.registryDroplet} · </span>}
                       <span className="font-mono">{endpoint}</span>
-                      {info.registryRole ? ` · ${info.registryRole}` : sourceLabel ? ` · ${sourceLabel}` : ""}
+                      {info.registryRole ? ` · ${info.registryRole}` : ""}
                     </p>
-                    {info.nodeId && (
-                      <p className="text-[10px] text-muted-foreground font-mono break-all" title={info.nodeId}>
-                        {info.nodeId}
-                      </p>
-                    )}
                   </div>
                   {isPeer ? (
-                    <Badge className="bg-blue-500 text-white shrink-0">Connected</Badge>
+                    <Badge className="shrink-0 bg-blue-600">P2P</Badge>
                   ) : info.healthy ? (
-                    <Badge className="bg-green-500 text-white shrink-0">Healthy</Badge>
+                    <Badge className="shrink-0 bg-emerald-600">Healthy</Badge>
                   ) : (
                     <Badge variant="destructive" className="shrink-0">
                       Down
@@ -207,72 +145,37 @@ export default function NodesPage() {
               <CardContent className="space-y-2 text-sm">
                 {isPeer ? (
                   <>
-                    <Row label="Public IP" value={info.publicIp ?? endpoint} mono />
+                    <Row label="Connectivity" value={meshLabelForNode(info, meshPeerCount)} />
                     <Row label="Version" value={info.version ?? "—"} mono />
                     <Row
-                      label="Observed uptime"
-                      value={
-                        info.observedUptime !== undefined
-                          ? `${info.observedUptime}%`
-                          : "—"
-                      }
-                    />
-                    <Row
-                      label="Last sent"
-                      value={formatPeerTime(info.lastSent)}
-                      icon={<Activity className="h-3 w-3" />}
-                      mono
-                      small
-                    />
-                    <Row
-                      label="Last received"
-                      value={formatPeerTime(info.lastReceived)}
-                      mono
-                      small
-                    />
-                    <Row
-                      label="Benched chains"
-                      value={
-                        info.benched?.length ? String(info.benched.length) : "0"
-                      }
+                      label="Uptime"
+                      value={info.observedUptime !== undefined ? `${info.observedUptime}%` : "—"}
                     />
                     <p className="text-xs text-muted-foreground pt-1">
-                      Discovered via P2P — no HTTP API configured for this node.
+                      Seen via P2P gossip — block height shown on sync panel above when probed.
                     </p>
                   </>
                 ) : (
                   <>
-                    <Row label="Public IP" value={info.publicIp ?? endpoint} mono />
                     <Row
-                      label="Peers"
-                      value={info.peers != null ? String(info.peers) : info.inMesh ? "In mesh" : "—"}
-                      icon={<Users className="h-3 w-3" />}
+                      label="Connectivity"
+                      value={meshLabelForNode(info, meshPeerCount)}
+                      icon={<Users className="size-3" />}
                     />
+                    <Row label="Block" value={info.blockNumber ?? "—"} mono />
                     <Row label="Chain ID" value={info.chainId ?? "—"} mono />
-                    <Row label="Latest Block" value={info.blockNumber ?? "—"} mono />
-                    <Row label="Gas Price" value={info.gasPrice ?? "—"} mono />
+                    <Row label="Gas" value={info.gasPrice ?? "—"} mono />
                     <Row
-                      label="RPC (MetaMask)"
+                      label="C-Chain RPC"
                       value={
-                        publicRpcUrl ??
-                        `http://${info.host ?? "localhost"}:${info.port}/ext/bc/C/rpc`
+                        info.discoveryMethod === "bootstrap" && publicRpcUrl
+                          ? publicRpcUrl
+                          : `http://${info.host ?? "localhost"}:${info.port}/ext/bc/C/rpc`
                       }
                       mono
                       small
                     />
-                    <Row
-                      label="API probe"
-                      value={
-                        bootstrapUrl && info.source === "seed"
-                          ? bootstrapUrl
-                          : `${info.port === 443 ? "https" : "http"}://${info.host ?? "localhost"}${info.port === 443 || info.port === 80 ? "" : `:${info.port}`}`
-                      }
-                      mono
-                      small
-                    />
-                    {info.error && (
-                      <p className="text-xs text-red-500 break-all">{info.error}</p>
-                    )}
+                    {info.error && <p className="text-xs text-destructive break-all">{info.error}</p>}
                   </>
                 )}
               </CardContent>
@@ -282,13 +185,6 @@ export default function NodesPage() {
       </div>
     </div>
   );
-}
-
-function formatPeerTime(iso?: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
 }
 
 function Row({
@@ -305,8 +201,8 @@ function Row({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="flex justify-between items-start gap-2">
-      <span className="text-muted-foreground shrink-0 flex items-center gap-1">
+    <div className="flex items-start justify-between gap-2">
+      <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
         {icon}
         {label}
       </span>

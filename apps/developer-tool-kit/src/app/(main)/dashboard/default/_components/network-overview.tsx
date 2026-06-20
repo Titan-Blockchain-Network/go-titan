@@ -1,32 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Blocks, Network, Rocket, Server } from "lucide-react";
 
 import { APP_CONFIG } from "@/config/app-config";
+import { blockLabelForNode, meshLabelForNode } from "@/lib/titan/node-display";
 import { Badge } from "@/components/ui/badge";
-import { useNetworkStatusStore } from "@/stores/titan/network-status-store";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNetworkStatusStore } from "@/stores/titan/network-status-store";
 
-function StatCard({ title, value, sub, ok }: { title: string; value: string; sub?: string; ok?: boolean }) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        {ok !== undefined &&
-          (ok ? (
-            <CheckCircle2 className="size-4 text-emerald-500" />
-          ) : (
-            <AlertCircle className="size-4 text-amber-500" />
-          ))}
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tabular-nums">{value}</div>
-        {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+const QUICK_LINKS = [
+  { href: "/dashboard/activity", label: "Chain Explorer", icon: Blocks, desc: "Blocks & transactions" },
+  { href: "/dashboard/nodes", label: "Nodes", icon: Server, desc: "RPC sync & validators" },
+  { href: "/dashboard/ecosystem", label: "Launchpad", icon: Rocket, desc: "Apps & escrow" },
+] as const;
 
 export function NetworkOverview() {
   const nodes = useNetworkStatusStore((s) => s.nodes);
@@ -35,109 +23,151 @@ export function NetworkOverview() {
   const runtime = useNetworkStatusStore((s) => s.runtime);
 
   const bootstrap = nodes.find((n) => n.discoveryMethod === "bootstrap");
-  const meshValidators = nodes.filter((n) => n.inMesh || n.discoveryMethod === "bootstrap").length;
+  const networkHead = bootstrap?.blockNumber ?? nodes.find((n) => n.blockNumber)?.blockNumber ?? null;
+  const validators = nodes.filter(
+    (n) => n.inMesh || n.discoveryMethod === "bootstrap" || n.discoveryMethod === "direct-probe",
+  );
   const healthyCount = nodes.filter((n) => n.healthy).length;
-  const blockNumber = bootstrap?.blockNumber ?? nodes.find((n) => n.blockNumber)?.blockNumber ?? "—";
-  const meshPeers =
-    (typeof meshPeerCount === "number" && Number.isFinite(meshPeerCount) ? meshPeerCount : null) ??
-    (typeof bootstrap?.peers === "number" ? bootstrap.peers : null) ??
-    4;
-  const operational = healthyCount > 0 && blockNumber !== "—";
+  const operational = healthyCount > 0 && networkHead != null;
+
+  const lineup = [...nodes]
+    .filter((n) => n.discoveryMethod !== "p2p-gossip" || n.displayName)
+    .sort((a, b) => {
+      const rank = (n: (typeof nodes)[0]) => {
+        if (n.discoveryMethod === "bootstrap") return 0;
+        if (n.discoveryMethod === "direct-probe") return 1;
+        return 2;
+      };
+      return rank(a) - rank(b) || (a.displayName ?? a.node).localeCompare(b.displayName ?? b.node);
+    })
+    .slice(0, 8);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Network</h1>
-          <p className="text-sm text-muted-foreground">
-            {runtime?.networkName ?? APP_CONFIG.titan.networkName} validator mesh
-          </p>
+      <div className="rounded-xl border bg-linear-to-br from-primary/5 via-background to-muted/30 p-5 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Network className="size-6 text-primary" />
+              {runtime?.networkName ?? APP_CONFIG.titan.networkName}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Chain {APP_CONFIG.titan.chainIdDec} ·{" "}
+              {validators.length > 0 ? `${validators.length} validators live` : "Syncing mesh"}
+              {meshPeerCount != null && rpcProbeNode
+                ? ` · ${meshPeerCount} P2P peers on ${rpcProbeNode}`
+                : ""}
+            </p>
+          </div>
+          <Badge variant={operational ? "default" : "outline"} className="w-fit gap-1.5 px-3 py-1">
+            <span
+              className={`size-2 rounded-full ${operational ? "bg-emerald-400" : "bg-amber-400"}`}
+            />
+            {operational ? "Operational" : "Syncing"}
+          </Badge>
         </div>
-        <Badge variant={operational ? "default" : "outline"} className="w-fit gap-1.5">
-          <span
-            className={`size-2 rounded-full ${operational ? "bg-emerald-400" : "bg-amber-400"}`}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <Metric label="C-Chain head" value={networkHead ?? "—"} />
+          <Metric
+            label="Mesh"
+            value={meshPeerCount != null ? `${meshPeerCount} peers` : "—"}
+            sub="on public RPC node"
           />
-          {operational ? "Operational" : "Syncing"}
-        </Badge>
+          <Metric
+            label="Probed"
+            value={`${healthyCount}/${nodes.length || "—"}`}
+            sub="API healthy"
+          />
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Validators"
-          value={String(meshValidators || nodes.length)}
-          sub={rpcProbeNode ? `via ${rpcProbeNode}` : "In mesh"}
-          ok={meshValidators >= 1}
-        />
-        <StatCard title="Latest block" value={blockNumber} sub="C-Chain head" ok={blockNumber !== "—"} />
-        <StatCard
-          title="Mesh peers"
-          value={String(meshPeers)}
-          sub="P2P connections"
-          ok={meshPeers >= 1}
-        />
-        <StatCard
-          title="Healthy nodes"
-          value={String(healthyCount || nodes.length)}
-          sub={`of ${nodes.length} probed`}
-          ok={healthyCount > 0}
-        />
+      <div className="grid gap-3 sm:grid-cols-3">
+        {QUICK_LINKS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href} className="group block">
+              <Card className="h-full transition-colors hover:border-primary/40 hover:bg-muted/20">
+                <CardContent className="flex items-center gap-3 pt-5">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50">
+                    <Icon className="size-4 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-        {nodes.map((info) => (
-          <Card key={info.nodeId ?? info.node}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-base font-semibold">
-                  {info.displayName ?? info.nodeId ?? info.node}
-                </CardTitle>
-                {info.discoveryMethod === "bootstrap" ? (
-                  <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    Public RPC
-                  </Badge>
-                ) : info.discoveryMethod === "direct-probe" ? (
-                  <Badge className="shrink-0 bg-emerald-600 text-[10px]">Direct API</Badge>
-                ) : info.inMesh ? (
-                  <Badge variant="outline" className="shrink-0 text-[10px]">
-                    P2P mesh
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {info.registryDroplet && <span className="font-mono">{info.registryDroplet} · </span>}
-                <span className="font-mono">
-                  {info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`}
-                </span>
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Mesh</span>
-                <span className="font-medium">
-                  {info.discoveryMethod === "bootstrap" || info.discoveryMethod === "direct-probe"
-                    ? `${typeof info.peers === "number" ? info.peers : meshPeers} peers`
-                    : info.inMesh
-                      ? `${meshPeers} in mesh`
-                      : "—"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Block</span>
-                <span className="font-mono font-medium">{info.blockNumber ?? "—"}</span>
-              </div>
-              {info.error && <p className="text-xs text-destructive break-all">{info.error}</p>}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {lineup.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base">Validator lineup</CardTitle>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" asChild>
+              <Link href="/dashboard/nodes">
+                RPC & node details
+                <ArrowRight className="size-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {lineup.map((info) => {
+                const block = blockLabelForNode(info, networkHead);
+                return (
+                  <div
+                    key={info.nodeId ?? info.node}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`size-2 shrink-0 rounded-full ${info.healthy ? "bg-emerald-500" : "bg-amber-500"}`}
+                      />
+                      <span className="font-medium truncate">
+                        {info.displayName ?? info.nodeId ?? info.node}
+                      </span>
+                      {info.discoveryMethod === "bootstrap" && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          RPC
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <span>{meshLabelForNode(info, meshPeerCount)}</span>
+                      <span className="font-mono tabular-nums">
+                        #{block.text}
+                        {block.shared && <span className="ml-1 font-sans">(head)</span>}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-xs text-muted-foreground">
-        MetaMask RPC and chain config live on{" "}
+        Wallet & RPC setup →{" "}
         <Link href="/dashboard/developers" className="text-foreground underline-offset-4 hover:underline">
           Developer Connection
         </Link>
-        .
       </p>
+    </div>
+  );
+}
+
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-background/80 px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="font-semibold text-lg tabular-nums tracking-tight">{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }

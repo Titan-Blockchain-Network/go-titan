@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { meshLabelForNode } from "@/lib/titan/node-display";
 import { cn } from "@/lib/utils";
 
 export interface RpcSyncNode {
@@ -49,10 +50,12 @@ export function RpcSyncPanel({
   nodes,
   loading,
   headBlock,
+  meshPeerCount = null,
 }: {
   nodes: RpcSyncNode[];
   loading: boolean;
   headBlock?: string | null;
+  meshPeerCount?: number | null;
 }) {
   if (nodes.length === 0) return null;
 
@@ -71,9 +74,9 @@ export function RpcSyncPanel({
               inSync ? "bg-emerald-500" : loading ? "bg-muted-foreground/40" : "bg-amber-500",
             )}
           />
-          RPC sync
+          Validator RPC sync
           <span className="font-normal text-muted-foreground">
-            {sorted.length} endpoint{sorted.length === 1 ? "" : "s"}
+            {sorted.length} node{sorted.length === 1 ? "" : "s"}
             {inSync ? " · aligned" : head ? " · checking" : ""}
           </span>
         </div>
@@ -108,9 +111,17 @@ export function RpcSyncPanel({
                 <p className="truncate text-sm font-medium leading-tight">{name}</p>
                 <p className="mt-0.5 font-mono text-xs text-muted-foreground">
                   {block ? `#${Number(block).toLocaleString()}` : "—"}
-                  {node.discoveryMethod === "p2p-gossip" && block && head && block === head && (
-                    <span className="ml-1 font-sans text-[10px]">(shared)</span>
+                  {block && head && block !== head && (
+                    <span className="ml-1 font-sans text-amber-600">
+                      ({Number(head) - Number(block)} behind)
+                    </span>
                   )}
+                  {node.discoveryMethod === "p2p-gossip" && block && head && block === head && (
+                    <span className="ml-1 font-sans text-[10px]">(head)</span>
+                  )}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                  {meshLabelForNode(node, meshPeerCount)}
                 </p>
               </div>
               <Badge variant={role.variant} className="shrink-0 px-1.5 text-[10px]">
