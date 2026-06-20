@@ -107,10 +107,10 @@ async function jsonRpc(url: string, method: string, params: unknown[] = [], time
 }
 
 export async function GET() {
-  const nodes = await discoverTitanNodes();
+  const targets = await discoverTitanNodes();
 
   const results = await Promise.allSettled(
-    nodes.map(async ({ node, rpc, port, host, nodeId, displayUrl, source }) => {
+    targets.map(async ({ node, rpc, port, host, nodeId, displayUrl, source }) => {
       const cRpc = `${rpc}/ext/bc/C/rpc`;
       const infoRpc = `${rpc}/ext/info`;
       const healthRpc = `${rpc}/ext/health`;
@@ -180,12 +180,12 @@ export async function GET() {
       return rest;
     }
     return {
-      node: nodes[i].node,
-      nodeId: nodes[i].nodeId,
-      host: nodes[i].host,
-      port: nodes[i].port,
-      displayUrl: nodes[i].displayUrl,
-      source: nodes[i].source,
+      node: targets[i].node,
+      nodeId: targets[i].nodeId,
+      host: targets[i].host,
+      port: targets[i].port,
+      displayUrl: targets[i].displayUrl,
+      source: targets[i].source,
       healthy: false,
       peers: 0,
       error: String((r as PromiseRejectedResult).reason),
@@ -219,7 +219,7 @@ export async function GET() {
   const bootstrapNode = allNodes.find((n) => n.discoveryMethod === "bootstrap");
   const meshCount = normalizePeerCount(bootstrapNode?.peers) ?? 4;
 
-  const nodes = allNodes.map((n) => {
+  const meshNodes = allNodes.map((n) => {
     if (!n.inMesh && n.discoveryMethod !== "bootstrap") return n;
     const count = normalizePeerCount(n.peers);
     if (count != null && count > 0) return n;
@@ -230,7 +230,7 @@ export async function GET() {
     meshPeerCount: meshCount,
     networkHeadBlock: bootstrapNode?.blockNumber ?? null,
     rpcProbeNode: bootstrapNode?.displayName ?? bootstrapNode?.node ?? null,
-    nodes,
+    nodes: meshNodes,
   });
 }
 
@@ -376,6 +376,7 @@ export async function POST(req: NextRequest) {
     if (chain === "INFO") path = "/ext/info";
     else if (chain === "HEALTH") path = "/ext/health";
     else if (chain === "P") path = "/ext/bc/P";
+    else if (chain === "X") path = "/ext/bc/X";
 
     const url = `${base}${path}`;
 
