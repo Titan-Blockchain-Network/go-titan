@@ -125,6 +125,46 @@ export const SANDBOX_ABIS: Record<SandboxTemplateId, Abi> = {
       inputs: [],
       outputs: [{ type: "uint256" }],
     },
+    {
+      type: "function",
+      name: "nextGameId",
+      stateMutability: "view",
+      inputs: [],
+      outputs: [{ type: "uint256" }],
+    },
+    {
+      type: "function",
+      name: "getGame",
+      stateMutability: "view",
+      inputs: [{ name: "gameId", type: "uint256" }],
+      outputs: [
+        { name: "player", type: "address" },
+        { name: "playerStake", type: "uint256" },
+        { name: "stockfishStake", type: "uint256" },
+        { name: "status", type: "uint8" },
+        { name: "outcome", type: "uint8" },
+        { name: "winner", type: "address" },
+        { name: "startedAt", type: "uint256" },
+        { name: "finishedAt", type: "uint256" },
+      ],
+    },
+    {
+      type: "function",
+      name: "reportResult",
+      stateMutability: "nonpayable",
+      inputs: [
+        { name: "gameId", type: "uint256" },
+        { name: "outcome", type: "uint8" },
+      ],
+      outputs: [],
+    },
+    {
+      type: "function",
+      name: "cancelActiveGame",
+      stateMutability: "nonpayable",
+      inputs: [{ name: "gameId", type: "uint256" }],
+      outputs: [],
+    },
   ],
 };
 

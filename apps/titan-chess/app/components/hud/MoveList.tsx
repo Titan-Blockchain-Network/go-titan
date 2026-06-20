@@ -67,7 +67,7 @@ export function MoveList({ moves, mobile = false }: MoveListProps) {
       style={{ height: mobile ? '180px' : '260px' }}
     >
       {!mobile && (
-        <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--bg-glass-border)' }}>
+        <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--bg-glass-border)' }}>
           <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
             Move History
           </span>

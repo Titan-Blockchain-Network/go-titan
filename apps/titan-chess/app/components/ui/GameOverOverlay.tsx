@@ -31,23 +31,29 @@ export function GameOverOverlay({
 
   const winner = isCheckmate ? (turn === 'w' ? 'Black' : 'White') : null;
 
+  const stockfishWon = isCheckmate && !youWon;
+
   const payoutText = wagerSession.isPractice
     ? 'Practice game — no on-chain payout'
     : settlementStatus === 'pending'
-      ? `Outcome recorded — house operator will settle ${wagerSession.potTitan} TITAN on-chain`
+      ? `Outcome recorded — settlement will complete shortly (${wagerSession.potTitan} TITAN)`
       : settlementStatus === 'submitting'
         ? 'Settling wager on Titan…'
         : settlementStatus === 'done'
           ? youWon
-            ? `Paid out ${wagerSession.potTitan} TITAN on-chain`
+            ? `Paid out ${wagerSession.potTitan} TITAN to your wallet`
             : isDraw
               ? `Draw — stakes refunded on-chain`
-              : `House won ${wagerSession.potTitan} TITAN on-chain`
+              : stockfishWon
+                ? `${wagerSession.potTitan} TITAN returned to the house pool`
+                : `House won ${wagerSession.potTitan} TITAN on-chain`
           : youWon
             ? `You won ${wagerSession.potTitan} TITAN`
             : isDraw
               ? `Draw — ${wagerSession.stake} TITAN refunded`
-              : `You lost ${wagerSession.stake} TITAN`;
+              : stockfishWon
+                ? `Stockfish wins — ${wagerSession.stake} TITAN goes to the house pool`
+                : `You lost ${wagerSession.stake} TITAN`;
 
   return (
     <AnimatePresence>

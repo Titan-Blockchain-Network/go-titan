@@ -27,7 +27,7 @@ export function TitanBalance({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div
-      className={embedded ? 'p-0' : 'glass rounded-xl p-4'}
+      className={embedded ? 'p-0' : 'glass hud-card rounded-xl'}
       style={embedded ? undefined : { borderColor: 'rgba(201, 168, 76, 0.2)' }}
     >
       <div className="flex items-center justify-between mb-1">

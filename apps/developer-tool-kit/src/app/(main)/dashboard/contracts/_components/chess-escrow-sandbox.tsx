@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Coins, FlaskConical, Loader2, Play, RefreshCw } from "lucide-react";
+import { AlertTriangle, Coins, FlaskConical, Loader2, Play, RefreshCw, Swords } from "lucide-react";
 import { formatEther, parseEther, type Abi } from "viem";
 
 import { APP_CONFIG } from "@/config/app-config";
@@ -25,6 +25,20 @@ type ChessEscrowSandboxProps = {
   abi: Abi;
 };
 
+const GAME_STATUS = ["Active", "Finished", "Cancelled"] as const;
+const OUTCOMES = [
+  { value: 1, label: "Player wins" },
+  { value: 2, label: "Stockfish wins" },
+  { value: 3, label: "Draw" },
+] as const;
+
+type ActiveGameInfo = {
+  gameId: string;
+  player: string;
+  stake: string;
+  status: string;
+};
+
 type EscrowState = {
   owner: string;
   operator: string;
@@ -33,6 +47,7 @@ type EscrowState = {
   activeGames: string;
   minStake: string;
   maxStake: string;
+  activeGame: ActiveGameInfo | null;
 };
 
 export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscrowSandboxProps) {
@@ -48,6 +63,7 @@ export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscr
   const [hasBytecode, setHasBytecode] = useState<boolean | null>(null);
   const [networkName, setNetworkName] = useState("Titan Network");
   const [depositTitan, setDepositTitan] = useState("2");
+  const [resolveOutcome, setResolveOutcome] = useState("2");
   const [state, setState] = useState<EscrowState | null>(null);
 
   useEffect(() => {
@@ -64,7 +80,7 @@ export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscr
         throw new Error(`No contract at ${contractAddress} on ${networkName}.`);
       }
 
-      const [owner, operator, houseBankroll, queueLength, activeGames, minStake, maxStake] =
+      const [owner, operator, houseBankroll, queueLength, activeGames, minStake, maxStake, nextGameId] =
         await Promise.all([
           readContractFunction<string>({ contractAddress, abi, functionName: "owner" }),
           readContractFunction<string>({ contractAddress, abi, functionName: "stockfishOperator" }),
@@ -73,7 +89,32 @@ export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscr
           readContractFunction<bigint>({ contractAddress, abi, functionName: "activeGames" }),
           readContractFunction<bigint>({ contractAddress, abi, functionName: "minStake" }),
           readContractFunction<bigint>({ contractAddress, abi, functionName: "maxStake" }),
+          readContractFunction<bigint>({ contractAddress, abi, functionName: "nextGameId" }),
         ]);
+
+      let activeGame: ActiveGameInfo | null = null;
+      if (Number(activeGames) > 0) {
+        for (let id = Number(nextGameId) - 1; id >= 0; id--) {
+          const game = await readContractFunction<
+            readonly [string, bigint, bigint, number, number, string, bigint, bigint]
+          >({
+            contractAddress,
+            abi,
+            functionName: "getGame",
+            args: [BigInt(id)],
+          });
+          const statusIdx = Number(game[3]);
+          if (statusIdx === 0) {
+            activeGame = {
+              gameId: String(id),
+              player: game[0],
+              stake: formatEther(game[1]),
+              status: GAME_STATUS[statusIdx] ?? "Unknown",
+            };
+            break;
+          }
+        }
+      }
 
       setState({
         owner,
@@ -83,6 +124,7 @@ export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscr
         activeGames: activeGames.toString(),
         minStake: formatEther(minStake),
         maxStake: formatEther(maxStake),
+        activeGame,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read escrow.");
@@ -195,6 +237,81 @@ export function ChessEscrowSandbox({ contractAddress, recordId, abi }: ChessEscr
           </Button>
         )}
       </div>
+
+      {state?.activeGame && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-medium text-amber-900 dark:text-amber-200">
+                Stuck match — Game #{state.activeGame.gameId} still active on-chain
+              </p>
+              <p className="text-muted-foreground">
+                The chess game may have ended in the browser, but{" "}
+                <span className="font-mono">reportResult()</span> was never sent. Player{" "}
+                <span className="font-mono">{shortAddress(state.activeGame.player)}</span> ·{" "}
+                {state.activeGame.stake} T stake locked until settled.
+              </p>
+            </div>
+          </div>
+
+          {isOperator ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor={`outcome-${recordId}`} className="text-xs">
+                  reportResult(gameId, outcome)
+                </Label>
+                <select
+                  id={`outcome-${recordId}`}
+                  value={resolveOutcome}
+                  onChange={(e) => setResolveOutcome(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                >
+                  {OUTCOMES.map((o) => (
+                    <option key={o.value} value={String(o.value)}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                size="sm"
+                onClick={() =>
+                  void runWrite("reportResult", [
+                    BigInt(state.activeGame!.gameId),
+                    Number(resolveOutcome),
+                  ])
+                }
+                disabled={writing}
+              >
+                {writing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Swords className="h-3.5 w-3.5" />}
+                Settle Game #{state.activeGame.gameId}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Connect the <strong>operator</strong> wallet ({shortAddress(state.operator)}) to call{" "}
+              <span className="font-mono">reportResult</span>.
+            </p>
+          )}
+
+          {isOwner && (
+            <div className="pt-1 border-t border-amber-500/20">
+              <p className="text-[10px] text-muted-foreground mb-2">
+                Emergency only — refunds the player and returns house stake to the pool (not a Stockfish win payout).
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void runWrite("cancelActiveGame", [BigInt(state.activeGame!.gameId)])}
+                disabled={writing}
+              >
+                cancelActiveGame(#{state.activeGame.gameId})
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="rounded-md border bg-background/80 p-3 space-y-2">
         <div className="flex items-center gap-2 text-sm font-medium">

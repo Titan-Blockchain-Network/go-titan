@@ -18,7 +18,7 @@ export function WagerBanner({ session, houseUnderfunded, onCancel }: WagerBanner
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-xl px-4 py-3 mb-3"
+      className="glass hud-card rounded-xl mb-3"
       style={{
         borderColor: isWaiting ? 'rgba(201,168,76,0.25)' : 'rgba(34,197,94,0.25)',
       }}

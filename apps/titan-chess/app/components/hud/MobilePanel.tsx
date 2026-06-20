@@ -15,7 +15,7 @@ export function MobilePanel({ title, defaultOpen = false, children }: MobilePane
       open={defaultOpen}
     >
       <summary
-        className="px-4 py-3.5 cursor-pointer list-none flex items-center justify-between text-xs uppercase tracking-widest min-h-[48px] [&::-webkit-details-marker]:hidden"
+        className="px-5 py-4 cursor-pointer list-none flex items-center justify-between text-xs uppercase tracking-widest min-h-[48px] [&::-webkit-details-marker]:hidden"
         style={{ color: 'var(--text-secondary)' }}
       >
         <span>{title}</span>
@@ -27,7 +27,7 @@ export function MobilePanel({ title, defaultOpen = false, children }: MobilePane
           ▼
         </span>
       </summary>
-      <div className="px-4 pb-4 border-t" style={{ borderColor: 'var(--bg-glass-border)' }}>
+      <div className="px-5 pb-5 border-t" style={{ borderColor: 'var(--bg-glass-border)' }}>
         {children}
       </div>
     </details>

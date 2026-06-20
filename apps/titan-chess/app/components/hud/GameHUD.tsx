@@ -7,6 +7,7 @@ import { MoveList } from './MoveList';
 import { StatusBar } from './StatusBar';
 import { WalletButton } from '@/components/wallet/WalletButton';
 import { WagerBanner } from '@/components/ui/WagerBanner';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { EscrowOperatorPanel } from '@/components/hud/EscrowOperatorPanel';
 import { MobilePanel } from '@/components/hud/MobilePanel';
 import type { GameState } from '@/types/chess';
@@ -115,8 +116,8 @@ export function GameHUD({
         className="hidden lg:flex flex-col gap-3 w-full lg:w-72 xl:w-80 shrink-0"
       >
         <div
-          className="glass rounded-xl px-4 py-3 flex items-center justify-between gap-2"
-          style={{ borderColor: 'rgba(201,168,76,0.15)' }}
+          className="glass hud-card rounded-xl flex items-center justify-between gap-2"
+          style={{ borderColor: 'var(--accent-border)' }}
         >
           <div>
             <div className="text-xs uppercase tracking-widest mb-0.5" style={{ color: 'var(--text-secondary)' }}>
@@ -133,7 +134,9 @@ export function GameHUD({
         {wagerBanner}
         <EscrowOperatorPanel operator={escrowOperator} />
 
-        <div className="glass rounded-xl px-4 py-3">{statusBar}</div>
+        <ThemeSwitcher />
+
+        <div className="glass hud-card rounded-xl">{statusBar}</div>
 
         {showAiSlider && (
           <DifficultySlider
@@ -155,7 +158,7 @@ export function GameHUD({
 
       {/* Mobile panels — board stays on top in GamePage */}
       <div className="flex flex-col gap-3 w-full lg:hidden pb-24">
-        <div className="glass rounded-xl px-4 py-3">{statusBar}</div>
+        <div className="glass hud-card rounded-xl">{statusBar}</div>
         {wagerBanner}
 
         <MobilePanel title="Wallet & balance" defaultOpen={false}>

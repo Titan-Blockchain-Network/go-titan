@@ -8,12 +8,14 @@ import { GameHUD } from '@/components/hud/GameHUD';
 import { GameOverOverlay } from '@/components/ui/GameOverOverlay';
 import { NewGameModal } from '@/components/ui/NewGameModal';
 import { WalletButton } from '@/components/wallet/WalletButton';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useChessGame } from '@/hooks/useChessGame';
 import { useEscrowOperator } from '@/hooks/useEscrowOperator';
 import { useWagerSession } from '@/hooks/useWagerSession';
 import { EscrowOutcome } from '@/lib/escrow-abi';
 import { TITAN_NETWORK } from '@/lib/titan-config';
 import { parseEther } from 'viem';
+import { useAccount } from 'wagmi';
 import type { Color } from 'chess.js';
 
 export function GamePage() {
@@ -48,6 +50,7 @@ export function GamePage() {
   });
 
   const operator = useEscrowOperator();
+  const { address } = useAccount();
   const [settlementStatus, setSettlementStatus] = useState<
     'none' | 'pending' | 'submitting' | 'done'
   >('none');
@@ -143,21 +146,55 @@ export function GamePage() {
       outcome = playerWon ? EscrowOutcome.PlayerWins : EscrowOutcome.StockfishWins;
     }
 
+    settledGameIdRef.current = gameId;
+
     if (operator.isOperator) {
-      settledGameIdRef.current = gameId;
       setSettlementStatus('submitting');
       operator.reportResult(gameId, outcome);
-    } else {
-      setSettlementStatus('pending');
+      return;
     }
+
+    if (!address) {
+      setSettlementStatus('pending');
+      return;
+    }
+
+    setSettlementStatus('submitting');
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/escrow/settle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gameId: gameId.toString(),
+            outcome,
+            fen: gameState.fen,
+            playerColor,
+            playerAddress: address,
+          }),
+        });
+        if (cancelled) return;
+        setSettlementStatus(res.ok ? 'done' : 'pending');
+      } catch {
+        if (!cancelled) setSettlementStatus('pending');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     isMatchActive,
     opponentType,
     gameState.isGameOver,
     gameState.isCheckmate,
     gameState.isDraw,
+    gameState.fen,
     gameState.turn,
     playerColor,
+    address,
     wager.settleSession,
     wager.session.escrowGameId,
     wager.session.isPractice,
@@ -239,6 +276,9 @@ export function GamePage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <div className="w-28 sm:w-40 shrink-0 lg:hidden">
+            <ThemeSwitcher compact />
+          </div>
           <div
             className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs"
             style={{

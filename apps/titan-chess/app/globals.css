@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-:root {
+:root,
+[data-theme='gold'] {
   --bg-primary: #0f0f11;
   --bg-secondary: #161618;
   --bg-glass: rgba(255, 255, 255, 0.04);
@@ -9,6 +10,10 @@
   --gold-secondary: #e8c97a;
   --gold-dim: rgba(201, 168, 76, 0.15);
   --bronze: #8a6234;
+  --accent-primary: #c9a84c;
+  --accent-secondary: #e8c97a;
+  --accent-dim: rgba(201, 168, 76, 0.15);
+  --accent-border: rgba(201, 168, 76, 0.35);
   --text-primary: #f0ead6;
   --text-secondary: #8a8a9a;
   --board-light: #f0d9b5;
@@ -17,6 +22,34 @@
   --board-legal: rgba(20, 85, 30, 0.35);
   --board-last-move: rgba(155, 199, 0, 0.41);
   --board-check: rgba(220, 30, 30, 0.5);
+}
+
+[data-theme='blue'] {
+  --gold-primary: #3b82f6;
+  --gold-secondary: #60a5fa;
+  --gold-dim: rgba(59, 130, 246, 0.15);
+  --bronze: #1d4ed8;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #60a5fa;
+  --accent-dim: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.35);
+  --board-selected: rgba(37, 99, 235, 0.45);
+  --board-legal: rgba(37, 99, 235, 0.3);
+  --board-last-move: rgba(96, 165, 250, 0.45);
+}
+
+[data-theme='green'] {
+  --gold-primary: #22c55e;
+  --gold-secondary: #4ade80;
+  --gold-dim: rgba(34, 197, 94, 0.15);
+  --bronze: #15803d;
+  --accent-primary: #22c55e;
+  --accent-secondary: #4ade80;
+  --accent-dim: rgba(34, 197, 94, 0.15);
+  --accent-border: rgba(34, 197, 94, 0.35);
+  --board-selected: rgba(21, 128, 61, 0.5);
+  --board-legal: rgba(21, 128, 61, 0.35);
+  --board-last-move: rgba(74, 222, 128, 0.4);
 }
 
 * {
@@ -94,6 +127,10 @@ details[open] .panel-chevron {
   border: 1px solid var(--bg-glass-border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.hud-card {
+  padding: 1.125rem 1.375rem;
 }
 
 /* Gold gradient text */

@@ -15,7 +15,7 @@ export function EscrowOperatorPanel({ operator }: EscrowOperatorPanelProps) {
 
   return (
     <div
-      className="glass rounded-xl px-4 py-3"
+      className="glass hud-card rounded-xl"
       style={{ borderColor: 'rgba(96,165,250,0.35)' }}
     >
       <div className="text-xs uppercase tracking-widest mb-1" style={{ color: '#93c5fd' }}>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ThemeBoot } from './components/ThemeBoot';
 import { Web3Provider } from './lib/web3';
 
 export const metadata: Metadata = {
@@ -20,13 +21,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="gold">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body style={{ fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif' }}>
-        <Web3Provider>{children}</Web3Provider>
+        <Web3Provider>
+          <ThemeBoot />
+          {children}
+        </Web3Provider>
       </body>
     </html>
   );

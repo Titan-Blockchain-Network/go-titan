@@ -24,7 +24,7 @@ const LEVEL_LABELS: Record<number, string> = {
 
 export function DifficultySlider({ value, onChange, disabled, embedded = false }: DifficultySliderProps) {
   return (
-    <div className={embedded ? 'p-0' : 'glass rounded-xl p-4'}>
+    <div className={embedded ? 'p-0' : 'glass hud-card rounded-xl'}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
           AI Difficulty
@@ -83,16 +83,16 @@ export function DifficultySlider({ value, onChange, disabled, embedded = false }
           width: 16px;
           height: 16px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #c9a84c, #e8c97a);
+          background: linear-gradient(135deg, var(--gold-primary), var(--gold-secondary));
           cursor: pointer;
-          box-shadow: 0 0 8px rgba(201, 168, 76, 0.5);
+          box-shadow: 0 0 8px var(--accent-dim);
           border: 2px solid #0f0f11;
         }
         input[type='range']::-moz-range-thumb {
           width: 16px;
           height: 16px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #c9a84c, #e8c97a);
+          background: linear-gradient(135deg, var(--gold-primary), var(--gold-secondary));
           cursor: pointer;
           border: 2px solid #0f0f11;
         }
