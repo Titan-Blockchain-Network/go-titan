@@ -246,6 +246,9 @@ export function ContractStudio() {
         initialArgs[key] =
           selectedTemplate.constructorDefaults?.[key] ?? defaultArgValue(input);
       }
+      if (selectedTemplate.id === "titan-chess-escrow" && address) {
+        initialArgs._stockfishOperator = address;
+      }
       setConstructorArgValues(initialArgs);
       setActiveStep("deploy");
     } catch (error) {
@@ -571,6 +574,8 @@ export function ContractStudio() {
 
                 {compiled?.constructorInputs.map((input) => {
                   const key = input.name || input.type;
+                  const isChessOperator =
+                    selectedTemplate.id === "titan-chess-escrow" && key === "_stockfishOperator";
                   return (
                     <div key={key} className="space-y-1.5">
                       <Label htmlFor={key} className="text-xs font-mono">
@@ -588,6 +593,28 @@ export function ContractStudio() {
                         placeholder={placeholderForType(input.type)}
                         className="font-mono text-xs"
                       />
+                      {isChessOperator && (
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Your wallet address (not the contract). This wallet signs{" "}
+                          <span className="font-mono">startNextMatch</span> /{" "}
+                          <span className="font-mono">reportResult</span> after deploy — the contract
+                          holds the funds.{" "}
+                          {walletReady && (
+                            <button
+                              type="button"
+                              className="text-amber-700 dark:text-amber-300 underline underline-offset-2"
+                              onClick={() =>
+                                setConstructorArgValues((prev) => ({
+                                  ...prev,
+                                  [key]: address ?? "",
+                                }))
+                              }
+                            >
+                              Use connected wallet
+                            </button>
+                          )}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
