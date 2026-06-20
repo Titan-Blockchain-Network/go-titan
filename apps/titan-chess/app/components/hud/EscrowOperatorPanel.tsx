@@ -49,6 +49,14 @@ export function EscrowOperatorPanel({ operator }: EscrowOperatorPanelProps) {
           Next stake: {formatEther(operator.nextStake)} TITAN
         </p>
       )}
+      {operator.nextStake != null &&
+        operator.queueLength > 0 &&
+        operator.houseBankroll < operator.nextStake && (
+          <p className="text-[10px] mt-2 leading-relaxed" style={{ color: '#ff8a8a' }}>
+            House underfunded — deposit at least {formatEther(operator.nextStake)} TITAN via{' '}
+            <span className="font-mono">depositHouse()</span> (contract owner).
+          </p>
+        )}
       {(operator.isWritePending || operator.isConfirming) && (
         <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: '#93c5fd' }}>
           <Loader2 className="h-3 w-3 animate-spin" />

@@ -11,6 +11,7 @@ interface StatusBarProps {
   opponentType: OpponentType | null;
   isMatchActive: boolean;
   wagerPhase: WagerPhase;
+  houseUnderfunded?: boolean;
 }
 
 export function StatusBar({
@@ -20,14 +21,15 @@ export function StatusBar({
   opponentType,
   isMatchActive,
   wagerPhase,
+  houseUnderfunded,
 }: StatusBarProps) {
   const { turn, isCheck, isCheckmate, isDraw } = gameState;
 
   const getStatusText = () => {
     if (wagerPhase === 'waiting') {
-      return opponentType === 'human'
-        ? 'Waiting for a player to join...'
-        : 'Waiting for Stockfish match...';
+      if (opponentType === 'human') return 'Waiting for a player to join...';
+      if (houseUnderfunded) return 'Queued — waiting for house pool funding...';
+      return 'Waiting for operator to start match...';
     }
     if (!isMatchActive) return 'Start a new wagered game';
     if (isCheckmate) {

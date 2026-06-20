@@ -12,6 +12,8 @@ import { useChessGame } from '@/hooks/useChessGame';
 import { useEscrowOperator } from '@/hooks/useEscrowOperator';
 import { useWagerSession } from '@/hooks/useWagerSession';
 import { EscrowOutcome } from '@/lib/escrow-abi';
+import { TITAN_NETWORK } from '@/lib/titan-config';
+import { parseEther } from 'viem';
 import type { Color } from 'chess.js';
 
 export function GamePage() {
@@ -181,6 +183,16 @@ export function GamePage() {
   const showOverlay =
     isMatchActive && gameState.isGameOver && wager.session.phase !== 'idle';
 
+  const queuedStakeWei =
+    wager.session.phase === 'waiting' && wager.session.opponentType === 'stockfish'
+      ? parseEther(wager.session.stake || '0')
+      : BigInt(0);
+  const houseUnderfunded =
+    wager.escrow.enabled &&
+    wager.session.phase === 'waiting' &&
+    wager.session.opponentType === 'stockfish' &&
+    wager.escrow.houseBankroll < queuedStakeWei;
+
   return (
     <div
       className="min-h-screen flex flex-col"
@@ -238,7 +250,7 @@ export function GamePage() {
               boxShadow: '0 0 4px var(--gold-primary)',
             }}
           />
-          Titan Local UAT
+          {TITAN_NETWORK.name}
         </div>
       </motion.header>
 
@@ -252,19 +264,33 @@ export function GamePage() {
           <div className="relative w-full max-w-[600px]">
             {!isMatchActive && wager.session.phase !== 'waiting' && (
               <div
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-xl"
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl px-6"
                 style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
               >
                 <button
+                  onClick={() => wager.startStockfishPractice()}
+                  className="px-6 py-3 rounded-xl font-semibold text-sm w-full max-w-xs"
+                  style={{
+                    background: 'var(--bg-glass)',
+                    border: '1px solid var(--bg-glass-border)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  Practice vs Stockfish
+                </button>
+                <button
                   onClick={handleNewGame}
-                  className="px-6 py-3 rounded-xl font-semibold text-sm"
+                  className="px-6 py-3 rounded-xl font-semibold text-sm w-full max-w-xs"
                   style={{
                     background: 'linear-gradient(135deg, var(--gold-primary), var(--gold-secondary))',
                     color: '#0f0f11',
                   }}
                 >
-                  New Wagered Game
+                  Wagered Game
                 </button>
+                <p className="text-xs text-center max-w-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Practice is free and instant. Wagers use on-chain escrow.
+                </p>
               </div>
             )}
             <ChessBoard
@@ -297,6 +323,7 @@ export function GamePage() {
           opponentType={opponentType}
           isMatchActive={isMatchActive}
           wagerSession={wager.session}
+          houseUnderfunded={houseUnderfunded}
           escrowOperator={operator}
           onDifficultyChange={updateDifficulty}
           onNewGame={handleNewGame}
@@ -308,6 +335,7 @@ export function GamePage() {
       <NewGameModal
         open={wager.showModal}
         onClose={wager.closeModal}
+        onPlayPractice={wager.startStockfishPractice}
         onPlayStockfish={wager.startStockfishWager}
         onPlayHuman={wager.startHumanWager}
         waitingPlayers={wager.waitingPlayers}

@@ -61,6 +61,21 @@ export function useWagerSession(callbacks: WagerCallbacks) {
     }
   }, [session.phase]);
 
+  const startStockfishPractice = useCallback(() => {
+    matchStartedRef.current = true;
+    callbacks.onMatchStart('stockfish', 'w');
+    setSession({
+      ...INITIAL_SESSION,
+      phase: 'playing',
+      opponentType: 'stockfish',
+      opponentLabel: 'Stockfish',
+      isPractice: true,
+      stake: '0',
+      potTitan: '0',
+    });
+    setShowModal(false);
+  }, [callbacks]);
+
   const startStockfishWager = useCallback(
     async (stake: string) => {
       if (!isConnected) {
@@ -277,6 +292,7 @@ export function useWagerSession(callbacks: WagerCallbacks) {
     showModal,
     openNewGameModal,
     closeModal,
+    startStockfishPractice,
     startStockfishWager,
     startHumanWager,
     cancelWaiting,

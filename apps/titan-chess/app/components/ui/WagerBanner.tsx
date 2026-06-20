@@ -5,10 +5,11 @@ import type { WagerSession } from '@/hooks/useWagerSession';
 
 interface WagerBannerProps {
   session: WagerSession;
+  houseUnderfunded?: boolean;
   onCancel?: () => void;
 }
 
-export function WagerBanner({ session, onCancel }: WagerBannerProps) {
+export function WagerBanner({ session, houseUnderfunded, onCancel }: WagerBannerProps) {
   if (session.phase === 'idle' || session.phase === 'modal') return null;
 
   const isWaiting = session.phase === 'waiting';
@@ -37,6 +38,13 @@ export function WagerBanner({ session, onCancel }: WagerBannerProps) {
           {isWaiting && session.queuePosition != null && (
             <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
               Queue position #{session.queuePosition}
+            </div>
+          )}
+          {isWaiting && houseUnderfunded && session.opponentType === 'stockfish' && (
+            <div className="text-xs mt-1.5 leading-relaxed" style={{ color: '#ff8a8a' }}>
+              House pool is empty — owner must call <span className="font-mono">depositHouse()</span> with
+              at least {session.stake} TITAN before the operator can start your match. Leave queue or play
+              Practice instead.
             </div>
           )}
         </div>

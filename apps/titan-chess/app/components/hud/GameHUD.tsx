@@ -20,6 +20,7 @@ interface GameHUDProps {
   opponentType: OpponentType | null;
   isMatchActive: boolean;
   wagerSession: WagerSession;
+  houseUnderfunded?: boolean;
   escrowOperator: ReturnType<typeof useEscrowOperator>;
   onDifficultyChange: (v: number) => void;
   onNewGame: () => void;
@@ -35,6 +36,7 @@ export function GameHUD({
   opponentType,
   isMatchActive,
   wagerSession,
+  houseUnderfunded,
   escrowOperator,
   onDifficultyChange,
   onNewGame,
@@ -67,7 +69,11 @@ export function GameHUD({
 
       <TitanBalance />
 
-      <WagerBanner session={wagerSession} onCancel={onCancelWager} />
+      <WagerBanner
+        session={wagerSession}
+        houseUnderfunded={houseUnderfunded}
+        onCancel={onCancelWager}
+      />
 
       <EscrowOperatorPanel operator={escrowOperator} />
 
@@ -79,6 +85,7 @@ export function GameHUD({
           opponentType={opponentType}
           isMatchActive={isMatchActive}
           wagerPhase={wagerSession.phase}
+          houseUnderfunded={houseUnderfunded}
         />
       </div>
 
@@ -123,7 +130,7 @@ export function GameHUD({
 
       <div className="text-center">
         <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>
-          Wager vs Stockfish or queue · chess.js
+          Practice free · wagers on-chain · chess.js
         </span>
       </div>
     </motion.aside>

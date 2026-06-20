@@ -7,6 +7,7 @@ import type { WaitingPlayer } from '@/hooks/useMatchmaking';
 interface NewGameModalProps {
   open: boolean;
   onClose: () => void;
+  onPlayPractice: () => void;
   onPlayStockfish: (stake: string) => void;
   onPlayHuman: (stake: string, opponentAddress?: string) => void;
   waitingPlayers: WaitingPlayer[];
@@ -22,6 +23,7 @@ const PRESET_STAKES = ['0.01', '0.05', '0.1', '0.25', '0.5', '1'];
 export function NewGameModal({
   open,
   onClose,
+  onPlayPractice,
   onPlayStockfish,
   onPlayHuman,
   waitingPlayers,
@@ -148,12 +150,37 @@ export function NewGameModal({
               />
               <p className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
                 Pot: <span style={{ color: 'var(--gold-secondary)' }}>{pot} TITAN</span>
-                {!escrowEnabled && ' · Practice mode (escrow not deployed)'}
+                {escrowEnabled ? ' · Waits for on-chain match start' : ' · Escrow not configured'}
               </p>
             </div>
 
             {/* Opponent options */}
             <div className="space-y-3 mb-5">
+              <button
+                disabled={isLoading}
+                onClick={() => {
+                  onPlayPractice();
+                  onClose();
+                }}
+                className="w-full p-4 rounded-xl text-left transition-opacity disabled:opacity-40"
+                style={{
+                  background: 'var(--bg-glass)',
+                  border: '1px solid var(--bg-glass-border)',
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      Practice vs Stockfish
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      Free · instant · no wallet or queue
+                    </div>
+                  </div>
+                  <span className="text-2xl">♟</span>
+                </div>
+              </button>
+
               <button
                 disabled={!isConnected || isLoading}
                 onClick={() => onPlayStockfish(effectiveStake)}
@@ -166,10 +193,10 @@ export function NewGameModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-semibold text-sm" style={{ color: 'var(--gold-secondary)' }}>
-                      vs Stockfish
+                      Wager vs Stockfish
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      Bet against the house AI · {escrowEnabled ? 'On-chain escrow' : 'Instant play'}
+                      Stake TITAN on-chain · house must fund pool before match opens
                     </div>
                   </div>
                   <span className="text-2xl">🤖</span>

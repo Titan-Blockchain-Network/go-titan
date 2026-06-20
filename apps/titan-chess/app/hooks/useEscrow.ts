@@ -79,6 +79,14 @@ export function useEscrow() {
     query: { enabled: enabled && !!address, refetchInterval: 2_000 },
   });
 
+  const { data: houseBankrollRaw, refetch: refetchHouseBankroll } = useReadContract({
+    address: ESCROW_ADDRESS,
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName: 'houseBankroll',
+    chainId: titanSubnet.id,
+    query: { enabled: ESCROW_ENABLED, refetchInterval: 5_000 },
+  });
+
   const minStake = minStakeRaw ?? DEFAULT_MIN_STAKE;
   const maxStake = maxStakeRaw ?? DEFAULT_MAX_STAKE;
   const queueLength = Number(queueLengthRaw ?? BigInt(0));
@@ -129,7 +137,10 @@ export function useEscrow() {
     refetchActive();
     refetchInQueue();
     refetchInActiveGame();
-  }, [refetchQueue, refetchActive, refetchInQueue, refetchInActiveGame]);
+    refetchHouseBankroll();
+  }, [refetchQueue, refetchActive, refetchInQueue, refetchInActiveGame, refetchHouseBankroll]);
+
+  const houseBankroll = houseBankrollRaw ?? BigInt(0);
 
   const stakeBounds = useMemo(
     () => ({
@@ -152,6 +163,7 @@ export function useEscrow() {
     activeGames,
     inQueue: Boolean(inQueue),
     inActiveGame: Boolean(inActiveGame),
+    houseBankroll,
     joinQueue,
     leaveQueue,
     txHash,

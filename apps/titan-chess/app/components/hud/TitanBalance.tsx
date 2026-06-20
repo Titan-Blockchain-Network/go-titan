@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { useAccount, useBalance } from 'wagmi';
 import { formatEther } from 'viem';
+import { TITAN_NETWORK } from '@/lib/titan-config';
 import { titanSubnet } from '@/lib/web3';
 
 function useTitanBalance() {
@@ -71,7 +72,7 @@ export function TitanBalance() {
                 strokeLinecap="round" strokeLinejoin="round" style={{ color: '#22c55e' }} />
             </svg>
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              Live on Titan Local UAT
+              Live on {TITAN_NETWORK.name}
             </span>
           </div>
         </motion.div>
