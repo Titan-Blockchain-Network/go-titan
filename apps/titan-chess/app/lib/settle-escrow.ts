@@ -2,6 +2,7 @@ import { Chess, type Color } from 'chess.js';
 import {
   createPublicClient,
   createWalletClient,
+  defineChain,
   http,
   type Address,
   type Hex,
@@ -27,14 +28,14 @@ export function outcomeFromFen(fen: string, playerColor: Color): EscrowOutcome |
   return EscrowOutcome.Draw;
 }
 
-function titanChain() {
-  return {
-    id: TITAN_NETWORK.chainId,
-    name: TITAN_NETWORK.name,
-    nativeCurrency: TITAN_NETWORK.nativeCurrency,
-    rpcUrls: { default: { http: [TITAN_NETWORK.rpcUrl] } },
-  } as const;
-}
+const titanChain = defineChain({
+  id: TITAN_NETWORK.chainId,
+  name: TITAN_NETWORK.name,
+  nativeCurrency: TITAN_NETWORK.nativeCurrency,
+  rpcUrls: {
+    default: { http: [TITAN_NETWORK.rpcUrl] },
+  },
+});
 
 export async function settleEscrowOnChain(input: {
   gameId: bigint;
@@ -57,11 +58,10 @@ export async function settleEscrowOnChain(input: {
     throw new Error('Operator key not configured on server');
   }
 
-  const chain = titanChain();
   const transport = http(TITAN_NETWORK.rpcUrl);
-  const publicClient = createPublicClient({ chain, transport });
+  const publicClient = createPublicClient({ chain: titanChain, transport });
   const account = privateKeyToAccount(pk as Hex);
-  const walletClient = createWalletClient({ account, chain, transport });
+  const walletClient = createWalletClient({ account, chain: titanChain, transport });
 
   const [player, , , status] = await publicClient.readContract({
     address: ESCROW_ADDRESS,
