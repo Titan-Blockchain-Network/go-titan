@@ -53,9 +53,11 @@ export async function issueAtomicTx(txHex: string, chain: "C" | "P" | "X"): Prom
   }
 
   const attempts: Array<{ method: string; params: unknown }> = [
+    { method: "wallet_issueTx", params: { tx: txHex, chainAlias: chain } },
     { method: "wallet_issueTx", params: [{ tx: txHex, chainAlias: chain }] },
     { method: "wallet_issueTx", params: [{ txHex, chainAlias: chain }] },
     { method: "avax_issueTx", params: { tx: txHex, chainAlias: chain } },
+    { method: "avax.issueTx", params: { tx: txHex, chainAlias: chain } },
   ];
 
   let lastError: unknown;

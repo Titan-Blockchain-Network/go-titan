@@ -49,6 +49,7 @@ interface StakingSnapshot {
     balanceTitan: number;
   } | null;
   walletError?: string;
+  pendingImportUtxos?: number;
   derivedPAddress: string | null;
 }
 
@@ -67,6 +68,7 @@ export function StakingHub() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("");
+  const [transferStatus, setTransferStatus] = useState("");
   const [coreDetected, setCoreDetected] = useState(false);
 
   const [transferAmount, setTransferAmount] = useState("1");
@@ -111,9 +113,29 @@ export function StakingHub() {
   }, []);
 
   async function runTransfer(step: "export" | "import") {
-    if (!walletReady || !onTitan) return;
+    setTransferStatus("");
+    if (!walletReady) {
+      setTransferStatus("Connect MetaMask first (top-right wallet button).");
+      return;
+    }
+    if (!onTitan) {
+      setTransferStatus("Switch MetaMask to Titan network (chain 888), then try again.");
+      return;
+    }
+    if (!coreDetected) {
+      setTransferStatus(
+        "Open and unlock Avalanche Core on this browser — export/import are signed in Core, not MetaMask.",
+      );
+      return;
+    }
+    if (step === "import" && (data?.pendingImportUtxos ?? 0) === 0) {
+      setTransferStatus(
+        "Nothing to import yet. Run Export first, wait ~30 seconds, then click Import again.",
+      );
+      return;
+    }
+
     setBusy(step);
-    setStatus("");
     try {
       const res = await fetch("/api/titan/staking/transfer", {
         method: "POST",
@@ -137,16 +159,25 @@ export function StakingHub() {
       const chain = step === "export" ? json.exportChain : json.importChain;
       if (!txHex || !chain) throw new Error("Missing transaction bytes");
 
-      const txId = await issueAtomicTx(txHex, chain);
-      setStatus(
+      setTransferStatus(
         step === "export"
-          ? `Export submitted (${txId.slice(0, 12)}…). Wait ~30s, then run Import on P-chain.`
-          : `Import submitted (${txId.slice(0, 12)}…). P-chain balance should update shortly.`,
+          ? "Approve the export in the Core extension popup (not MetaMask)…"
+          : "Approve the import in the Core extension popup…",
       );
+
+      const txId = await issueAtomicTx(txHex, chain);
+      const message =
+        step === "export"
+          ? `Export submitted (${txId.slice(0, 12)}…). Wait ~30s until “ready to import” shows, then click Import.`
+          : `Import submitted (${txId.slice(0, 12)}…). P-chain balance should update shortly.`;
+      setTransferStatus(message);
+      setStatus(message);
       await refreshBalance();
       await load();
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Transfer failed");
+      const message = e instanceof Error ? e.message : "Transfer failed";
+      setTransferStatus(message);
+      setStatus(message);
     } finally {
       setBusy("");
     }
@@ -268,7 +299,9 @@ export function StakingHub() {
               Fund P-chain (C → P)
             </CardTitle>
             <CardDescription>
-              Step 1: export from C-chain. Step 2: after ~30 seconds, import on P-chain.
+              Cross-chain transfer is two atomic transactions. Export locks TITAN on C-chain; import
+              releases it on P-chain. Both steps sign in <strong>Core</strong> — MetaMask only shows
+              your C-chain balance here.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -282,6 +315,29 @@ export function StakingHub() {
                 {data?.derivedPAddress && (
                   <p className="text-xs text-muted-foreground font-mono break-all">
                     P-address: {data.derivedPAddress}
+                  </p>
+                )}
+                <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>
+                    <strong>Export</strong> — Core popup approves moving TITAN off C-chain (small fee
+                    ~0.01 T).
+                  </li>
+                  <li>
+                    <strong>Wait ~30s</strong> — network accepts the export and queues funds for import
+                    {typeof data?.pendingImportUtxos === "number" && data.pendingImportUtxos > 0
+                      ? ` (${data.pendingImportUtxos} batch${data.pendingImportUtxos === 1 ? "" : "es"} ready)`
+                      : ""}
+                    .
+                  </li>
+                  <li>
+                    <strong>Import</strong> — Core popup pulls those funds onto P-chain at the address
+                    above.
+                  </li>
+                </ol>
+                {typeof data?.pendingImportUtxos === "number" && data.pendingImportUtxos > 0 && (
+                  <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                    Ready to import — {data.pendingImportUtxos} export
+                    {data.pendingImportUtxos === 1 ? "" : "s"} waiting on P-chain.
                   </p>
                 )}
                 <div className="space-y-1.5">
@@ -313,6 +369,11 @@ export function StakingHub() {
                     2. Import on P-chain
                   </Button>
                 </div>
+                {transferStatus && (
+                  <p className="text-sm rounded-md border bg-muted/40 px-3 py-2 break-words">
+                    {transferStatus}
+                  </p>
+                )}
               </>
             )}
           </CardContent>

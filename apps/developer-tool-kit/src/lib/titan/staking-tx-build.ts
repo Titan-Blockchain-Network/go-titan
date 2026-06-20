@@ -77,6 +77,24 @@ export async function buildCtoPTransfer(cAddress: string, amountTitan: number) {
   };
 }
 
+export async function countPendingImportUtxos(cAddress: string): Promise<number> {
+  if (!isAddress(cAddress)) {
+    return 0;
+  }
+
+  const baseUrl = await getPrimaryNodeBaseUrl();
+  const context = await loadContext(baseUrl);
+  const pAddress = cAddressToPChainAddress(cAddress, context.hrp);
+  const pvmapi = new pvm.PVMApi(baseUrl);
+
+  const { utxos } = await pvmapi.getUTXOs({
+    sourceChain: "C",
+    addresses: [pAddress],
+  });
+
+  return utxos.length;
+}
+
 export async function buildPChainImport(cAddress: string) {
   if (!isAddress(cAddress)) {
     throw new Error("Invalid C-chain address");

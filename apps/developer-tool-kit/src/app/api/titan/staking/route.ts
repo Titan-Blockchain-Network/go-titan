@@ -4,7 +4,7 @@ import { isAddress } from "viem";
 import { buildValidatorAddressLabels } from "@/lib/titan/address-labels";
 import { cAddressToPChainAddress, resolveNetworkHrp } from "@/lib/titan/p-chain-address";
 import { getPrimaryNodeBaseUrl, nanoToTitan, platformRpc } from "@/lib/titan/platform-rpc";
-import { getPChainBalance } from "@/lib/titan/staking-tx-build";
+import { countPendingImportUtxos, getPChainBalance } from "@/lib/titan/staking-tx-build";
 import { enrichNodeFields } from "@/lib/titan/node-registry";
 import { Context } from "@flarenetwork/flarejs";
 
@@ -87,15 +87,24 @@ export async function GET(request: NextRequest) {
 
     let wallet: Awaited<ReturnType<typeof getPChainBalance>> | null = null;
     let walletError: string | undefined;
+    let pendingImportUtxos = 0;
 
     if (cAddress && isAddress(cAddress)) {
       try {
-        wallet = await getPChainBalance(cAddress);
+        [wallet, pendingImportUtxos] = await Promise.all([
+          getPChainBalance(cAddress),
+          countPendingImportUtxos(cAddress),
+        ]);
       } catch (walletLookupError) {
         walletError =
           walletLookupError instanceof Error
             ? walletLookupError.message
             : "Failed to load P-chain balance";
+        try {
+          pendingImportUtxos = await countPendingImportUtxos(cAddress);
+        } catch {
+          pendingImportUtxos = 0;
+        }
       }
     } else if (cAddress) {
       return NextResponse.json({ error: "Invalid cAddress" }, { status: 400 });
@@ -112,6 +121,7 @@ export async function GET(request: NextRequest) {
       addressLabels,
       wallet,
       walletError,
+      pendingImportUtxos,
       derivedPAddress:
         cAddress && isAddress(cAddress)
           ? cAddressToPChainAddress(cAddress, context.hrp)
