@@ -90,7 +90,7 @@ func statusMain(args []string) {
 			if v.Connected != nil {
 				fmt.Printf("    connected=%v", *v.Connected)
 				if v.Uptime != nil {
-					fmt.Printf(" uptime=%.1f%%", *v.Uptime*100)
+					fmt.Printf(" uptime=%.1f%%", formatValidatorUptime(*v.Uptime))
 				}
 				fmt.Println()
 			}
@@ -103,6 +103,15 @@ func statusMain(args []string) {
   %s/ext/bc/P | jq .
 `, uri)
 	fmt.Println()
+}
+
+// API may return uptime as a 0–1 fraction or already as 0–100 percent.
+func formatValidatorUptime(uptime float32) float64 {
+	u := float64(uptime)
+	if u <= 1 {
+		return u * 100
+	}
+	return u
 }
 
 func fetchNodeHealth(uri string) (reachable bool, healthy bool) {
