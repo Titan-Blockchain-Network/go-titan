@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRightLeft,
   CheckCircle2,
+  Clock,
   Coins,
   ExternalLink,
   Loader2,
@@ -31,10 +32,29 @@ interface ValidatorRow {
   nodeID: string;
   displayName: string;
   stakeTitan: number;
+  delegatorWeightTitan: number;
+  delegatorCount: number;
+  totalWeightTitan: number;
+  maxDelegateDays: number;
+  canAcceptDelegators: boolean;
+  remainingDelegationCapacityTitan: number;
+  endTime: number | null;
   uptimePercent: number | null;
   connected: boolean | null;
   delegationFeePercent: number | null;
   potentialRewardTitan: number;
+}
+
+interface UserDelegationRow {
+  txID: string;
+  nodeID: string;
+  validatorName: string;
+  stakeTitan: number;
+  startTime: number;
+  endTime: number;
+  potentialRewardTitan: number;
+  rewardAddress: string;
+  status: "active" | "pending" | "ended";
 }
 
 interface StakingSnapshot {
@@ -45,6 +65,8 @@ interface StakingSnapshot {
   maxDelegationDays: number;
   validatorCount: number;
   validators: ValidatorRow[];
+  userDelegations: UserDelegationRow[];
+  totalStakedTitan: number;
   wallet: {
     pAddress: string;
     balanceTitan: number;
@@ -52,6 +74,22 @@ interface StakingSnapshot {
   walletError?: string;
   pendingImportUtxos?: number;
   derivedPAddress: string | null;
+}
+
+function formatUnix(ts: number): string {
+  if (!ts) return "—";
+  return new Date(ts * 1000).toLocaleString();
+}
+
+function delegationStatusLabel(status: UserDelegationRow["status"]): string {
+  switch (status) {
+    case "active":
+      return "Active";
+    case "pending":
+      return "Pending";
+    case "ended":
+      return "Ended";
+  }
 }
 
 export function StakingHub() {
@@ -86,7 +124,7 @@ export function StakingHub() {
 
   const [transferAmount, setTransferAmount] = useState("1");
   const [delegateAmount, setDelegateAmount] = useState("1");
-  const [delegateDays, setDelegateDays] = useState("30");
+  const [delegateDays, setDelegateDays] = useState("10");
   const [selectedNode, setSelectedNode] = useState("");
 
   const load = useCallback(async () => {
@@ -99,8 +137,11 @@ export function StakingHub() {
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setData(json);
       setError(json.walletError ?? "");
-      if (!selectedNode && json.validators[0]?.nodeID) {
-        setSelectedNode(json.validators[0].nodeID);
+      const firstOpen =
+        json.validators.find((v) => v.canAcceptDelegators)?.nodeID ??
+        json.validators[0]?.nodeID;
+      if (!selectedNode && firstOpen) {
+        setSelectedNode(firstOpen);
       }
     } catch (e) {
       setData(null);
@@ -239,7 +280,15 @@ export function StakingHub() {
   }
 
   const pBalance = data?.wallet?.balanceTitan ?? 0;
+  const totalStaked = data?.totalStakedTitan ?? 0;
+  const userDelegations = data?.userDelegations ?? [];
+  const selectedValidator = data?.validators.find((v) => v.nodeID === selectedNode);
+  const maxDaysForValidator = selectedValidator?.maxDelegateDays ?? data?.maxDelegationDays ?? 365;
+  const delegateDaysNum = Number(delegateDays || 0);
+  const delegatePeriodTooLong =
+    Number.isFinite(delegateDaysNum) && delegateDaysNum > maxDaysForValidator;
   const needsTransfer = walletReady && pBalance < Number(delegateAmount || 0);
+  const cannotDelegateToSelected = selectedValidator != null && !selectedValidator.canAcceptDelegators;
 
   return (
     <div className="flex flex-col gap-6">
@@ -374,7 +423,7 @@ export function StakingHub() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MiniStat title="Validators" value={data ? String(data.validatorCount) : "—"} />
         <MiniStat
           title="Min delegate"
@@ -383,7 +432,7 @@ export function StakingHub() {
         />
         <MiniStat title="C-chain balance" value={walletReady ? `${cBalance} T` : "—"} />
         <MiniStat
-          title="P-chain balance"
+          title="P-chain liquid"
           value={walletReady && data?.wallet ? `${pBalance.toLocaleString()} T` : "—"}
           sub={
             data?.wallet
@@ -396,7 +445,70 @@ export function StakingHub() {
           }
           mono
         />
+        <MiniStat
+          title="Your stake locked"
+          value={walletReady && data ? `${totalStaked.toLocaleString()} T` : "—"}
+          sub={
+            userDelegations.length > 0
+              ? `${userDelegations.length} delegation${userDelegations.length === 1 ? "" : "s"}`
+              : walletReady
+                ? "No active delegations"
+                : "Connect wallet"
+          }
+        />
       </div>
+
+      {walletReady && userDelegations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Your delegations
+            </CardTitle>
+            <CardDescription>
+              Active P-chain stakes from your wallet. Principal unlocks at the end time; rewards accrue
+              to your P-address.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y rounded-lg border">
+              {userDelegations.map((d) => (
+                <div
+                  key={d.txID}
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm">
+                      {d.validatorName} · {d.stakeTitan.toLocaleString()} T
+                    </div>
+                    <div className="font-mono text-[10px] text-muted-foreground truncate max-w-md">
+                      {d.txID}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Unlocks {formatUnix(d.endTime)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+                    <Badge
+                      className={
+                        d.status === "active"
+                          ? "bg-green-600"
+                          : d.status === "pending"
+                            ? "bg-amber-600"
+                            : ""
+                      }
+                      variant={d.status === "ended" ? "outline" : "default"}
+                    >
+                      {delegationStatusLabel(d.status)}
+                    </Badge>
+                    <span className="text-muted-foreground">Started {formatUnix(d.startTime)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
@@ -527,11 +639,23 @@ export function StakingHub() {
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 {(data?.validators ?? []).map((v) => (
-                  <option key={v.nodeID} value={v.nodeID}>
-                    {v.displayName} · {v.stakeTitan.toLocaleString()} T staked
+                  <option key={v.nodeID} value={v.nodeID} disabled={!v.canAcceptDelegators}>
+                    {v.displayName} · {v.stakeTitan.toLocaleString()} T
+                    {v.delegatorWeightTitan > 0 ? ` + ${v.delegatorWeightTitan.toLocaleString()} T delegated` : ""}
+                    {!v.canAcceptDelegators ? " (full)" : ""}
                   </option>
                 ))}
               </select>
+              {selectedValidator && (
+                <p className="text-xs text-muted-foreground">
+                  Validator active until {formatUnix(selectedValidator.endTime ?? 0)} · max{" "}
+                  {selectedValidator.maxDelegateDays} day
+                  {selectedValidator.maxDelegateDays === 1 ? "" : "s"} for new delegations
+                  {selectedValidator.remainingDelegationCapacityTitan > 0
+                    ? ` · ~${selectedValidator.remainingDelegationCapacityTitan.toLocaleString()} T capacity left`
+                    : ""}
+                </p>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -545,7 +669,9 @@ export function StakingHub() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="delegate-days">Days (min {data?.minDelegationDays ?? 1})</Label>
+                <Label htmlFor="delegate-days">
+                  Days (min {data?.minDelegationDays ?? 1}, max {maxDaysForValidator} for this validator)
+                </Label>
                 <Input
                   id="delegate-days"
                   value={delegateDays}
@@ -560,9 +686,30 @@ export function StakingHub() {
                 P-chain balance is lower than the stake amount — fund P-chain first.
               </p>
             )}
+            {delegatePeriodTooLong && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Delegation period must end before the validator&apos;s staking window closes (~
+                {maxDaysForValidator} days max for {selectedValidator?.displayName ?? "this validator"}
+                ).
+              </p>
+            )}
+            {cannotDelegateToSelected && (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                This validator cannot accept more delegations (weight cap reached). Pick Prometheus,
+                Hyperion, Theia, or Oceanus.
+              </p>
+            )}
             <Button
               onClick={() => void runDelegate()}
-              disabled={!walletReady || !stakingReady || !coreReady || busy !== "" || needsTransfer}
+              disabled={
+                !walletReady ||
+                !stakingReady ||
+                !coreReady ||
+                busy !== "" ||
+                needsTransfer ||
+                delegatePeriodTooLong ||
+                cannotDelegateToSelected
+              }
               className="w-full sm:w-auto"
             >
               {busy === "delegate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -602,13 +749,25 @@ export function StakingHub() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <Badge variant="secondary">{v.stakeTitan.toLocaleString()} T</Badge>
+                    <Badge variant="secondary">{v.stakeTitan.toLocaleString()} T own</Badge>
+                    {v.delegatorWeightTitan > 0 && (
+                      <Badge variant="outline">
+                        +{v.delegatorWeightTitan.toLocaleString()} T delegated ({v.delegatorCount})
+                      </Badge>
+                    )}
+                    <span className="text-muted-foreground">
+                      {v.totalWeightTitan.toLocaleString()} T total
+                    </span>
                     {v.delegationFeePercent != null && (
                       <span className="text-muted-foreground">Fee {v.delegationFeePercent}%</span>
                     )}
                     {v.uptimePercent != null && (
                       <span className="text-muted-foreground">{v.uptimePercent.toFixed(1)}% uptime</span>
                     )}
+                    {v.endTime != null && (
+                      <span className="text-muted-foreground">Until {formatUnix(v.endTime)}</span>
+                    )}
+                    {!v.canAcceptDelegators && <Badge variant="outline">Delegations full</Badge>}
                     {v.connected ? (
                       <Badge className="bg-green-600">Online</Badge>
                     ) : (

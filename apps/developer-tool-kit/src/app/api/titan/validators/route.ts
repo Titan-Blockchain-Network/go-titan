@@ -18,6 +18,8 @@ interface PlatformValidator {
   connected?: boolean;
   delegationFee?: string;
   potentialReward?: string;
+  delegatorCount?: string;
+  delegatorWeight?: string;
   validationRewardOwner?: { addresses?: string[] };
   delegationRewardOwner?: { addresses?: string[] };
 }
@@ -147,6 +149,7 @@ export async function GET() {
 
   const normalized = validators.map((v) => {
     const stakeTitan = nanoToTitan(v.weight);
+    const delegatorWeightTitan = nanoToTitan(v.delegatorWeight);
     const rewardAddresses = collectRewardAddresses(v);
     const registry = enrichNodeFields({
       nodeId: v.nodeID,
@@ -159,6 +162,9 @@ export async function GET() {
       registryRole: registry.registryRole,
       registryDroplet: registry.registryDroplet,
       stakeTitan,
+      delegatorWeightTitan,
+      delegatorCount: Number(v.delegatorCount ?? 0),
+      totalWeightTitan: stakeTitan + delegatorWeightTitan,
       stakeNano: v.weight ?? "0",
       startTime: v.startTime ? Number.parseInt(v.startTime, 10) : null,
       endTime: v.endTime ? Number.parseInt(v.endTime, 10) : null,

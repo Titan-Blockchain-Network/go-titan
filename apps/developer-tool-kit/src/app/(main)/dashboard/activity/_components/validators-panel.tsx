@@ -15,6 +15,9 @@ interface ValidatorRow {
   registryRole?: string;
   registryDroplet?: string;
   stakeTitan: number;
+  delegatorWeightTitan?: number;
+  delegatorCount?: number;
+  totalWeightTitan?: number;
   startTime: number | null;
   endTime: number | null;
   uptimePercent: number | null;
@@ -151,7 +154,7 @@ export function ValidatorsPanel({ onLabelsLoaded }: ValidatorsPanelProps) {
           <thead className="bg-muted/40 text-muted-foreground text-xs uppercase tracking-wider border-b">
             <tr>
               <th className="px-4 py-2.5 text-left font-medium">Validator</th>
-              <th className="px-4 py-2.5 text-right font-medium">Stake</th>
+              <th className="px-4 py-2.5 text-right font-medium">Stake / delegated</th>
               <th className="px-4 py-2.5 text-right font-medium hidden md:table-cell">Uptime</th>
               <th className="px-4 py-2.5 text-center font-medium w-24">Status</th>
               <th className="px-4 py-2.5 text-left font-medium hidden lg:table-cell">Active until</th>
@@ -174,8 +177,14 @@ export function ValidatorsPanel({ onLabelsLoaded }: ValidatorsPanelProps) {
                       {shortNodeId(v.nodeID)}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono tabular-nums">
-                    {v.stakeTitan.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  <td className="px-4 py-2.5 text-right font-mono tabular-nums text-xs">
+                    <div>{v.stakeTitan.toLocaleString(undefined, { maximumFractionDigits: 2 })} own</div>
+                    {(v.delegatorWeightTitan ?? 0) > 0 && (
+                      <div className="text-muted-foreground">
+                        +{(v.delegatorWeightTitan ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                        ({v.delegatorCount ?? 0})
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums hidden md:table-cell">
                     {v.uptimePercent != null ? `${v.uptimePercent.toFixed(1)}%` : "—"}
