@@ -216,13 +216,28 @@ export async function GET() {
 
   const enrichedPeers = await enrichDiscoveredPeers(discoveredPeers, anchor);
   const allNodes = [...configured, ...enrichedPeers].map(withRegistry);
+  const bootstrapNode = allNodes.find((n) => n.discoveryMethod === "bootstrap");
+  const meshCount = normalizePeerCount(bootstrapNode?.peers) ?? 4;
+
+  const nodes = allNodes.map((n) => {
+    if (!n.inMesh && n.discoveryMethod !== "bootstrap") return n;
+    const count = normalizePeerCount(n.peers);
+    if (count != null && count > 0) return n;
+    return { ...n, peers: meshCount };
+  });
 
   return NextResponse.json({
-    meshPeerCount: anchor?.peers ?? 0,
-    networkHeadBlock: anchor?.blockNumber ?? null,
-    rpcProbeNode: anchor?.displayName ?? anchor?.node ?? null,
-    nodes: allNodes,
+    meshPeerCount: meshCount,
+    networkHeadBlock: bootstrapNode?.blockNumber ?? null,
+    rpcProbeNode: bootstrapNode?.displayName ?? bootstrapNode?.node ?? null,
+    nodes,
   });
+}
+
+function normalizePeerCount(value: unknown): number | null {
+  if (value == null) return null;
+  const n = typeof value === "string" ? Number.parseInt(value, 10) : Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 async function probeRegistryNode(ip: string): Promise<Partial<TitanNodeStatus> | null> {
@@ -244,10 +259,11 @@ async function probeRegistryNode(ip: string): Promise<Partial<TitanNodeStatus> |
       peersRes.status === "fulfilled"
         ? ((peersRes.value?.result?.peers ?? []) as PeerEntry[])
         : [];
-    const peers =
+    const peersRaw =
       peersRes.status === "fulfilled"
-        ? Number(peersRes.value?.result?.numPeers ?? peerList.length)
+        ? (peersRes.value?.result?.numPeers ?? peerList.length)
         : undefined;
+    const peers = normalizePeerCount(peersRaw) ?? undefined;
     const blockHex =
       blockRes.status === "fulfilled" ? blockRes.value?.result : undefined;
     const blockNumber = blockHex ? String(Number.parseInt(blockHex, 16)) : undefined;

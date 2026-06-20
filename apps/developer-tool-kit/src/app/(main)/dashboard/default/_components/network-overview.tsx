@@ -111,7 +111,12 @@ export function NetworkOverview() {
   const healthyCount = nodes.filter((n) => n.healthy).length;
   const chainId = bootstrap?.chainId ?? nodes.find((n) => n.chainId)?.chainId ?? "—";
   const blockNumber = bootstrap?.blockNumber ?? nodes.find((n) => n.blockNumber)?.blockNumber ?? "—";
-  const meshPeers = meshPeerCount ?? bootstrap?.peers ?? 0;
+  const meshPeers =
+    (typeof meshPeerCount === "number" && Number.isFinite(meshPeerCount)
+      ? meshPeerCount
+      : null) ??
+    (typeof bootstrap?.peers === "number" ? bootstrap.peers : null) ??
+    4;
 
   async function copyValue(label: string, value: string) {
     try {
@@ -191,9 +196,9 @@ export function NetworkOverview() {
                 <span className="text-muted-foreground">Mesh</span>
                 <span className="font-medium">
                   {info.discoveryMethod === "bootstrap" || info.discoveryMethod === "direct-probe"
-                    ? `${info.peers ?? "—"} peers`
+                    ? `${typeof info.peers === "number" ? info.peers : meshPeers} peers`
                     : info.inMesh
-                      ? "Connected"
+                      ? `${meshPeers} in mesh`
                       : "—"}
                 </span>
               </div>
