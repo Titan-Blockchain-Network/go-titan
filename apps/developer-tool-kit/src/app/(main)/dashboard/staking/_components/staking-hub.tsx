@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -10,8 +10,10 @@ import {
   Loader2,
   RefreshCw,
   Shield,
+  Sparkles,
   Wallet,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { APP_CONFIG } from "@/config/app-config";
 import { Badge } from "@/components/ui/badge";
@@ -121,35 +123,58 @@ export function StakingHub() {
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("");
   const [transferStatus, setTransferStatus] = useState("");
+  const [delegateStatus, setDelegateStatus] = useState("");
+  const [delegateSuccess, setDelegateSuccess] = useState<{
+    validatorName: string;
+    amountTitan: number;
+    days: number;
+    txId: string;
+    unlocksAt: string;
+  } | null>(null);
 
   const [transferAmount, setTransferAmount] = useState("1");
   const [delegateAmount, setDelegateAmount] = useState("1");
   const [delegateDays, setDelegateDays] = useState("10");
   const [selectedNode, setSelectedNode] = useState("");
+  const delegationsSectionRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const qs = walletReady ? `?cAddress=${encodeURIComponent(address)}` : "";
-      const res = await fetch(`/api/titan/staking${qs}`);
-      const json = (await res.json()) as StakingSnapshot & { error?: string };
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      setData(json);
-      setError(json.walletError ?? "");
-      const firstOpen =
-        json.validators.find((v) => v.canAcceptDelegators)?.nodeID ??
-        json.validators[0]?.nodeID;
-      if (!selectedNode && firstOpen) {
-        setSelectedNode(firstOpen);
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      setError("");
+      try {
+        const qs = walletReady ? `?cAddress=${encodeURIComponent(address)}` : "";
+        const res = await fetch(`/api/titan/staking${qs}`);
+        const json = (await res.json()) as StakingSnapshot & { error?: string };
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        setData(json);
+        setError(json.walletError ?? "");
+        const firstOpen =
+          json.validators.find((v) => v.canAcceptDelegators)?.nodeID ??
+          json.validators[0]?.nodeID;
+        if (!selectedNode && firstOpen) {
+          setSelectedNode(firstOpen);
+        }
+        return json;
+      } catch (e) {
+        if (!opts?.silent) setData(null);
+        setError(e instanceof Error ? e.message : "Failed to load staking data");
+        return null;
+      } finally {
+        if (!opts?.silent) setLoading(false);
       }
-    } catch (e) {
-      setData(null);
-      setError(e instanceof Error ? e.message : "Failed to load staking data");
-    } finally {
-      setLoading(false);
-    }
-  }, [address, walletReady]);
+    },
+    [address, walletReady, selectedNode],
+  );
+
+  const refreshAfterDelegation = useCallback(async () => {
+    await refreshBalance();
+    await load({ silent: true });
+    await new Promise((r) => setTimeout(r, 2_000));
+    await load({ silent: true });
+    await new Promise((r) => setTimeout(r, 3_000));
+    await load({ silent: true });
+  }, [load, refreshBalance]);
 
   useEffect(() => {
     void load();
@@ -242,8 +267,19 @@ export function StakingHub() {
 
   async function runDelegate() {
     if (!walletReady || !stakingReady || !coreReady || !selectedNode) return;
+
+    const amountTitan = Number(delegateAmount);
+    const days = Number(delegateDays);
+    const validatorName =
+      data?.validators.find((v) => v.nodeID === selectedNode)?.displayName ?? "validator";
+
     setBusy("delegate");
     setStatus("");
+    setDelegateStatus("");
+    setDelegateSuccess(null);
+
+    const toastId = toast.loading(`Preparing delegation to ${validatorName}…`);
+
     try {
       const res = await fetch("/api/titan/staking/delegate", {
         method: "POST",
@@ -251,8 +287,8 @@ export function StakingHub() {
         body: JSON.stringify({
           cAddress: address,
           nodeId: selectedNode,
-          amountTitan: Number(delegateAmount),
-          days: Number(delegateDays),
+          amountTitan,
+          days,
         }),
       });
       const json = (await res.json()) as {
@@ -261,19 +297,52 @@ export function StakingHub() {
         chain?: "P";
         unsignedTxJson?: string;
         utxoIds?: string[];
+        endTime?: number;
       };
       if (!res.ok) throw new Error(json.error ?? "Delegate build failed");
       if (!json.delegateTxHex || !json.chain) throw new Error("Missing delegate transaction");
+
+      setDelegateStatus(
+        "Approve the delegation in Core (check the extension icon in your browser toolbar)…",
+      );
+      toast.loading("Waiting for Core signature…", { id: toastId });
 
       const txId = await issueAtomicTx(json.delegateTxHex, json.chain, {
         unsignedTxJson: json.unsignedTxJson,
         utxoIds: json.utxoIds,
         cAddress: address,
       });
-      setStatus(`Delegation submitted (${txId.slice(0, 12)}…). Rewards unlock when the period ends.`);
-      await load();
+
+      const unlocksAt = json.endTime
+        ? formatUnix(json.endTime)
+        : formatUnix(Math.floor(Date.now() / 1000) + days * 86_400);
+
+      const successMessage = `Staked ${amountTitan.toLocaleString()} T on ${validatorName} for ${days} day${days === 1 ? "" : "s"}. Unlocks ${unlocksAt}.`;
+
+      setDelegateSuccess({
+        validatorName,
+        amountTitan,
+        days,
+        txId,
+        unlocksAt,
+      });
+      setDelegateStatus(successMessage);
+      setStatus(successMessage);
+
+      toast.success("Delegation confirmed on Titan", {
+        id: toastId,
+        description: `${amountTitan.toLocaleString()} T → ${validatorName}. Tx ${txId.slice(0, 12)}…`,
+        duration: 12_000,
+      });
+
+      void refreshAfterDelegation().then(() => {
+        delegationsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Delegation failed");
+      const message = e instanceof Error ? e.message : "Delegation failed";
+      setDelegateStatus(message);
+      setStatus(message);
+      toast.error("Delegation failed", { id: toastId, description: message, duration: 10_000 });
     } finally {
       setBusy("");
     }
@@ -458,8 +527,8 @@ export function StakingHub() {
         />
       </div>
 
-      {walletReady && userDelegations.length > 0 && (
-        <Card>
+      {walletReady && (
+        <Card ref={delegationsSectionRef}>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Clock className="h-4 w-4" />
@@ -471,6 +540,20 @@ export function StakingHub() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {busy === "delegate" && (
+              <p className="text-sm text-muted-foreground flex items-center gap-2 mb-3">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Updating after your delegation…
+              </p>
+            )}
+            {userDelegations.length === 0 && !busy && (
+              <p className="text-sm text-muted-foreground py-4 text-center rounded-lg border border-dashed">
+                {totalStaked > 0
+                  ? `${totalStaked.toLocaleString()} T staked on P-chain — refresh if a new delegation is not listed yet.`
+                  : "No active delegations yet. Delegate above to lock TITAN to a validator."}
+              </p>
+            )}
+            {userDelegations.length > 0 && (
             <div className="divide-y rounded-lg border">
               {userDelegations.map((d) => (
                 <div
@@ -506,6 +589,7 @@ export function StakingHub() {
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -627,6 +711,8 @@ export function StakingHub() {
             </CardTitle>
             <CardDescription>
               Locks P-chain {APP_CONFIG.titan.nativeToken.symbol} to a validator for the chosen period.
+              Your tokens stay yours but are illiquid until unlock; you earn a share of network staking
+              rewards (minus the validator&apos;s delegation fee, typically 0.0025%).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -713,8 +799,32 @@ export function StakingHub() {
               className="w-full sm:w-auto"
             >
               {busy === "delegate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Delegate stake
+              {busy === "delegate" ? "Delegating…" : "Delegate stake"}
             </Button>
+            {delegateSuccess && (
+              <div className="rounded-md border border-green-500/40 bg-green-500/10 px-3 py-3 text-sm text-green-900 dark:text-green-100 space-y-1">
+                <p className="font-medium flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  You&apos;re staked on {delegateSuccess.validatorName}
+                </p>
+                <p>
+                  {delegateSuccess.amountTitan.toLocaleString()} T locked for {delegateSuccess.days} day
+                  {delegateSuccess.days === 1 ? "" : "s"}. Unlocks {delegateSuccess.unlocksAt}.
+                </p>
+                <p className="font-mono text-xs text-green-800/80 dark:text-green-200/80 break-all">
+                  Tx {delegateSuccess.txId}
+                </p>
+                <p className="text-xs text-green-800/90 dark:text-green-200/90">
+                  Balances and &quot;Your delegations&quot; below refresh automatically — rewards accrue on
+                  P-chain until unlock.
+                </p>
+              </div>
+            )}
+            {delegateStatus && !delegateSuccess && (
+              <p className="text-sm rounded-md border bg-muted/40 px-3 py-2 break-words">
+                {delegateStatus}
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
