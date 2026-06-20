@@ -9,6 +9,7 @@ import {
   Blocks,
   Clock,
   Hash,
+  Layers,
   Loader2,
   RefreshCw,
   Search,
@@ -27,8 +28,11 @@ import {
   resolveAddressLabel,
 } from "@/lib/titan/address-labels";
 import { averageBlockTime, computeBlockIntervals } from "@/lib/titan/chain-analytics";
+import { TITAN_CHAIN_META } from "@/lib/titan/chains";
 import { useTitanConfig } from "@/lib/titan/use-titan-config";
+import { useTitanChainStore } from "@/stores/titan/chain-store";
 import { ChainAnalyticsPanel } from "@/app/(main)/dashboard/activity/_components/chain-analytics-panel";
+import { XChainPanel } from "@/app/(main)/dashboard/activity/_components/x-chain-panel";
 import {
   AddressDetail,
   ExplorerDetailDrawer,
@@ -91,21 +95,6 @@ interface Receipt {
 }
 
 const BLOCKS_PAGE_SIZE = 20;
-
-// Small RPC helper via our proxy (targets C-Chain by default)
-async function rpc(method: string, params: unknown[] = [], node = "node1"): Promise<unknown> {
-  const res = await fetch("/api/titan/rpc", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ method, params, node, chain: "C" }),
-  });
-  const j = await res.json();
-  if (j?.error) {
-    const msg = typeof j.error === "string" ? j.error : j.error?.message || JSON.stringify(j.error);
-    throw new Error(msg);
-  }
-  return j?.result;
-}
 
 function shortHash(h?: string | null, left = 6, right = 4): string {
   if (!h) return "—";
@@ -178,6 +167,8 @@ interface FlatTx extends Tx {
 
 function ExplorerPageContent() {
   const titan = useTitanConfig();
+  const activeChain = useTitanChainStore((s) => s.chain);
+  const chainMeta = TITAN_CHAIN_META[activeChain];
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -207,6 +198,24 @@ function ExplorerPageContent() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [addressDetail, setAddressDetail] = useState<AddressDetail | null>(null);
+  const [pChainHeight, setPChainHeight] = useState<number | null>(null);
+
+  const rpc = useCallback(
+    async (method: string, params: unknown[] = [], node = "node1", chain = activeChain): Promise<unknown> => {
+      const res = await fetch("/api/titan/rpc", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method, params, node, chain }),
+      });
+      const j = await res.json();
+      if (j?.error) {
+        const msg = typeof j.error === "string" ? j.error : j.error?.message || JSON.stringify(j.error);
+        throw new Error(msg);
+      }
+      return j?.result;
+    },
+    [activeChain],
+  );
 
   const resolveAddressLabelFn = useCallback(
     (address: string) => resolveAddressLabel(address, addressLabels).label,
@@ -271,7 +280,7 @@ function ExplorerPageContent() {
       console.error("fetchBlock error", e);
       return null;
     }
-  }, []);
+  }, [rpc]);
 
   // Load recent N blocks starting from head
   const loadRecentBlocks = useCallback(async (count = BLOCKS_PAGE_SIZE) => {
@@ -301,7 +310,7 @@ function ExplorerPageContent() {
     } finally {
       setBlocksLoading(false);
     }
-  }, [fetchBlock]);
+  }, [fetchBlock, rpc]);
 
   // Load older blocks (paginated batches for infinite scroll)
   const loadOlder = useCallback(
@@ -517,6 +526,16 @@ function ExplorerPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  useEffect(() => {
+    if (activeChain === "P") {
+      setBrowseTab("validators");
+    } else if (activeChain === "C") {
+      setBrowseTab("blocks");
+    }
+    closeDrawer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChain]);
+
   // Auto-refresh nodes + detect new head and refresh blocks
   useEffect(() => {
     loadNodes();
@@ -529,14 +548,17 @@ function ExplorerPageContent() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (j?.addressLabels) setAddressLabels(j.addressLabels);
+        if (typeof j?.pChainHeight === "number") setPChainHeight(j.pChainHeight);
       })
       .catch(() => {
         /* optional */
       });
-  }, []);
+  }, [activeChain]);
 
-  // Initial blocks + periodic head check
+  // Initial blocks + periodic head check (C-Chain only)
   useEffect(() => {
+    if (activeChain !== "C") return;
+
     loadRecentBlocks(BLOCKS_PAGE_SIZE);
 
     const headPoll = setInterval(async () => {
@@ -556,7 +578,7 @@ function ExplorerPageContent() {
 
     return () => clearInterval(headPoll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeChain, rpc]);
 
   // Infinite scroll: load older blocks when sentinel enters view
   useEffect(() => {
@@ -607,14 +629,14 @@ function ExplorerPageContent() {
       <div className="rounded-xl border bg-gradient-to-br from-muted/40 via-background to-muted/20 p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
               <Blocks className="h-6 w-6" />
-              {titan.networkName} Chain
+              {titan.networkName} {chainMeta.name}
+              <Badge variant="secondary" className="font-mono text-xs">
+                {activeChain}
+              </Badge>
             </h1>
-            <p className="text-sm text-muted-foreground max-w-xl">
-              Browse blocks, transactions, and addresses on the C-Chain. Search by number, hash, or wallet — then drill
-              into full block and receipt details.
-            </p>
+            <p className="text-sm text-muted-foreground max-w-xl">{chainMeta.description}</p>
           </div>
           <Button
             variant="outline"
@@ -622,54 +644,84 @@ function ExplorerPageContent() {
             className="shrink-0"
             onClick={() => {
               loadNodes();
-              loadRecentBlocks(BLOCKS_PAGE_SIZE);
+              if (activeChain === "C") loadRecentBlocks(BLOCKS_PAGE_SIZE);
               closeDrawer();
             }}
-            disabled={blocksLoading || nodesLoading}
+            disabled={(activeChain === "C" && blocksLoading) || nodesLoading}
           >
             {blocksLoading || nodesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
         </div>
 
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              onKeyDown={onSearchKey}
-              placeholder="Block #, 0x hash, or 0x address"
-              className="h-11 pl-9 font-mono text-sm"
-              disabled={searchLoading}
-            />
-          </div>
-          <Button className="h-11" onClick={() => performSearch(searchValue)} disabled={searchLoading || !searchValue.trim()}>
-            {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Search chain
-          </Button>
-        </div>
-        {searchError && <p className="mt-2 text-xs text-amber-600 break-all">{searchError}</p>}
+        {activeChain === "C" && (
+          <>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  onKeyDown={onSearchKey}
+                  placeholder="Block #, 0x hash, or 0x address"
+                  className="h-11 pl-9 font-mono text-sm"
+                  disabled={searchLoading}
+                />
+              </div>
+              <Button
+                className="h-11"
+                onClick={() => performSearch(searchValue)}
+                disabled={searchLoading || !searchValue.trim()}
+              >
+                {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                Search chain
+              </Button>
+            </div>
+            {searchError && <p className="mt-2 text-xs text-amber-600 break-all">{searchError}</p>}
+          </>
+        )}
       </div>
 
       {/* Chain stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatMini title="Head block" value={headBlock ?? "—"} icon={<Zap className="h-4 w-4 text-muted-foreground" />} />
-        <StatMini title="Chain ID" value={chainId} sub={titan.chainIdHex} icon={<Hash className="h-4 w-4 text-muted-foreground" />} />
-        <StatMini title="Gas price" value={gasPrice} icon={<Activity className="h-4 w-4 text-muted-foreground" />} mono small />
-        <StatMini
-          title="In view"
-          value={`${blocks.length} blocks`}
-          sub={
-            avgBlockSec != null
-              ? `~${avgBlockSec.toFixed(1)}s avg · ${totalTxInView} txs`
-              : `${totalTxInView} transactions`
-          }
-          icon={<ArrowRightLeft className="h-4 w-4 text-muted-foreground" />}
-        />
+        {activeChain === "C" ? (
+          <>
+            <StatMini title="Head block" value={headBlock ?? "—"} icon={<Zap className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="Chain ID" value={chainId} sub={titan.chainIdHex} icon={<Hash className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="Gas price" value={gasPrice} icon={<Activity className="h-4 w-4 text-muted-foreground" />} mono small />
+            <StatMini
+              title="In view"
+              value={`${blocks.length} blocks`}
+              sub={
+                avgBlockSec != null
+                  ? `~${avgBlockSec.toFixed(1)}s avg · ${totalTxInView} txs`
+                  : `${totalTxInView} transactions`
+              }
+              icon={<ArrowRightLeft className="h-4 w-4 text-muted-foreground" />}
+            />
+          </>
+        ) : activeChain === "P" ? (
+          <>
+            <StatMini
+              title="P-chain height"
+              value={pChainHeight?.toLocaleString() ?? "—"}
+              icon={<Shield className="h-4 w-4 text-muted-foreground" />}
+            />
+            <StatMini title="Network ID" value={String(titan.networkId ?? "888")} sub="Titan primary" icon={<Hash className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="VM" value="Platform" sub="Staking & validators" icon={<Activity className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="API path" value="/ext/bc/P" sub="platform.* JSON-RPC" mono small />
+          </>
+        ) : (
+          <>
+            <StatMini title="VM" value="Exchange" sub="AVM assets" icon={<Layers className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="Network ID" value={String(titan.networkId ?? "888")} icon={<Hash className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="Primary activity" value="C-Chain" sub="Use header toggle for EVM" icon={<Blocks className="h-4 w-4 text-muted-foreground" />} />
+            <StatMini title="API path" value="/ext/bc/X" sub="avm.* JSON-RPC" mono small />
+          </>
+        )}
       </div>
 
-      {!titan.isLocalDev && nodes.length > 0 && (
+      {activeChain === "C" && !titan.isLocalDev && nodes.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>RPC sync:</span>
           {nodes.map((info) => {
@@ -694,6 +746,11 @@ function ExplorerPageContent() {
         </div>
       )}
 
+      {activeChain === "X" ? (
+        <XChainPanel />
+      ) : activeChain === "P" ? (
+        <ValidatorsPanel onLabelsLoaded={setAddressLabels} />
+      ) : (
       <Tabs
         value={browseTab}
         onValueChange={(v) => setBrowseTab(v as "blocks" | "transactions" | "analytics" | "validators")}
@@ -888,6 +945,7 @@ function ExplorerPageContent() {
           <ValidatorsPanel onLabelsLoaded={setAddressLabels} />
         </TabsContent>
       </Tabs>
+      )}
 
       <ExplorerDetailDrawer
         open={drawerOpen}
@@ -912,9 +970,13 @@ function ExplorerPageContent() {
       />
 
       <p className="text-[10px] text-muted-foreground px-1">
-        {titan.isLocalDev
-          ? `Live data from local Titan nodes via C-Chain JSON-RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE}.`
-          : `Live data from ${titan.networkName} public RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE} — scroll for history.`}
+        {activeChain === "C"
+          ? titan.isLocalDev
+            ? `Live data from local Titan nodes via C-Chain JSON-RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE}.`
+            : `Live data from ${titan.networkName} public RPC. Blocks load in batches of ${BLOCKS_PAGE_SIZE} — scroll for history.`
+          : activeChain === "P"
+            ? "Validator set and P-chain height from platform.getCurrentValidators / platform.getHeight."
+            : "X-Chain health via avm.getHeight and info.isBootstrapped."}
       </p>
     </div>
   );

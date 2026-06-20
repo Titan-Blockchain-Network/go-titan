@@ -14,11 +14,12 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
+import { TitanChainSync } from "@/stores/titan/chain-sync";
 import { WalletSync } from "@/stores/wallet/wallet-sync";
 
+import { ChainSwitcher } from "./_components/sidebar/chain-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
-import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
@@ -31,6 +32,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   return (
     <>
       <WalletSync />
+      <TitanChainSync />
       <SidebarProvider
       defaultOpen={defaultOpen}
       style={
@@ -68,7 +70,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             </div>
             <div className="flex items-center gap-2">
               <LayoutControls />
-              <ThemeSwitcher />
+              <ChainSwitcher />
               <Button asChild size="icon">
                 <Link
                   prefetch={false}

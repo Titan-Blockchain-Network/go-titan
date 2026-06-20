@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  Activity,
   AlertCircle,
   CheckCircle2,
   Copy,
   Loader2,
-  RefreshCw,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
@@ -73,7 +71,10 @@ export function NetworkOverview() {
   const titanBalance = useWalletStore((s) => s.titanBalance);
   const signMessage = useWalletStore((s) => s.signMessage);
   const walletError = useWalletStore((s) => s.error);
+  const walletLoading = useWalletStore((s) => s.isLoading);
+  const connectWallet = useWalletStore((s) => s.connect);
   const isWalletConnectedNow = isWalletConnected({ address });
+  const [secondsSinceRefresh, setSecondsSinceRefresh] = useState<number | null>(null);
 
   async function fetchAll() {
     setLoading(true);
@@ -106,6 +107,18 @@ export function NetworkOverview() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!lastUpdated) {
+      setSecondsSinceRefresh(null);
+      return;
+    }
+    const tick = () =>
+      setSecondsSinceRefresh(Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lastUpdated]);
+
   const bootstrap = nodes.find((n) => n.discoveryMethod === "bootstrap");
   const meshValidators = nodes.filter((n) => n.inMesh || n.discoveryMethod === "bootstrap").length;
   const healthyCount = nodes.filter((n) => n.healthy).length;
@@ -130,7 +143,7 @@ export function NetworkOverview() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Titan Network</h1>
           <p className="text-sm text-muted-foreground">
@@ -138,10 +151,49 @@ export function NetworkOverview() {
             {runtime?.networkId ?? APP_CONFIG.titan.networkId}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          {isWalletConnectedNow ? (
+            <div className="flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-600/15 text-emerald-600 dark:text-emerald-400">
+                <Wallet className="size-4" />
+              </div>
+              <div className="text-right text-sm leading-tight">
+                <p className="font-mono font-medium">{shortAddress(address)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {titanBalance} {APP_CONFIG.titan.nativeToken.symbol}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void connectWallet()}
+              disabled={walletLoading}
+              className="gap-2"
+            >
+              {walletLoading ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />}
+              Connect wallet
+            </Button>
+          )}
+          <p className="text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => void fetchAll()}
+              disabled={loading}
+              className="underline-offset-2 hover:underline disabled:opacity-50"
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+            {secondsSinceRefresh != null && (
+              <>
+                {" · "}
+                Updated {secondsSinceRefresh === 0 ? "just now" : `${secondsSinceRefresh}s ago`}
+                {" · auto every 10s"}
+              </>
+            )}
+          </p>
+        </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -225,7 +277,7 @@ export function NetworkOverview() {
           <p className="text-sm text-muted-foreground">
             {isWalletConnectedNow
               ? "Your wallet is connected. Use these values to configure MetaMask or other Titan tooling."
-              : "Use these values to add Titan Local UAT to MetaMask. Connect your wallet from the sidebar."}
+              : "Use these values to add Titan to MetaMask. Connect your wallet above."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -302,7 +354,6 @@ export function NetworkOverview() {
           {walletError && !isWalletConnectedNow && <p className="text-sm text-red-500 break-all">{walletError}</p>}
         </CardContent>
       </Card>
-      {lastUpdated && <p className="text-xs text-muted-foreground flex items-center gap-1"><Activity className="h-3 w-3" /> Last updated {lastUpdated.toLocaleTimeString()} · auto-refreshes every 10 s</p>}
     </div>
   );
 }
