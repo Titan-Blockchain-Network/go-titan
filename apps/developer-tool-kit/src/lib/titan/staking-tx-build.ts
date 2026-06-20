@@ -8,8 +8,8 @@ import { getPrimaryNodeBaseUrl, titanToNano } from "@/lib/titan/platform-rpc";
 const EXPORT_FEE_TITAN = 0.01;
 const MIN_DELEGATION_DAYS = 1;
 
-function bytesToHex(bytes: Uint8Array): string {
-  return utils.bufferToHex(bytes);
+function serializeUnsignedTx(tx: { toBytes(): Uint8Array }): string {
+  return utils.bufferToHex(tx.toBytes());
 }
 
 async function loadContext(baseUrl: string) {
@@ -66,7 +66,7 @@ export async function buildCtoPTransfer(cAddress: string, amountTitan: number) {
 
   return {
     pAddress,
-    exportTxHex: bytesToHex(utils.packTx(exportTx)),
+    exportTxHex: serializeUnsignedTx(exportTx),
     exportChain: "C" as const,
     importChain: "P" as const,
     feeTitan: EXPORT_FEE_TITAN,
@@ -108,7 +108,7 @@ export async function buildPChainImport(cAddress: string) {
 
   return {
     pAddress,
-    importTxHex: bytesToHex(utils.packTx(importTx)),
+    importTxHex: serializeUnsignedTx(importTx),
     importChain: "P" as const,
   };
 }
@@ -164,7 +164,7 @@ export async function buildDelegatorStake(input: {
 
   return {
     pAddress,
-    delegateTxHex: bytesToHex(utils.packTx(tx)),
+    delegateTxHex: serializeUnsignedTx(tx),
     chain: "P" as const,
     startTime: Number(start),
     endTime: Number(end),
