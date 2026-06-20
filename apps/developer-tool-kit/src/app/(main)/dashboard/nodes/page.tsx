@@ -243,7 +243,7 @@ export default function NodesPage() {
                     <Row label="Public IP" value={info.publicIp ?? endpoint} mono />
                     <Row
                       label="Peers"
-                      value={String(info.peers)}
+                      value={info.peers != null ? String(info.peers) : info.inMesh ? "In mesh" : "—"}
                       icon={<Users className="h-3 w-3" />}
                     />
                     <Row label="Chain ID" value={info.chainId ?? "—"} mono />
