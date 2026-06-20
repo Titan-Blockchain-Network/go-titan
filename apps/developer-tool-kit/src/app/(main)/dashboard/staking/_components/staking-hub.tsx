@@ -171,8 +171,8 @@ export function StakingHub() {
 
       setTransferStatus(
         step === "export"
-          ? "Approve the export in the Core extension popup (not MetaMask)…"
-          : "Approve the import in the Core extension popup…",
+          ? "Check the Core extension icon in your browser toolbar — approve the C-chain export there…"
+          : "Check the Core extension icon — approve the P-chain import there…",
       );
 
       const txId = await issueAtomicTx(txHex, chain);
