@@ -236,13 +236,19 @@ export async function POST(req: NextRequest) {
     const target =
       (nodeName
         ? nodes.find((n) => {
-            const needle = nodeName?.toLowerCase() ?? "";
+            const needle = nodeName.toLowerCase();
+            const registry = enrichNodeFields({
+              nodeId: n.nodeId,
+              host: n.host,
+              displayUrl: n.displayUrl,
+              fallback: n.node,
+            });
             return (
               n.node === nodeName ||
               n.nodeId === nodeName ||
-              n.nodeId?.includes(nodeName ?? "") ||
-              n.displayName?.toLowerCase() === needle ||
-              n.registryId?.toLowerCase() === needle
+              n.nodeId?.includes(nodeName) ||
+              registry.displayName.toLowerCase() === needle ||
+              registry.registryId?.toLowerCase() === needle
             );
           })
         : null) ?? nodes[0];
