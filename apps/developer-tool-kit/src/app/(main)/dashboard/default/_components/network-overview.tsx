@@ -14,24 +14,28 @@ import {
 import { APP_CONFIG } from "@/config/app-config";
 import { shortAddress } from "@/lib/titan/format";
 import { Badge } from "@/components/ui/badge";
+import type { TitanNodeStatus } from "@/app/api/titan/rpc/route";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface NodeHealth {
-  node: string;
-  nodeId?: string;
-  displayName?: string;
-  registryDroplet?: string;
-  host?: string;
-  port: number;
-  displayUrl?: string;
-  healthy: boolean;
-  peers: number;
-  chainId?: string;
-  blockNumber?: string;
-  error?: string;
-}
+type NodeHealth = Pick<
+  TitanNodeStatus,
+  | "node"
+  | "nodeId"
+  | "displayName"
+  | "registryDroplet"
+  | "host"
+  | "port"
+  | "displayUrl"
+  | "healthy"
+  | "peers"
+  | "chainId"
+  | "blockNumber"
+  | "error"
+  | "discoveryMethod"
+  | "inMesh"
+>;
 
 interface TitanRuntimeConfig {
   rpcUrl: string;
@@ -58,6 +62,8 @@ function StatCard({ title, value, sub, ok }: { title: string; value: string; sub
 
 export function NetworkOverview() {
   const [nodes, setNodes] = useState<NodeHealth[]>([]);
+  const [meshPeerCount, setMeshPeerCount] = useState<number | null>(null);
+  const [rpcProbeNode, setRpcProbeNode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [copiedField, setCopiedField] = useState<string>("");
@@ -75,6 +81,8 @@ export function NetworkOverview() {
       const res = await fetch("/api/titan/rpc");
       const data = await res.json();
       setNodes(data.nodes ?? []);
+      setMeshPeerCount(typeof data.meshPeerCount === "number" ? data.meshPeerCount : null);
+      setRpcProbeNode(typeof data.rpcProbeNode === "string" ? data.rpcProbeNode : null);
       setLastUpdated(new Date());
     } catch { setNodes([]); }
     finally { setLoading(false); }
@@ -98,10 +106,12 @@ export function NetworkOverview() {
     return () => clearInterval(id);
   }, []);
 
+  const bootstrap = nodes.find((n) => n.discoveryMethod === "bootstrap");
+  const meshValidators = nodes.filter((n) => n.inMesh || n.discoveryMethod === "bootstrap").length;
   const healthyCount = nodes.filter((n) => n.healthy).length;
-  const totalPeers = nodes.reduce((a, n) => a + n.peers, 0);
-  const chainId = nodes.find((n) => n.chainId)?.chainId ?? "—";
-  const blockNumber = nodes.find((n) => n.blockNumber)?.blockNumber ?? "—";
+  const chainId = bootstrap?.chainId ?? nodes.find((n) => n.chainId)?.chainId ?? "—";
+  const blockNumber = bootstrap?.blockNumber ?? nodes.find((n) => n.blockNumber)?.blockNumber ?? "—";
+  const meshPeers = meshPeerCount ?? bootstrap?.peers ?? 0;
 
   async function copyValue(label: string, value: string) {
     try {
@@ -129,19 +139,40 @@ export function NetworkOverview() {
         </Button>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Nodes Online" value={`${healthyCount} / ${nodes.length}`} sub={`${nodes.length - healthyCount} unhealthy`} ok={healthyCount === nodes.length} />
+        <StatCard
+          title="Validators in mesh"
+          value={String(meshValidators || nodes.length)}
+          sub={rpcProbeNode ? `via ${rpcProbeNode} RPC` : "P2P gossip + RPC"}
+          ok={meshValidators >= 5 || nodes.length >= 5}
+        />
         <StatCard title="Chain ID" value={chainId} sub="C-Chain" />
-        <StatCard title="Latest Block" value={blockNumber} sub="C-Chain head" />
-        <StatCard title="Total Peers" value={String(totalPeers)} sub="across all nodes" />
+        <StatCard title="Latest Block" value={blockNumber} sub="Network head (shared)" />
+        <StatCard
+          title="Mesh peers"
+          value={String(meshPeers)}
+          sub="Other validators connected to RPC node"
+          ok={meshPeers >= 4}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {nodes.map((info) => (
           <Card key={info.nodeId ?? info.node}>
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base font-semibold">
                   {info.displayName ?? info.nodeId ?? info.node}
                 </CardTitle>
+                {info.discoveryMethod === "bootstrap" ? (
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    Public RPC
+                  </Badge>
+                ) : info.discoveryMethod === "direct-probe" ? (
+                  <Badge className="shrink-0 bg-green-600 text-[10px]">Direct API</Badge>
+                ) : info.inMesh ? (
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    P2P mesh
+                  </Badge>
+                ) : null}
               </div>
               <p className="text-xs text-muted-foreground">
                 {info.registryDroplet && <span className="font-mono">{info.registryDroplet} · </span>}
@@ -156,8 +187,25 @@ export function NetworkOverview() {
               )}
             </CardHeader>
             <CardContent className="text-sm space-y-1">
-              <div className="flex justify-between"><span className="text-muted-foreground">Peers</span><span className="font-medium">{info.peers}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Block</span><span className="font-medium font-mono">{info.blockNumber ?? "—"}</span></div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Mesh</span>
+                <span className="font-medium">
+                  {info.discoveryMethod === "bootstrap" || info.discoveryMethod === "direct-probe"
+                    ? `${info.peers ?? "—"} peers`
+                    : info.inMesh
+                      ? "Connected"
+                      : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Block</span>
+                <span className="font-medium font-mono">
+                  {info.blockNumber ?? "—"}
+                  {info.discoveryMethod === "p2p-gossip" && info.blockNumber ? (
+                    <span className="text-[10px] text-muted-foreground font-sans ml-1">(shared)</span>
+                  ) : null}
+                </span>
+              </div>
               {info.error && <p className="text-xs text-red-500 break-all">{info.error}</p>}
             </CardContent>
           </Card>

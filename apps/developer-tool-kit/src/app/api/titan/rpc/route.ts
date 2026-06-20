@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { discoverTitanNodes } from "@/lib/titan/network-config";
-import { enrichNodeFields } from "@/lib/titan/node-registry";
+import { enrichNodeFields, resolveRegistryNode } from "@/lib/titan/node-registry";
 import { titanNodeFetch } from "@/lib/titan/titan-node-fetch";
 
 interface PeerEntry {
@@ -40,6 +40,10 @@ export interface TitanNodeStatus {
   registryRole?: string;
   registryDroplet?: string;
   registryIp?: string;
+  /** How this row was populated for the explorer UI. */
+  discoveryMethod?: "bootstrap" | "p2p-gossip" | "direct-probe";
+  /** Seen in info.peers on the bootstrap node (full mesh member). */
+  inMesh?: boolean;
 }
 
 function withRegistry(node: TitanNodeStatus): TitanNodeStatus {
@@ -81,7 +85,8 @@ function peerToNodeStatus(peer: PeerEntry): TitanNodeStatus | null {
     displayUrl: endpoint,
     source: "peer",
     healthy: true,
-    peers: 0,
+    inMesh: true,
+    discoveryMethod: "p2p-gossip",
     version: peer.version,
     publicIp: peer.publicIP || peer.ip,
     observedUptime: parseObservedUptime(peer.observedUptime),
@@ -204,9 +209,98 @@ export async function GET() {
     }
   }
 
+  const anchor = configured.find((n) => n.source === "seed") ?? configured[0];
+  if (anchor) {
+    anchor.discoveryMethod = "bootstrap";
+  }
+
+  const enrichedPeers = await enrichDiscoveredPeers(discoveredPeers, anchor);
+  const allNodes = [...configured, ...enrichedPeers].map(withRegistry);
+
   return NextResponse.json({
-    nodes: [...configured, ...discoveredPeers].map(withRegistry),
+    meshPeerCount: anchor?.peers ?? 0,
+    networkHeadBlock: anchor?.blockNumber ?? null,
+    rpcProbeNode: anchor?.displayName ?? anchor?.node ?? null,
+    nodes: allNodes,
   });
+}
+
+async function probeRegistryNode(ip: string): Promise<Partial<TitanNodeStatus> | null> {
+  const base = `http://${ip}:9650`;
+  const timeoutMs = 2500;
+  try {
+    const [healthRes, peersRes, blockRes, chainRes] = await Promise.allSettled([
+      titanNodeFetch(`${base}/ext/health`, { signal: AbortSignal.timeout(timeoutMs) }).then((r) =>
+        r.json(),
+      ),
+      jsonRpc(`${base}/ext/info`, "info.peers", [], timeoutMs),
+      jsonRpc(`${base}/ext/bc/C/rpc`, "eth_blockNumber", [], timeoutMs),
+      jsonRpc(`${base}/ext/bc/C/rpc`, "eth_chainId", [], timeoutMs),
+    ]);
+
+    const healthy =
+      healthRes.status === "fulfilled" && healthRes.value?.healthy === true;
+    const peerList: PeerEntry[] =
+      peersRes.status === "fulfilled"
+        ? ((peersRes.value?.result?.peers ?? []) as PeerEntry[])
+        : [];
+    const peers =
+      peersRes.status === "fulfilled"
+        ? Number(peersRes.value?.result?.numPeers ?? peerList.length)
+        : undefined;
+    const blockHex =
+      blockRes.status === "fulfilled" ? blockRes.value?.result : undefined;
+    const blockNumber = blockHex ? String(Number.parseInt(blockHex, 16)) : undefined;
+    const chainIdHex =
+      chainRes.status === "fulfilled" ? chainRes.value?.result : undefined;
+    const chainId = chainIdHex ? String(Number.parseInt(chainIdHex, 16)) : undefined;
+
+    if (blockNumber == null && !healthy) return null;
+
+    return {
+      healthy,
+      peers,
+      blockNumber,
+      chainId,
+      discoveryMethod: "direct-probe",
+      inMesh: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** P2P rows from info.peers: try direct HTTP, else inherit network head from bootstrap. */
+async function enrichDiscoveredPeers(
+  peers: TitanNodeStatus[],
+  anchor?: TitanNodeStatus,
+): Promise<TitanNodeStatus[]> {
+  return Promise.all(
+    peers.map(async (peer) => {
+      const reg = resolveRegistryNode({
+        nodeId: peer.nodeId,
+        host: peer.host,
+        publicIp: peer.publicIp,
+        displayUrl: peer.displayUrl,
+      });
+      const ip = reg?.ip ?? peer.host;
+      if (ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+        const probed = await probeRegistryNode(ip);
+        if (probed) {
+          return { ...peer, ...probed };
+        }
+      }
+
+      return {
+        ...peer,
+        blockNumber: anchor?.blockNumber,
+        chainId: anchor?.chainId,
+        gasPrice: anchor?.gasPrice,
+        discoveryMethod: "p2p-gossip",
+        inMesh: true,
+      };
+    }),
+  );
 }
 
 // POST: Proxy generic JSON-RPC calls for the explorer (and other clients).
