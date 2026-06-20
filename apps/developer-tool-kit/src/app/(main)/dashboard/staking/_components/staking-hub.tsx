@@ -19,7 +19,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { shortAddress } from "@/lib/titan/format";
-import { hasAvalancheWallet, issueAtomicTx } from "@/lib/titan/staking-client";
+import {
+  hasAvalancheWallet,
+  issueAtomicTx,
+  listenForAvalancheWallet,
+} from "@/lib/titan/staking-client";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 
 interface ValidatorRow {
@@ -56,13 +60,13 @@ export function StakingHub() {
 
   const walletReady = isWalletConnected({ address });
   const onTitan = isOnTitanChain(chainId);
-  const coreDetected = hasAvalancheWallet();
 
   const [data, setData] = useState<StakingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("");
+  const [coreDetected, setCoreDetected] = useState(false);
 
   const [transferAmount, setTransferAmount] = useState("1");
   const [delegateAmount, setDelegateAmount] = useState("1");
@@ -92,6 +96,17 @@ export function StakingHub() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const refreshCore = () => setCoreDetected(hasAvalancheWallet());
+    refreshCore();
+    const stop = listenForAvalancheWallet();
+    const timer = window.setInterval(refreshCore, 2000);
+    return () => {
+      stop();
+      window.clearInterval(timer);
+    };
+  }, []);
 
   async function runTransfer(step: "export" | "import") {
     if (!walletReady || !onTitan) return;
@@ -187,22 +202,33 @@ export function StakingHub() {
         </Button>
       </div>
 
-      {!coreDetected && (
+      {walletReady && !onTitan && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="py-4 text-sm">
-            <p className="font-medium text-amber-900 dark:text-amber-200">Avalanche Core recommended</p>
+            <p className="font-medium text-amber-900 dark:text-amber-200">Switch to Titan network</p>
             <p className="mt-1 text-muted-foreground">
-              P-chain transactions need an Avalanche-compatible wallet. MetaMask alone handles C-chain
-              only — install{" "}
+              C-chain is connected, but your wallet is on the wrong network. Approve the Titan network
+              switch in MetaMask to fund P-chain and delegate.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {walletReady && onTitan && !coreDetected && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="py-4 text-sm">
+            <p className="font-medium text-amber-900 dark:text-amber-200">Avalanche Core required for P-chain</p>
+            <p className="mt-1 text-muted-foreground">
+              MetaMask covers C-chain balances and export signing. Import and delegation need{" "}
               <a
                 href="https://core.app"
                 target="_blank"
                 rel="noreferrer"
                 className="text-primary hover:underline inline-flex items-center gap-1"
               >
-                Core <ExternalLink className="h-3 w-3" />
+                Avalanche Core <ExternalLink className="h-3 w-3" />
               </a>{" "}
-              on the same key to sign exports, imports, and delegations in one click.
+              on the same address — unlock Core on this page, then retry export / import / delegate.
             </p>
           </CardContent>
         </Card>
@@ -219,7 +245,13 @@ export function StakingHub() {
         <MiniStat
           title="P-chain balance"
           value={walletReady && data?.wallet ? `${pBalance.toLocaleString()} T` : "—"}
-          sub={data?.wallet ? shortAddress(data.wallet.pAddress) : "Connect wallet"}
+          sub={
+            data?.wallet
+              ? shortAddress(data.wallet.pAddress)
+              : walletReady
+                ? error || "Loading P-chain…"
+                : "Connect wallet"
+          }
           mono
         />
       </div>

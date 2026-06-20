@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 
 import { buildValidatorAddressLabels } from "@/lib/titan/address-labels";
-import { cAddressToPChainAddress } from "@/lib/titan/p-chain-address";
+import { cAddressToPChainAddress, resolveNetworkHrp } from "@/lib/titan/p-chain-address";
 import { getPrimaryNodeBaseUrl, nanoToTitan, platformRpc } from "@/lib/titan/platform-rpc";
 import { getPChainBalance } from "@/lib/titan/staking-tx-build";
 import { enrichNodeFields } from "@/lib/titan/node-registry";
@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
     const cAddress = request.nextUrl.searchParams.get("cAddress")?.trim();
 
     const baseUrl = await getPrimaryNodeBaseUrl();
-    const context = await Context.getContextFromURI(baseUrl);
+    const rawContext = await Context.getContextFromURI(baseUrl);
+    const hrp = resolveNetworkHrp(rawContext.networkID, rawContext.hrp);
+    const context = hrp === rawContext.hrp ? rawContext : { ...rawContext, hrp };
 
     const [minStake, currentValidators] = await Promise.all([
       platformRpc<{ minValidatorStake?: string; minDelegatorStake?: string }>(

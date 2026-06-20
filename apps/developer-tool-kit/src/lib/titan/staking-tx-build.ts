@@ -2,7 +2,7 @@ import { Context, evm, networkIDs, pvm, utils } from "@flarenetwork/flarejs";
 import { isAddress } from "viem";
 
 import { cChainRpc } from "@/lib/titan/c-chain-rpc";
-import { cAddressToPChainAddress } from "@/lib/titan/p-chain-address";
+import { cAddressToPChainAddress, resolveNetworkHrp } from "@/lib/titan/p-chain-address";
 import { getPrimaryNodeBaseUrl, titanToNano } from "@/lib/titan/platform-rpc";
 
 const EXPORT_FEE_TITAN = 0.01;
@@ -13,7 +13,9 @@ function serializeUnsignedTx(tx: { toBytes(): Uint8Array }): string {
 }
 
 async function loadContext(baseUrl: string) {
-  return Context.getContextFromURI(baseUrl);
+  const context = await Context.getContextFromURI(baseUrl);
+  const hrp = resolveNetworkHrp(context.networkID, context.hrp);
+  return hrp === context.hrp ? context : { ...context, hrp };
 }
 
 export async function getPChainBalance(cAddress: string): Promise<{

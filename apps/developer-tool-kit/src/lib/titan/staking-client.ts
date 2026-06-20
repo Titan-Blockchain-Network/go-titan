@@ -5,10 +5,38 @@ type AvalancheProvider = {
 export function getAvalancheWallet(): AvalancheProvider | undefined {
   if (typeof window === "undefined") return undefined;
   const w = window as Window & {
-    avalanche?: AvalancheProvider;
+    avalanche?: AvalancheProvider & { isAvalanche?: boolean };
     core?: AvalancheProvider;
   };
-  return w.avalanche ?? w.core;
+  if (w.avalanche?.request) return w.avalanche;
+  if (w.core?.request) return w.core;
+
+  // EIP-6963 multi-wallet discovery (Core, etc.)
+  const discovered = (w as Window & { __titanAvalancheProvider?: AvalancheProvider })
+    .__titanAvalancheProvider;
+  return discovered?.request ? discovered : undefined;
+}
+
+/** Register Core / Avalanche wallet from EIP-6963 announcements. */
+export function listenForAvalancheWallet(): () => void {
+  if (typeof window === "undefined") return () => undefined;
+
+  const onAnnounce = (event: Event) => {
+    const detail = (event as CustomEvent<{ info?: { name?: string }; provider?: AvalancheProvider }>)
+      .detail;
+    const name = detail?.info?.name?.toLowerCase() ?? "";
+    if (
+      detail?.provider?.request &&
+      (name.includes("core") || name.includes("avalanche"))
+    ) {
+      (window as Window & { __titanAvalancheProvider?: AvalancheProvider }).__titanAvalancheProvider =
+        detail.provider;
+    }
+  };
+
+  window.addEventListener("eip6963:announceProvider", onAnnounce);
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  return () => window.removeEventListener("eip6963:announceProvider", onAnnounce);
 }
 
 export function hasAvalancheWallet(): boolean {
