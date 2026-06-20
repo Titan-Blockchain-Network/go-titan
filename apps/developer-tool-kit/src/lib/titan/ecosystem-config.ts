@@ -1,3 +1,5 @@
+import { TITAN_GITHUB_REPO_URL } from "@/lib/titan/origin";
+
 /** Live ecosystem apps — set on Explorer (Vercel env). */
 export interface TitanEcosystemConfig {
   chessEscrowAddress: `0x${string}` | null;
@@ -24,6 +26,6 @@ export function getTitanEcosystemConfig(): TitanEcosystemConfig {
     chessAppUrl: chessApp || null,
     docsRepoUrl:
       process.env.TITAN_DOCS_REPO_URL?.trim() ||
-      "https://github.com/Titan-Blockchain-Network/go-titan",
+      TITAN_GITHUB_REPO_URL,
   };
 }

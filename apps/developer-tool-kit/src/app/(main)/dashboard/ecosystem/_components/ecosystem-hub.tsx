@@ -13,7 +13,6 @@ import {
   GitBranch,
   Loader2,
   Radio,
-  RefreshCw,
   Rocket,
   Server,
   Swords,
@@ -205,12 +204,10 @@ export function EcosystemHub() {
   const titan = useTitanConfig();
   const [data, setData] = useState<EcosystemSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSnapshot = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    else setRefreshing(true);
     setError(null);
 
     try {
@@ -224,7 +221,6 @@ export function EcosystemHub() {
       setError(e instanceof Error ? e.message : "Snapshot unavailable");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -259,24 +255,21 @@ export function EcosystemHub() {
               {operational ? "Network operational" : "Checking network"}
             </Badge>
             <Badge variant="outline">Chain {titan.chainIdDec}</Badge>
-            {data?.fetchedAt && (
-              <span className="text-xs text-muted-foreground">
-                Updated {Math.max(0, Math.floor((Date.now() - data.fetchedAt) / 1000))}s ago
-              </span>
-            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => void fetchSnapshot(true)}
-            disabled={refreshing}
-          >
-            {refreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            Refresh
-          </Button>
+          {!operational && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => void fetchSnapshot(true)}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <Activity className="size-4" />}
+              Retry
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="gap-2" asChild>
             <a href="/api/titan/status" target="_blank" rel="noopener noreferrer">
               <Radio className="size-4" />
@@ -503,7 +496,7 @@ export function EcosystemHub() {
               title: "Connect wallet",
               desc: `Add ${titan.networkName} (chain ${titan.chainIdDec}) in MetaMask`,
               icon: Wallet,
-              href: "/dashboard/default",
+              href: "/dashboard/developers",
             },
             {
               title: "Deploy contract",
@@ -521,7 +514,7 @@ export function EcosystemHub() {
               title: "Fork the repo",
               desc: "Docs, chess app, and explorer source",
               icon: GitBranch,
-              href: data?.docsRepoUrl ?? "https://github.com/Titan-Blockchain-Network/go-titan",
+              href: data?.docsRepoUrl ?? "https://github.com/Titan-Blockchain-Network/go-titan/",
               external: true,
             },
           ].map((item) => {

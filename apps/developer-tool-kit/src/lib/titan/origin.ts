@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const TITAN_GITHUB_REPO = "https://github.com/pakeku/go-titan";
-export const TITAN_GITHUB_BRANCH = "dev/explorer";
+export const TITAN_GITHUB_REPO = "https://github.com/Titan-Blockchain-Network/go-titan";
+export const TITAN_GITHUB_REPO_URL = `${TITAN_GITHUB_REPO}/`;
+export const TITAN_GITHUB_BRANCH = "main";
 export const TITAN_ORIGIN_GITHUB_PATH = "titan-network/origin.json";
 export const TITAN_ORIGIN_GITHUB_RAW_URL =
-  `https://raw.githubusercontent.com/pakeku/go-titan/${TITAN_GITHUB_BRANCH}/${TITAN_ORIGIN_GITHUB_PATH}`;
+  `https://raw.githubusercontent.com/Titan-Blockchain-Network/go-titan/${TITAN_GITHUB_BRANCH}/${TITAN_ORIGIN_GITHUB_PATH}`;
 export const TITAN_ORIGIN_GITHUB_BLOB_URL =
   `${TITAN_GITHUB_REPO}/blob/${TITAN_GITHUB_BRANCH}/${TITAN_ORIGIN_GITHUB_PATH}`;
 

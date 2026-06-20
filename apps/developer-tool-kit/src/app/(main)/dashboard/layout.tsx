@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
+import { TITAN_GITHUB_REPO_URL } from "@/lib/titan/origin";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
@@ -19,7 +20,6 @@ import { NetworkStatusSync } from "@/stores/titan/network-status-sync";
 import { WalletSync } from "@/stores/wallet/wallet-sync";
 
 import { ChainSwitcher } from "./_components/sidebar/chain-switcher";
-import { LayoutControls } from "./_components/sidebar/layout-controls";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
@@ -71,17 +71,16 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
               <SearchDialog />
             </div>
             <div className="flex items-center gap-2">
-              <LayoutControls />
               <ChainSwitcher />
-              <Button asChild size="icon">
+              <Button asChild size="icon" variant="outline">
                 <Link
                   prefetch={false}
-                  href="https://github.com/pakeku/go-titan"
+                  href={TITAN_GITHUB_REPO_URL}
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Open GitHub repository"
                 >
-                  <SimpleIcon icon={siGithub} className="fill-primary-foreground" />
+                  <SimpleIcon icon={siGithub} className="fill-foreground" />
                 </Link>
               </Button>
             </div>

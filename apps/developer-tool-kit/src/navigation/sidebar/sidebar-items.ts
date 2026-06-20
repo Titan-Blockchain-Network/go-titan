@@ -1,10 +1,12 @@
 import {
   Blocks,
+  BookOpen,
   Code2,
   Container,
   FileJson,
   type LucideIcon,
   Network,
+  Plug,
   Rocket,
   ScrollText,
   Server,
@@ -74,10 +76,19 @@ export const sidebarItems: NavGroup[] = [
     label: "Developers",
     items: [
       {
+        title: "Documentation",
+        url: "/dashboard/docs",
+        icon: BookOpen,
+      },
+      {
+        title: "Developer Connection",
+        url: "/dashboard/developers",
+        icon: Plug,
+      },
+      {
         title: "Contract Studio",
         url: "/dashboard/contracts",
         icon: Code2,
-        isNew: true,
       },
       {
         title: "Origin",
