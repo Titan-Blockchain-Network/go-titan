@@ -12,36 +12,10 @@ import {
 import { APP_CONFIG } from "@/config/app-config";
 import { shortAddress } from "@/lib/titan/format";
 import { Badge } from "@/components/ui/badge";
-import type { TitanNodeStatus } from "@/app/api/titan/rpc/route";
+import { useNetworkStatusStore } from "@/stores/titan/network-status-store";
 import { isOnTitanChain, isWalletConnected, useWalletStore } from "@/stores/wallet/wallet-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-type NodeHealth = Pick<
-  TitanNodeStatus,
-  | "node"
-  | "nodeId"
-  | "displayName"
-  | "registryDroplet"
-  | "host"
-  | "port"
-  | "displayUrl"
-  | "healthy"
-  | "peers"
-  | "chainId"
-  | "blockNumber"
-  | "error"
-  | "discoveryMethod"
-  | "inMesh"
->;
-
-interface TitanRuntimeConfig {
-  rpcUrl: string;
-  dashboardUrl: string;
-  explorerUrl: string;
-  networkName: string;
-  networkId?: number;
-}
 
 function StatCard({ title, value, sub, ok }: { title: string; value: string; sub?: string; ok?: boolean }) {
   return (
@@ -59,13 +33,15 @@ function StatCard({ title, value, sub, ok }: { title: string; value: string; sub
 }
 
 export function NetworkOverview() {
-  const [nodes, setNodes] = useState<NodeHealth[]>([]);
-  const [meshPeerCount, setMeshPeerCount] = useState<number | null>(null);
-  const [rpcProbeNode, setRpcProbeNode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const nodes = useNetworkStatusStore((s) => s.nodes);
+  const meshPeerCount = useNetworkStatusStore((s) => s.meshPeerCount);
+  const rpcProbeNode = useNetworkStatusStore((s) => s.rpcProbeNode);
+  const runtime = useNetworkStatusStore((s) => s.runtime);
+  const lastUpdatedMs = useNetworkStatusStore((s) => s.lastUpdated);
+  const loading = useNetworkStatusStore((s) => s.loading);
+  const isRefreshing = useNetworkStatusStore((s) => s.isRefreshing);
+  const refresh = useNetworkStatusStore((s) => s.refresh);
   const [copiedField, setCopiedField] = useState<string>("");
-  const [runtime, setRuntime] = useState<TitanRuntimeConfig | null>(null);
   const address = useWalletStore((s) => s.address);
   const walletChainId = useWalletStore((s) => s.chainId);
   const titanBalance = useWalletStore((s) => s.titanBalance);
@@ -76,48 +52,17 @@ export function NetworkOverview() {
   const isWalletConnectedNow = isWalletConnected({ address });
   const [secondsSinceRefresh, setSecondsSinceRefresh] = useState<number | null>(null);
 
-  async function fetchAll() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/titan/rpc");
-      const data = await res.json();
-      setNodes(data.nodes ?? []);
-      setMeshPeerCount(typeof data.meshPeerCount === "number" ? data.meshPeerCount : null);
-      setRpcProbeNode(typeof data.rpcProbeNode === "string" ? data.rpcProbeNode : null);
-      setLastUpdated(new Date());
-    } catch { setNodes([]); }
-    finally { setLoading(false); }
-  }
-
   useEffect(() => {
-    fetchAll();
-    fetch("/api/titan/config")
-      .then((r) => r.json())
-      .then((j) =>
-        setRuntime({
-          rpcUrl: j.rpcUrl ?? APP_CONFIG.titan.rpcUrl,
-          dashboardUrl: j.dashboardUrl ?? APP_CONFIG.titan.dashboardUrl,
-          explorerUrl: j.explorerUrl ?? APP_CONFIG.titan.explorerUrl,
-          networkName: j.networkName ?? APP_CONFIG.titan.networkName,
-          networkId: j.networkId ?? APP_CONFIG.titan.networkId,
-        }),
-      )
-      .catch(() => setRuntime(null));
-    const id = setInterval(fetchAll, 10_000);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!lastUpdated) {
+    if (lastUpdatedMs == null) {
       setSecondsSinceRefresh(null);
       return;
     }
     const tick = () =>
-      setSecondsSinceRefresh(Math.max(0, Math.floor((Date.now() - lastUpdated.getTime()) / 1000)));
+      setSecondsSinceRefresh(Math.max(0, Math.floor((Date.now() - lastUpdatedMs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [lastUpdated]);
+  }, [lastUpdatedMs]);
 
   const bootstrap = nodes.find((n) => n.discoveryMethod === "bootstrap");
   const meshValidators = nodes.filter((n) => n.inMesh || n.discoveryMethod === "bootstrap").length;
@@ -179,17 +124,17 @@ export function NetworkOverview() {
           <p className="text-xs text-muted-foreground">
             <button
               type="button"
-              onClick={() => void fetchAll()}
-              disabled={loading}
+              onClick={() => void refresh()}
+              disabled={loading || isRefreshing}
               className="underline-offset-2 hover:underline disabled:opacity-50"
             >
-              {loading ? "Refreshing…" : "Refresh"}
+              {loading || isRefreshing ? "Refreshing…" : "Refresh"}
             </button>
             {secondsSinceRefresh != null && (
               <>
                 {" · "}
                 Updated {secondsSinceRefresh === 0 ? "just now" : `${secondsSinceRefresh}s ago`}
-                {" · auto every 10s"}
+                {isRefreshing ? " · updating…" : " · auto every 10s"}
               </>
             )}
           </p>

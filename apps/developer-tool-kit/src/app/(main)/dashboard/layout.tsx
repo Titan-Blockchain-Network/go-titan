@@ -15,6 +15,7 @@ import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/prefer
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 import { TitanChainSync } from "@/stores/titan/chain-sync";
+import { NetworkStatusSync } from "@/stores/titan/network-status-sync";
 import { WalletSync } from "@/stores/wallet/wallet-sync";
 
 import { ChainSwitcher } from "./_components/sidebar/chain-switcher";
@@ -33,6 +34,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     <>
       <WalletSync />
       <TitanChainSync />
+      <NetworkStatusSync />
       <SidebarProvider
       defaultOpen={defaultOpen}
       style={
