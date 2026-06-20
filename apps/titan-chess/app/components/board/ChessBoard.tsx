@@ -1,11 +1,10 @@
 'use client';
 
 import { useMemo, useCallback, type PointerEvent } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Chess } from 'chess.js';
 import type { Square, Color } from 'chess.js';
 import type { GameState } from '@/types/chess';
-import { getPieceSVG } from '@/lib/pieces';
+import { getPieceDataUri, PIECE_SIZE_RATIO } from '@/lib/pieces';
 
 interface ChessBoardProps {
   gameState: GameState;
@@ -169,36 +168,44 @@ export function ChessBoard({
             fontFamily="Inter, sans-serif">{rank}</text>
         ))}
 
-        {/* Pieces */}
+        {/* Pieces — SVG <image> scales with the board (foreignObject HTML does not on mobile). */}
         {squares.map(({ sq, col, row, piece }) => {
           if (!piece) return null;
           const x = LABEL + col * CELL;
           const y = row * CELL;
-          const svgContent = getPieceSVG(piece.type, piece.color);
+          const pieceUri = getPieceDataUri(piece.type, piece.color);
+          if (!pieceUri) return null;
+
+          const pieceSize = CELL * PIECE_SIZE_RATIO;
+          const piecePad = (CELL - pieceSize) / 2;
+          const isSelected = selectedSquare === sq;
 
           return (
-            <foreignObject
-              key={`${sq}-${piece.color}${piece.type}`}
-              x={x} y={y}
-              width={CELL} height={CELL}
-              onPointerUp={handleSquarePress(sq)}
-              style={{ cursor: 'pointer', overflow: 'hidden', touchAction: 'manipulation' }}
-            >
-              <div style={{ width: CELL, height: CELL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div
-                  style={{
-                    width: CELL * 0.86,
-                    height: CELL * 0.86,
-                    filter: selectedSquare === sq
-                      ? 'drop-shadow(0 4px 12px rgba(201,168,76,0.8))'
-                      : 'drop-shadow(0 2px 5px rgba(0,0,0,0.45))',
-                    transition: 'filter 0.15s ease',
-                    transform: selectedSquare === sq ? 'scale(1.04)' : 'scale(1)',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: svgContent }}
+            <g key={`${sq}-${piece.color}${piece.type}`}>
+              {isSelected && (
+                <rect
+                  x={x + 2}
+                  y={y + 2}
+                  width={CELL - 4}
+                  height={CELL - 4}
+                  rx={4}
+                  fill="none"
+                  stroke="rgba(201,168,76,0.65)"
+                  strokeWidth={2}
+                  pointerEvents="none"
                 />
-              </div>
-            </foreignObject>
+              )}
+              <image
+                href={pieceUri}
+                x={x + piecePad}
+                y={y + piecePad}
+                width={pieceSize}
+                height={pieceSize}
+                preserveAspectRatio="xMidYMid meet"
+                onPointerUp={handleSquarePress(sq)}
+                style={{ cursor: 'pointer', touchAction: 'manipulation' }}
+              />
+            </g>
           );
         })}
 

@@ -125,3 +125,22 @@ export function getPieceSVG(type: PieceSymbol, color: Color): string {
 export function getPieceKey(type: PieceSymbol, color: Color): string {
   return `${color}${type.toUpperCase()}`;
 }
+
+const PIECE_DATA_URI_CACHE = new Map<string, string>();
+
+/** Data URI for native SVG <image> — scales correctly inside the board (unlike foreignObject). */
+export function getPieceDataUri(type: PieceSymbol, color: Color): string {
+  const key = getPieceKey(type, color);
+  const cached = PIECE_DATA_URI_CACHE.get(key);
+  if (cached) return cached;
+
+  const svg = PIECE_SVG[key];
+  if (!svg) return '';
+
+  const uri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  PIECE_DATA_URI_CACHE.set(key, uri);
+  return uri;
+}
+
+/** Fraction of cell size used for piece art (rest is padding inside the square). */
+export const PIECE_SIZE_RATIO = 0.78;
