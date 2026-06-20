@@ -2,7 +2,9 @@ import { Chess, type Color } from 'chess.js';
 import {
   createPublicClient,
   createWalletClient,
+  decodeFunctionResult,
   defineChain,
+  encodeFunctionData,
   http,
   type Address,
   type Hex,
@@ -37,6 +39,50 @@ const titanChain = defineChain({
   },
 });
 
+async function ethCall(data: Hex): Promise<Hex> {
+  const res = await fetch(TITAN_NETWORK.rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_call',
+      params: [{ to: ESCROW_ADDRESS, data }, 'latest'],
+    }),
+  });
+
+  const json = (await res.json()) as {
+    result?: Hex;
+    error?: { message?: string };
+  };
+
+  if (json.error) {
+    throw new Error(json.error.message ?? 'eth_call failed');
+  }
+  if (!json.result) {
+    throw new Error('eth_call returned empty data');
+  }
+
+  return json.result;
+}
+
+async function readEscrowContract<T>(
+  functionName: 'getGame' | 'stockfishOperator',
+  args: readonly unknown[] = [],
+): Promise<T> {
+  const data = encodeFunctionData({
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName,
+    args,
+  });
+  const result = await ethCall(data);
+  return decodeFunctionResult({
+    abi: TITAN_CHESS_ESCROW_ABI,
+    functionName,
+    data: result,
+  }) as T;
+}
+
 export async function settleEscrowOnChain(input: {
   gameId: bigint;
   outcome: EscrowOutcome;
@@ -63,12 +109,9 @@ export async function settleEscrowOnChain(input: {
   const account = privateKeyToAccount(pk as Hex);
   const walletClient = createWalletClient({ account, chain: titanChain, transport });
 
-  const [player, , , status] = await publicClient.readContract({
-    address: ESCROW_ADDRESS,
-    abi: TITAN_CHESS_ESCROW_ABI,
-    functionName: 'getGame',
-    args: [input.gameId],
-  });
+  const [player, , , status] = await readEscrowContract<
+    readonly [Address, bigint, bigint, number, number, Address, bigint, bigint]
+  >('getGame', [input.gameId]);
 
   if (Number(status) !== GAME_STATUS_ACTIVE) {
     throw new Error('Game is not active');
@@ -78,21 +121,23 @@ export async function settleEscrowOnChain(input: {
     throw new Error('Player does not own this game');
   }
 
-  const operator = await publicClient.readContract({
-    address: ESCROW_ADDRESS,
-    abi: TITAN_CHESS_ESCROW_ABI,
-    functionName: 'stockfishOperator',
-  });
+  const operator = await readEscrowContract<Address>('stockfishOperator');
 
   if (operator.toLowerCase() !== account.address.toLowerCase()) {
     throw new Error('Server operator key does not match contract operator');
   }
 
-  const hash = await walletClient.writeContract({
-    address: ESCROW_ADDRESS,
+  const calldata = encodeFunctionData({
     abi: TITAN_CHESS_ESCROW_ABI,
     functionName: 'reportResult',
     args: [input.gameId, input.outcome],
+  });
+
+  const hash = await walletClient.sendTransaction({
+    account,
+    chain: titanChain,
+    to: ESCROW_ADDRESS,
+    data: calldata,
   });
 
   await publicClient.waitForTransactionReceipt({ hash });
