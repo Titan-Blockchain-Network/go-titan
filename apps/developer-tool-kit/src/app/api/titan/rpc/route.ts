@@ -23,7 +23,7 @@ export interface TitanNodeStatus {
   displayUrl?: string;
   source?: "seed" | "local" | "peer";
   healthy: boolean;
-  peers: number;
+  peers?: number;
   chainId?: string;
   blockNumber?: string;
   gasPrice?: string;
