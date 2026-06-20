@@ -11,6 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface NodeInfo {
   node: string;
   nodeId?: string;
+  displayName?: string;
+  registryId?: string;
+  registryRole?: string;
+  registryDroplet?: string;
+  registryIp?: string;
   host?: string;
   port: number;
   displayUrl?: string;
@@ -104,10 +109,17 @@ export default function NodesPage() {
                 {apiNodes.map((info) => {
                   const height = Number.parseInt(info.blockNumber ?? "0", 10);
                   const lag = Number.isFinite(height) ? Math.max(0, maxBlock - height) : null;
-                  const label = info.nodeId ?? info.node;
+                  const label = info.displayName ?? info.nodeId ?? info.node;
                   return (
                     <tr key={info.nodeId ?? info.node}>
-                      <td className="py-2 font-mono text-xs">{label}</td>
+                      <td className="py-2 text-xs">
+                        <span className="font-semibold">{label}</span>
+                        {info.nodeId && info.displayName && (
+                          <span className="block font-mono text-[10px] text-muted-foreground">
+                            {info.nodeId.replace(/^NodeID-/, "").slice(0, 16)}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2 text-right font-mono tabular-nums">
                         {info.blockNumber ?? "—"}
                       </td>
@@ -150,8 +162,9 @@ export default function NodesPage() {
         ) : null}
         {nodes.map((info) => {
           const isPeer = info.source === "peer";
-          const label = info.nodeId ?? info.node;
-          const endpoint = info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`;
+          const label = info.displayName ?? info.nodeId ?? info.node;
+          const endpoint =
+            info.registryIp ?? info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`;
           const sourceLabel =
             info.source === "seed"
               ? "bootstrap"
@@ -166,13 +179,17 @@ export default function NodesPage() {
                 <div className="flex items-center gap-3">
                   <Server className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-base font-mono text-sm break-all">
-                      {label}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground font-mono break-all">
-                      {endpoint}
-                      {sourceLabel ? ` · ${sourceLabel}` : ""}
+                    <CardTitle className="text-base break-all">{label}</CardTitle>
+                    <p className="text-xs text-muted-foreground break-all">
+                      {info.registryDroplet && <span className="font-mono">{info.registryDroplet} · </span>}
+                      <span className="font-mono">{endpoint}</span>
+                      {info.registryRole ? ` · ${info.registryRole}` : sourceLabel ? ` · ${sourceLabel}` : ""}
                     </p>
+                    {info.nodeId && (
+                      <p className="text-[10px] text-muted-foreground font-mono break-all" title={info.nodeId}>
+                        {info.nodeId}
+                      </p>
+                    )}
                   </div>
                   {isPeer ? (
                     <Badge className="bg-blue-500 text-white shrink-0">Connected</Badge>

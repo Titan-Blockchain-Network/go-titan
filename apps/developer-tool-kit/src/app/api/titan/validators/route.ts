@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildValidatorAddressLabels } from "@/lib/titan/address-labels";
 import { discoverTitanNodes } from "@/lib/titan/network-config";
+import { enrichNodeFields, getRegistryNodes } from "@/lib/titan/node-registry";
 import { titanNodeFetch } from "@/lib/titan/titan-node-fetch";
 
 export const dynamic = "force-dynamic";
@@ -147,8 +148,16 @@ export async function GET() {
   const normalized = validators.map((v) => {
     const stakeTitan = nanoToTitan(v.weight);
     const rewardAddresses = collectRewardAddresses(v);
+    const registry = enrichNodeFields({
+      nodeId: v.nodeID,
+      fallback: v.nodeID?.replace(/^NodeID-/, "").slice(0, 12),
+    });
     return {
       nodeID: v.nodeID ?? "—",
+      displayName: registry.displayName,
+      registryId: registry.registryId,
+      registryRole: registry.registryRole,
+      registryDroplet: registry.registryDroplet,
       stakeTitan,
       stakeNano: v.weight ?? "0",
       startTime: v.startTime ? Number.parseInt(v.startTime, 10) : null,
@@ -163,17 +172,25 @@ export async function GET() {
     };
   });
 
-  const pending = pendingValidators.map((v) => ({
-    nodeID: v.nodeID ?? "—",
-    stakeTitan: nanoToTitan(v.weight),
+  const pending = pendingValidators.map((v) => {
+    const registry = enrichNodeFields({
+      nodeId: v.nodeID,
+      fallback: v.nodeID?.replace(/^NodeID-/, "").slice(0, 12),
+    });
+    return {
+      nodeID: v.nodeID ?? "—",
+      displayName: registry.displayName,
+      stakeTitan: nanoToTitan(v.weight),
     startTime: v.startTime ? Number.parseInt(v.startTime, 10) : null,
     endTime: v.endTime ? Number.parseInt(v.endTime, 10) : null,
-  }));
+    };
+  });
 
   const totalStakedTitan = normalized.reduce((sum, v) => sum + v.stakeTitan, 0);
   const addressLabels = buildValidatorAddressLabels(
     normalized.map((v) => ({
       nodeID: v.nodeID,
+      name: v.displayName,
       rewardAddresses: v.rewardAddresses,
     })),
   );
@@ -189,6 +206,7 @@ export async function GET() {
     validators: normalized,
     pendingValidators: pending,
     addressLabels,
+    registry: getRegistryNodes(),
     errors: errors.length ? errors : undefined,
   });
 }

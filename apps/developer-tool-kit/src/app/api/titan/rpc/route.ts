@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { discoverTitanNodes } from "@/lib/titan/network-config";
+import { enrichNodeFields } from "@/lib/titan/node-registry";
 import { titanNodeFetch } from "@/lib/titan/titan-node-fetch";
 
 interface PeerEntry {
@@ -33,6 +34,23 @@ export interface TitanNodeStatus {
   lastReceived?: string;
   benched?: string[];
   error?: string;
+  /** Pantheon name from titan-node-registry.json (Atlas, Prometheus, …). */
+  displayName?: string;
+  registryId?: string;
+  registryRole?: string;
+  registryDroplet?: string;
+  registryIp?: string;
+}
+
+function withRegistry(node: TitanNodeStatus): TitanNodeStatus {
+  const registry = enrichNodeFields({
+    nodeId: node.nodeId,
+    host: node.host,
+    publicIp: node.publicIp,
+    displayUrl: node.displayUrl,
+    fallback: node.node,
+  });
+  return { ...node, ...registry };
 }
 
 function shortNodeLabel(nodeId: string): string {
@@ -186,7 +204,9 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ nodes: [...configured, ...discoveredPeers] });
+  return NextResponse.json({
+    nodes: [...configured, ...discoveredPeers].map(withRegistry),
+  });
 }
 
 // POST: Proxy generic JSON-RPC calls for the explorer (and other clients).
@@ -215,12 +235,16 @@ export async function POST(req: NextRequest) {
     const nodeName = body.node;
     const target =
       (nodeName
-        ? nodes.find(
-            (n) =>
+        ? nodes.find((n) => {
+            const needle = nodeName?.toLowerCase() ?? "";
+            return (
               n.node === nodeName ||
               n.nodeId === nodeName ||
-              n.nodeId?.includes(nodeName ?? ""),
-          )
+              n.nodeId?.includes(nodeName ?? "") ||
+              n.displayName?.toLowerCase() === needle ||
+              n.registryId?.toLowerCase() === needle
+            );
+          })
         : null) ?? nodes[0];
 
     if (!target) {

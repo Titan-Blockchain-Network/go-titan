@@ -21,6 +21,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface NodeHealth {
   node: string;
   nodeId?: string;
+  displayName?: string;
+  registryDroplet?: string;
   host?: string;
   port: number;
   displayUrl?: string;
@@ -137,13 +139,21 @@ export function NetworkOverview() {
           <Card key={info.nodeId ?? info.node}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold font-mono text-sm">
-                  {info.nodeId ?? info.node}
+                <CardTitle className="text-base font-semibold">
+                  {info.displayName ?? info.nodeId ?? info.node}
                 </CardTitle>
               </div>
-              <p className="text-xs text-muted-foreground font-mono">
-                {info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`}
+              <p className="text-xs text-muted-foreground">
+                {info.registryDroplet && <span className="font-mono">{info.registryDroplet} · </span>}
+                <span className="font-mono">
+                  {info.displayUrl ?? `${info.host ?? "unknown"}:${info.port}`}
+                </span>
               </p>
+              {info.nodeId && info.displayName && (
+                <p className="text-[10px] text-muted-foreground font-mono truncate" title={info.nodeId}>
+                  {info.nodeId}
+                </p>
+              )}
             </CardHeader>
             <CardContent className="text-sm space-y-1">
               <div className="flex justify-between"><span className="text-muted-foreground">Peers</span><span className="font-medium">{info.peers}</span></div>

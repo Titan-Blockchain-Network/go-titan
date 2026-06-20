@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { discoverTitanNodes, getTitanPublicConfig } from "@/lib/titan/network-config";
 import { getTitanHomePath } from "@/lib/titan/nav";
+import { getRegistryNodes } from "@/lib/titan/node-registry";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     isLocalDev: config.isLocalDev,
     logsEnabled: config.logsEnabled,
     discovery: "Single bootstrap node from TITAN_NETWORK_HOST (or TITAN_BOOTSTRAP_URL).",
+    nodeRegistry: getRegistryNodes(),
     nodes: nodes.map((n) => ({
       node: n.node,
       nodeId: n.nodeId,

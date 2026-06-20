@@ -38,6 +38,8 @@ import { ValidatorsPanel } from "@/app/(main)/dashboard/activity/_components/val
 interface NodeInfo {
   node: string;
   nodeId?: string;
+  displayName?: string;
+  registryDroplet?: string;
   host?: string;
   port: number;
   displayUrl?: string;
@@ -671,7 +673,7 @@ function ExplorerPageContent() {
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>RPC sync:</span>
           {nodes.map((info) => {
-            const label = info.nodeId ? shortHash(info.nodeId, 8, 6) : info.node;
+            const label = info.displayName ?? info.node;
             return (
               <Badge
                 key={info.nodeId ?? info.node}

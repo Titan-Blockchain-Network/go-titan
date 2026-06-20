@@ -10,6 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 interface ValidatorRow {
   nodeID: string;
+  displayName?: string;
+  registryId?: string;
+  registryRole?: string;
+  registryDroplet?: string;
   stakeTitan: number;
   startTime: number | null;
   endTime: number | null;
@@ -22,6 +26,7 @@ interface ValidatorRow {
 
 interface PendingRow {
   nodeID: string;
+  displayName?: string;
   stakeTitan: number;
   startTime: number | null;
   endTime: number | null;
@@ -43,6 +48,10 @@ interface ValidatorsResponse {
 
 function shortNodeId(nodeID: string): string {
   return nodeID.replace(/^NodeID-/, "").slice(0, 16);
+}
+
+function validatorLabel(v: { displayName?: string; nodeID: string }): string {
+  return v.displayName?.trim() || shortNodeId(v.nodeID);
 }
 
 function formatUnix(ts: number | null): string {
@@ -141,7 +150,7 @@ export function ValidatorsPanel({ onLabelsLoaded }: ValidatorsPanelProps) {
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-muted-foreground text-xs uppercase tracking-wider border-b">
             <tr>
-              <th className="px-4 py-2.5 text-left font-medium">Node ID</th>
+              <th className="px-4 py-2.5 text-left font-medium">Validator</th>
               <th className="px-4 py-2.5 text-right font-medium">Stake</th>
               <th className="px-4 py-2.5 text-right font-medium hidden md:table-cell">Uptime</th>
               <th className="px-4 py-2.5 text-center font-medium w-24">Status</th>
@@ -158,8 +167,12 @@ export function ValidatorsPanel({ onLabelsLoaded }: ValidatorsPanelProps) {
             ) : (
               data.validators.map((v) => (
                 <tr key={v.nodeID} className="hover:bg-muted/30">
-                  <td className="px-4 py-2.5 font-mono text-xs" title={v.nodeID}>
-                    {shortNodeId(v.nodeID)}
+                  <td className="px-4 py-2.5" title={v.nodeID}>
+                    <div className="font-semibold">{validatorLabel(v)}</div>
+                    <div className="font-mono text-[10px] text-muted-foreground truncate max-w-[220px]">
+                      {v.registryDroplet ? `${v.registryDroplet} · ` : ""}
+                      {shortNodeId(v.nodeID)}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono tabular-nums">
                     {v.stakeTitan.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -204,7 +217,7 @@ export function ValidatorsPanel({ onLabelsLoaded }: ValidatorsPanelProps) {
           <CardContent className="space-y-2 text-sm">
             {data.pendingValidators.map((p) => (
               <div key={`${p.nodeID}-${p.startTime}`} className="flex flex-wrap justify-between gap-2 border-b border-dashed py-2 last:border-0">
-                <span className="font-mono text-xs">{shortNodeId(p.nodeID)}</span>
+                <span className="font-semibold">{validatorLabel(p)}</span>
                 <span className="text-muted-foreground">
                   {p.stakeTitan.toLocaleString()} TITAN · starts {formatUnix(p.startTime)}
                 </span>
