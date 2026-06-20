@@ -20,8 +20,10 @@ interface NodeInfo {
   port: number;
   displayUrl?: string;
   source?: "seed" | "local" | "peer";
+  discoveryMethod?: "bootstrap" | "p2p-gossip" | "direct-probe";
+  inMesh?: boolean;
   healthy: boolean;
-  peers: number;
+  peers?: number;
   chainId?: string;
   blockNumber?: string;
   gasPrice?: string;
