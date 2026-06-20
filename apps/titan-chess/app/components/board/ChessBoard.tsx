@@ -88,12 +88,15 @@ export function ChessBoard({
     [onSquareClick]
   );
 
+  const viewSize = BOARD + LABEL;
+
   return (
-    <div className="chess-board-shell relative w-full aspect-square max-w-[min(100%,600px)] mx-auto">
+    <div className="chess-board-shell relative">
       <svg
-        viewBox={`0 0 ${BOARD + LABEL} ${BOARD + LABEL}`}
-        className="absolute inset-0 h-full w-full"
-        style={{ filter: 'drop-shadow(0 12px 40px rgba(0,0,0,0.55))' }}
+        viewBox={`0 0 ${viewSize} ${viewSize}`}
+        preserveAspectRatio="xMidYMid meet"
+        overflow="hidden"
+        className="block h-full w-full max-w-full"
         role="img"
         aria-label="Chess board"
       >
@@ -179,7 +182,7 @@ export function ChessBoard({
               x={x} y={y}
               width={CELL} height={CELL}
               onPointerUp={handleSquarePress(sq)}
-              style={{ cursor: 'pointer', overflow: 'visible', touchAction: 'manipulation' }}
+              style={{ cursor: 'pointer', overflow: 'hidden', touchAction: 'manipulation' }}
             >
               <div style={{ width: CELL, height: CELL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div
@@ -190,7 +193,7 @@ export function ChessBoard({
                       ? 'drop-shadow(0 4px 12px rgba(201,168,76,0.8))'
                       : 'drop-shadow(0 2px 5px rgba(0,0,0,0.45))',
                     transition: 'filter 0.15s ease',
-                    transform: selectedSquare === sq ? 'scale(1.07)' : 'scale(1)',
+                    transform: selectedSquare === sq ? 'scale(1.04)' : 'scale(1)',
                   }}
                   dangerouslySetInnerHTML={{ __html: svgContent }}
                 />

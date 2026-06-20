@@ -195,7 +195,7 @@ export function GamePage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="min-h-screen min-h-[100dvh] flex flex-col overflow-x-hidden w-full max-w-[100vw]"
       style={{
         background:
           'radial-gradient(ellipse at top, #1a1a22 0%, #0f0f11 60%)',
@@ -262,14 +262,14 @@ export function GamePage() {
         </div>
       </motion.header>
 
-      <main className="flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6 px-safe py-3 sm:p-4 lg:p-6 max-w-7xl mx-auto w-full min-h-0">
+      <main className="flex-1 flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6 px-safe py-3 sm:p-4 lg:p-6 max-w-7xl mx-auto w-full min-h-0 min-w-0 overflow-x-hidden">
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1 flex items-start lg:items-center justify-center w-full min-w-0"
+          className="flex-1 flex items-start lg:items-center justify-center w-full min-w-0 max-w-full overflow-hidden shrink-0"
         >
-          <div className="relative w-full max-w-[600px]">
+          <div className="relative w-full min-w-0 max-w-full overflow-hidden">
             {!isMatchActive && wager.session.phase !== 'waiting' && (
               <div
                 className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl px-6"

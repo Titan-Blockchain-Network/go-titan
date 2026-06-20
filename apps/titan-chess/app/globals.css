@@ -56,6 +56,20 @@ body {
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  aspect-ratio: 1;
+  overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
+}
+
+@media (min-width: 1024px) {
+  .chess-board-shell {
+    max-width: 600px;
+  }
 }
 
 details[open] .panel-chevron {
