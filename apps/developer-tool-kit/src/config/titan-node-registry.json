@@ -34,7 +34,7 @@
       "role": "validator",
       "region": "nyc1",
       "ip": "67.205.175.107",
-      "nodeId": null,
+      "nodeId": "NodeID-2h1C691Q4atTNk32npZ3nBo7iU6CAXZ9A",
       "hostnames": ["hyperion.titan-network.xyz"],
       "spec": "4 GB / 80 GB",
       "tags": ["titan", "validator"]
@@ -58,7 +58,7 @@
       "role": "validator",
       "region": "nyc1",
       "ip": "159.223.97.55",
-      "nodeId": null,
+      "nodeId": "NodeID-D8DjX2ppLfDCDCPhKvVhvNWGqZBeYBvTo",
       "hostnames": ["oceanus.titan-network.xyz"],
       "spec": "4 GB / 80 GB",
       "tags": ["titan", "validator"]
