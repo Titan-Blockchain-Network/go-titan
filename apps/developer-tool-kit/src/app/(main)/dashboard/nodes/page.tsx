@@ -60,6 +60,12 @@ export default function NodesPage() {
     return () => clearInterval(id);
   }, []);
 
+  const apiNodes = nodes.filter((n) => n.source !== "peer" && n.blockNumber);
+  const blockHeights = apiNodes
+    .map((n) => Number.parseInt(n.blockNumber ?? "0", 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const maxBlock = blockHeights.length ? Math.max(...blockHeights) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -79,6 +85,53 @@ export default function NodesPage() {
           Refresh
         </Button>
       </div>
+
+      {maxBlock != null && apiNodes.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">C-chain sync</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground border-b">
+                <tr>
+                  <th className="py-2 text-left font-medium">Node</th>
+                  <th className="py-2 text-right font-medium">Block</th>
+                  <th className="py-2 text-right font-medium">Lag</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {apiNodes.map((info) => {
+                  const height = Number.parseInt(info.blockNumber ?? "0", 10);
+                  const lag = Number.isFinite(height) ? Math.max(0, maxBlock - height) : null;
+                  const label = info.nodeId ?? info.node;
+                  return (
+                    <tr key={info.nodeId ?? info.node}>
+                      <td className="py-2 font-mono text-xs">{label}</td>
+                      <td className="py-2 text-right font-mono tabular-nums">
+                        {info.blockNumber ?? "—"}
+                      </td>
+                      <td className="py-2 text-right tabular-nums">
+                        {lag === 0 ? (
+                          <Badge className="bg-green-600">Synced</Badge>
+                        ) : lag != null ? (
+                          <span className="text-amber-600">{lag} behind</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="text-xs text-muted-foreground mt-3">
+              Head across probed API nodes: #{maxBlock.toLocaleString()}. P2P peers below are not HTTP-probed for block
+              height in production.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
         {nodes.length === 0 && !loading ? (

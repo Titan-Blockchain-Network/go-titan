@@ -48,6 +48,11 @@ export interface AddressDetail {
   address: string;
   balanceHex: string;
   balanceTitan: string;
+  label?: string | null;
+  kind?: string | null;
+  isContract?: boolean;
+  codeSizeBytes?: number;
+  txCount?: number;
 }
 
 type ExplorerDetailDrawerProps = {
@@ -62,6 +67,7 @@ type ExplorerDetailDrawerProps = {
   receipt: ExplorerReceipt | null;
   txLoading: boolean;
   addressDetail: AddressDetail | null;
+  resolveAddressLabel?: (address: string) => string | null;
   shortHash: (h?: string | null, left?: number, right?: number) => string;
   formatTimestamp: (tsHex?: string) => { full: string; ago: string };
   hexToNumber: (hex?: string) => number | null;
@@ -81,6 +87,7 @@ export function ExplorerDetailDrawer({
   receipt,
   txLoading,
   addressDetail,
+  resolveAddressLabel,
   shortHash,
   formatTimestamp,
   hexToNumber,
@@ -113,6 +120,7 @@ export function ExplorerDetailDrawer({
                   txHash={txHash!}
                   receipt={receipt}
                   onSelectBlock={onSelectBlock}
+                  resolveAddressLabel={resolveAddressLabel}
                   shortHash={shortHash}
                   hexToNumber={hexToNumber}
                   formatWeiToTitan={formatWeiToTitan}
@@ -126,12 +134,38 @@ export function ExplorerDetailDrawer({
         {showAddress && addressDetail && (
           <>
             <SheetHeader className="border-b bg-muted/30">
-              <SheetTitle>Address</SheetTitle>
+              <SheetTitle className="flex flex-wrap items-center gap-2">
+                {addressDetail.label ?? "Address"}
+                {addressDetail.isContract && (
+                  <Badge variant="secondary" className="font-normal">
+                    {addressDetail.codeSizeBytes
+                      ? `Contract · ${addressDetail.codeSizeBytes.toLocaleString()} bytes`
+                      : "Contract"}
+                  </Badge>
+                )}
+                {!addressDetail.isContract && addressDetail.label && (
+                  <Badge variant="outline" className="font-normal capitalize">
+                    {addressDetail.kind ?? "labeled"}
+                  </Badge>
+                )}
+              </SheetTitle>
               <SheetDescription className="font-mono text-xs break-all">{addressDetail.address}</SheetDescription>
             </SheetHeader>
             <div className="space-y-3 px-4 py-4 text-sm">
+              {addressDetail.label && (
+                <DetailRow label="Label" value={addressDetail.label} />
+              )}
               <DetailRow label="Balance" value={`${addressDetail.balanceTitan} TITAN`} />
+              {addressDetail.txCount != null && (
+                <DetailRow label="Outgoing txs (nonce)" value={String(addressDetail.txCount)} />
+              )}
               <DetailRow label="Raw balance" value={addressDetail.balanceHex} mono copyValue={addressDetail.balanceHex} />
+              {addressDetail.isContract && (
+                <p className="text-xs text-muted-foreground rounded-md border bg-muted/30 p-2">
+                  Source code is not verified on-chain. Bytecode is present — treat interactions as unverified until
+                  published source matches this deployment.
+                </p>
+              )}
             </div>
           </>
         )}
@@ -245,11 +279,27 @@ function BlockDetailBody({
   );
 }
 
+function labeledAddress(
+  address: string,
+  shortHash: (h?: string | null, left?: number, right?: number) => string,
+  resolveAddressLabel?: (address: string) => string | null,
+) {
+  const label = resolveAddressLabel?.(address);
+  if (!label) return shortHash(address);
+  return (
+    <span className="inline-flex flex-col items-end gap-0.5">
+      <span>{label}</span>
+      <span className="text-[10px] text-muted-foreground">{shortHash(address)}</span>
+    </span>
+  );
+}
+
 function TxDetailBody({
   tx,
   txHash,
   receipt,
   onSelectBlock,
+  resolveAddressLabel,
   shortHash,
   hexToNumber,
   formatWeiToTitan,
@@ -259,6 +309,7 @@ function TxDetailBody({
   txHash: string;
   receipt: ExplorerReceipt | null;
   onSelectBlock: (block: ExplorerBlock) => void;
+  resolveAddressLabel?: (address: string) => string | null;
   shortHash: (h?: string | null, left?: number, right?: number) => string;
   hexToNumber: (hex?: string) => number | null;
   formatWeiToTitan: (hexOrBig?: string | bigint) => string;
@@ -267,10 +318,10 @@ function TxDetailBody({
   return (
     <div className="space-y-3 text-sm">
       <div className="grid grid-cols-1 gap-x-6 gap-y-1">
-        <DetailRow label="From" value={shortHash(tx.from)} mono copyValue={tx.from} />
+        <DetailRow label="From" value={labeledAddress(tx.from, shortHash, resolveAddressLabel)} mono copyValue={tx.from} />
         <DetailRow
           label="To"
-          value={tx.to ? shortHash(tx.to) : "Contract creation"}
+          value={tx.to ? labeledAddress(tx.to, shortHash, resolveAddressLabel) : "Contract creation"}
           mono
           copyValue={tx.to ?? undefined}
         />

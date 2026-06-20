@@ -5,12 +5,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Activity,
   ArrowRightLeft,
+  BarChart3,
   Blocks,
   Clock,
   Hash,
   Loader2,
   RefreshCw,
   Search,
+  Shield,
   Zap,
 } from "lucide-react";
 
@@ -19,11 +21,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  bytecodeSizeBytes,
+  isContractBytecode,
+  resolveAddressLabel,
+} from "@/lib/titan/address-labels";
+import { averageBlockTime, computeBlockIntervals } from "@/lib/titan/chain-analytics";
 import { useTitanConfig } from "@/lib/titan/use-titan-config";
+import { ChainAnalyticsPanel } from "@/app/(main)/dashboard/activity/_components/chain-analytics-panel";
 import {
   AddressDetail,
   ExplorerDetailDrawer,
 } from "@/app/(main)/dashboard/activity/_components/explorer-detail-drawer";
+import { ValidatorsPanel } from "@/app/(main)/dashboard/activity/_components/validators-panel";
 
 interface NodeInfo {
   node: string;
@@ -170,7 +180,8 @@ function ExplorerPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const skipUrlSearchRef = useRef(false);
-  const [browseTab, setBrowseTab] = useState<"blocks" | "transactions">("blocks");
+  const [browseTab, setBrowseTab] = useState<"blocks" | "transactions" | "analytics" | "validators">("blocks");
+  const [addressLabels, setAddressLabels] = useState<Record<string, string>>({});
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [nodesLoading, setNodesLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -194,6 +205,11 @@ function ExplorerPageContent() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [addressDetail, setAddressDetail] = useState<AddressDetail | null>(null);
+
+  const resolveAddressLabelFn = useCallback(
+    (address: string) => resolveAddressLabel(address, addressLabels).label,
+    [addressLabels],
+  );
 
   const syncUrlParam = useCallback(
     (q: string | null) => {
@@ -409,13 +425,30 @@ function ExplorerPageContent() {
 
     try {
       if (isAddress(q)) {
-        const balHex = (await rpc("eth_getBalance", [q, "latest"])) as string;
-        const titan = formatWeiToTitan(balHex);
+        const [balHex, code, nonceHex] = await Promise.all([
+          rpc("eth_getBalance", [q, "latest"]),
+          rpc("eth_getCode", [q, "latest"]),
+          rpc("eth_getTransactionCount", [q, "latest"]),
+        ]);
+        const balanceHex = balHex as string;
+        const codeHex = code as string;
+        const titan = formatWeiToTitan(balanceHex);
+        const meta = resolveAddressLabel(q, addressLabels);
+        const contract = isContractBytecode(codeHex);
         setSelectedBlock(null);
         setSelectedTxHash(null);
         setSelectedTx(null);
         setSelectedReceipt(null);
-        setAddressDetail({ address: q, balanceHex: balHex, balanceTitan: titan });
+        setAddressDetail({
+          address: q,
+          balanceHex,
+          balanceTitan: titan,
+          label: meta.label,
+          kind: meta.kind,
+          isContract: contract,
+          codeSizeBytes: contract ? bytecodeSizeBytes(codeHex) : 0,
+          txCount: hexToNumber(nonceHex as string) ?? undefined,
+        });
         syncUrlParam(q);
         setSearchValue("");
       } else if (isTxHash(q)) {
@@ -489,6 +522,17 @@ function ExplorerPageContent() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    fetch("/api/titan/validators")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.addressLabels) setAddressLabels(j.addressLabels);
+      })
+      .catch(() => {
+        /* optional */
+      });
+  }, []);
+
   // Initial blocks + periodic head check
   useEffect(() => {
     loadRecentBlocks(BLOCKS_PAGE_SIZE);
@@ -552,6 +596,8 @@ function ExplorerPageContent() {
   }, [blocks]);
 
   const totalTxInView = recentTxs.length;
+  const blockIntervals = useMemo(() => computeBlockIntervals(blocks), [blocks]);
+  const avgBlockSec = averageBlockTime(blockIntervals);
 
   return (
     <div className="flex flex-col gap-5">
@@ -612,7 +658,11 @@ function ExplorerPageContent() {
         <StatMini
           title="In view"
           value={`${blocks.length} blocks`}
-          sub={`${totalTxInView} transactions`}
+          sub={
+            avgBlockSec != null
+              ? `~${avgBlockSec.toFixed(1)}s avg · ${totalTxInView} txs`
+              : `${totalTxInView} transactions`
+          }
           icon={<ArrowRightLeft className="h-4 w-4 text-muted-foreground" />}
         />
       </div>
@@ -642,8 +692,11 @@ function ExplorerPageContent() {
         </div>
       )}
 
-      <Tabs value={browseTab} onValueChange={(v) => setBrowseTab(v as "blocks" | "transactions")}>
-        <TabsList>
+      <Tabs
+        value={browseTab}
+        onValueChange={(v) => setBrowseTab(v as "blocks" | "transactions" | "analytics" | "validators")}
+      >
+        <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="blocks" className="gap-1.5">
             <Blocks className="h-3.5 w-3.5" />
             Blocks
@@ -651,6 +704,14 @@ function ExplorerPageContent() {
           <TabsTrigger value="transactions" className="gap-1.5">
             <ArrowRightLeft className="h-3.5 w-3.5" />
             Transactions
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="validators" className="gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Validators
           </TabsTrigger>
         </TabsList>
 
@@ -816,6 +877,14 @@ function ExplorerPageContent() {
             </table>
           </section>
         </TabsContent>
+
+        <TabsContent value="analytics" className="mt-4">
+          <ChainAnalyticsPanel blocks={blocks} />
+        </TabsContent>
+
+        <TabsContent value="validators" className="mt-4">
+          <ValidatorsPanel onLabelsLoaded={setAddressLabels} />
+        </TabsContent>
       </Tabs>
 
       <ExplorerDetailDrawer
@@ -832,6 +901,7 @@ function ExplorerPageContent() {
         receipt={selectedReceipt}
         txLoading={txLoading}
         addressDetail={addressDetail}
+        resolveAddressLabel={resolveAddressLabelFn}
         shortHash={shortHash}
         formatTimestamp={formatTimestamp}
         hexToNumber={hexToNumber}
