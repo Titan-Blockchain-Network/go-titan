@@ -88,6 +88,16 @@ type RawLog = {
   data: `0x${string}`;
 };
 
+type EventTopics = [`0x${string}`, ...`0x${string}`[]];
+
+function decodeEscrowLog(log: RawLog) {
+  return decodeEventLog({
+    abi: CHESS_ESCROW_ABI,
+    data: log.data,
+    topics: log.topics as EventTopics,
+  });
+}
+
 export interface ChessEscrowSnapshot {
   address: `0x${string}`;
   queueLength: number;
@@ -155,7 +165,7 @@ export async function readChessEscrowSnapshot(
   ]);
 
   const started = startedRaw.map((log) => {
-    const decoded = decodeEventLog({ abi: CHESS_ESCROW_ABI, data: log.data, topics: log.topics });
+    const decoded = decodeEscrowLog(log);
     const args = decoded.args as { gameId?: bigint; player?: string; stake?: bigint };
     return {
       kind: "started" as const,
@@ -168,7 +178,7 @@ export async function readChessEscrowSnapshot(
   });
 
   const resolved = resolvedRaw.map((log) => {
-    const decoded = decodeEventLog({ abi: CHESS_ESCROW_ABI, data: log.data, topics: log.topics });
+    const decoded = decodeEscrowLog(log);
     const args = decoded.args as {
       gameId?: bigint;
       outcome?: number;
