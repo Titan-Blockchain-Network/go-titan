@@ -70,6 +70,16 @@ done
 
 mkdir -p "$AVAGO_DIR/build"
 
+REPO_ROOT="$(cd "$AVAGO_DIR/.." && pwd)"
+# Use local coreth checkout (required for fork compatibility)
+if ! grep -q 'replace github.com/ava-labs/coreth => ../coreth' "$AVAGO_DIR/go.mod" 2>/dev/null; then
+  (cd "$AVAGO_DIR" && go mod edit -replace "github.com/ava-labs/coreth=../coreth")
+fi
+if [[ -f "$REPO_ROOT/titan-network/origin.json" || -f "$REPO_ROOT/titan-network/origin.example.json" ]]; then
+  echo "Syncing genesis from titan-network/..."
+  (cd "$AVAGO_DIR" && go run ./cmd/titan genesis apply 2>/dev/null) || true
+fi
+
 echo "Building titan CLI..."
 (cd "$AVAGO_DIR" && go build -o build/titan ./cmd/titan)
 

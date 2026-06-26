@@ -153,8 +153,9 @@ func fetchOriginAnchor(baseURL string) (*TitanOriginAnchor, error) {
 	if anchor.GenesisHash == "" || anchor.GenesisNodeID == "" {
 		return nil, fmt.Errorf("anchor from %s is incomplete", baseURL)
 	}
-	if anchor.NetworkID != 0 && anchor.NetworkID != constants.TitanID {
-		return nil, fmt.Errorf("anchor networkID %d is not Titan (%d)", anchor.NetworkID, constants.TitanID)
+	expectedID, err := deployedNetworkID()
+	if err == nil && anchor.NetworkID != 0 && anchor.NetworkID != expectedID {
+		return nil, fmt.Errorf("anchor networkID %d does not match deployed genesis (%d)", anchor.NetworkID, expectedID)
 	}
 	return &anchor, nil
 }
@@ -445,9 +446,19 @@ func isSensitiveKeyFilename(name string) bool {
 }
 
 func newOriginHTTPHandler(bundleDir string) http.Handler {
+	limiter := newRateLimiter(30, time.Minute)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cache-Control", "public, max-age=60")
+
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if !limiter.allow(r.RemoteAddr) {
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
@@ -463,33 +474,42 @@ func newOriginHTTPHandler(bundleDir string) http.Handler {
 	})
 }
 
-func serveOrigin(dataDir, port string) error {
-	bundleDir := originBundleDir(dataDir)
-	if _, err := os.Stat(filepath.Join(bundleDir, originAnchorFile)); err != nil {
-		return fmt.Errorf("origin bundle missing in %s — run bootstrap --first first", bundleDir)
-	}
-	if err := scrubOriginBundleDir(bundleDir); err != nil {
-		return err
-	}
-	addr := ":" + port
-	fmt.Printf("Serving Titan origin bundle at http://0.0.0.0%s/ (whitelist: %s, %s only)\n", addr, originAnchorFile, originGenesisFile)
-	fmt.Printf("  anchor:  http://<this-host>:%s/%s\n", port, originAnchorFile)
-	fmt.Printf("  genesis: http://<this-host>:%s/%s\n", port, originGenesisFile)
-	return http.ListenAndServe(addr, newOriginHTTPHandler(bundleDir))
+func serveOrigin(dataDir, port, tlsCert, tlsKey string) error {
+	fmt.Printf("  anchor:  http(s)://<this-host>:%s/%s\n", port, originAnchorFile)
+	fmt.Printf("  genesis: http(s)://<this-host>:%s/%s\n", port, originGenesisFile)
+	return serveOriginWithConfig(originServeConfig{
+		dataDir: dataDir,
+		port:    port,
+		tlsCert: tlsCert,
+		tlsKey:  tlsKey,
+	})
 }
 
 func genesisMain(args []string) {
 	if len(args) == 0 {
-		fmt.Println(`titan genesis - origin chain alignment
+		fmt.Println(`titan genesis - create, apply, and align chain genesis
 
+  titan genesis create                   # interactive wizard → titan-network/origin.json
+  titan genesis apply                    # create network config + sync genesis
   titan genesis fingerprint              # show embedded genesis hash
   titan genesis publish --data-dir DIR   # write origin bundle (first node)
   titan genesis align --from URL         # sync genesis from first node + rebuild
-  titan genesis serve --data-dir DIR     # HTTP serve origin bundle (port 9652)`)
+  titan genesis serve --data-dir DIR     # HTTP serve origin bundle (port 9652)
+  titan genesis serve --tls-cert --tls-key  # HTTPS origin server`)
 		return
 	}
 
 	switch args[0] {
+	case "create":
+		if err := runGenesisCreate(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "create failed: %v\n", err)
+			os.Exit(1)
+		}
+	case "apply":
+		if err := runGenesisApply(args[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "apply failed: %v\n", err)
+			os.Exit(1)
+		}
 	case "fingerprint":
 		hash, err := computeEmbeddedGenesisFingerprint()
 		if err != nil {
@@ -521,8 +541,10 @@ func genesisMain(args []string) {
 		fs := flag.NewFlagSet("genesis serve", flag.ExitOnError)
 		dataDir := fs.String("data-dir", "/root/titan-data", "data directory")
 		port := fs.String("port", defaultOriginPort, "listen port")
+		tlsCert := fs.String("tls-cert", "", "TLS certificate file (enables HTTPS)")
+		tlsKey := fs.String("tls-key", "", "TLS private key file")
 		fs.Parse(args[1:])
-		if err := serveOrigin(*dataDir, *port); err != nil {
+		if err := serveOrigin(*dataDir, *port, *tlsCert, *tlsKey); err != nil {
 			fmt.Fprintf(os.Stderr, "serve failed: %v\n", err)
 			os.Exit(1)
 		}

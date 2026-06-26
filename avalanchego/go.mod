@@ -200,3 +200,5 @@ require (
 )
 
 tool github.com/onsi/ginkgo/v2/ginkgo
+
+replace github.com/ava-labs/coreth => ../coreth

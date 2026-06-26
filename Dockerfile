@@ -1,24 +1,26 @@
 FROM golang:1.24.13-trixie@sha256:5835f052b784aa39f2fe9070def3568605c8bc3fcd810f10402066348b61e716 AS build
 
 RUN apt-get update -y && \
-    apt-get install -y rsync
+    apt-get install -y --no-install-recommends rsync && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/
 
-COPY ./.git /app/.git
 COPY ./avalanchego /app/avalanchego
 COPY ./config /app/config
 COPY ./coreth /app/coreth
+COPY ./titan-network /app/titan-network
 
 WORKDIR /app/avalanchego/
 
-RUN /app/avalanchego/scripts/build.sh
+RUN /app/avalanchego/scripts/build-titan.sh
 
 FROM ubuntu:24.04
 
 WORKDIR /app
 
-ENV HTTP_HOST=0.0.0.0 \
+ENV NODE_MODE="" \
+    HTTP_HOST=0.0.0.0 \
     HTTP_PORT=9650 \
     STAKING_PORT=9651 \
     PUBLIC_IP= \
@@ -42,12 +44,16 @@ ENV HTTP_HOST=0.0.0.0 \
     HTTP_ALLOWED_HOSTS="*"
 
 RUN apt-get update -y && \
-    apt-get install -y curl jq
+    apt-get install -y --no-install-recommends curl jq ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db /app/data
 
 COPY --from=build /app/avalanchego/build /app/build
+COPY --from=build /app/avalanchego/build/titan /app/build/titan
+COPY config/ /app/conf/
 COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE ${STAKING_PORT}
 EXPOSE ${HTTP_PORT}

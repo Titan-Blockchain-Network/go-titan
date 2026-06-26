@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-release:
+    name: Build release artifacts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+      - name: Run CLI tests
+        working-directory: avalanchego
+        run: go test ./cmd/titan/... -count=1
+      - name: Build
+        working-directory: avalanchego
+        run: ./scripts/build-titan.sh
+      - name: Package binaries
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          tar -czf "dist/go-titan-${VERSION}-linux-amd64.tar.gz" \
+            -C avalanchego/build titan avalanchego
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

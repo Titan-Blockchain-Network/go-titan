@@ -1,0 +1,45 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  gosec:
+    name: gosec scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: "-no-fail -fmt sarif -out gosec.sarif ./avalanchego/cmd/titan/..."
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec.sarif
+
+  trivy:
+    name: Trivy image scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image for scanning
+        run: docker build -t go-titan:scan -f Dockerfile .
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: go-titan:scan
+          format: table
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true

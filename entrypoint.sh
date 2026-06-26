@@ -2,6 +2,20 @@
 
 set -eo pipefail
 
+# NODE_MODE: bootstrap (empty bootstrap peers) or provider (join existing network)
+case "${NODE_MODE:-}" in
+	bootstrap)
+		export BOOTSTRAP_IPS=""
+		export BOOTSTRAP_IDS=""
+		;;
+	provider)
+		if [ -z "${BOOTSTRAP_IPS:-}" ] && [ "${AUTOCONFIGURE_BOOTSTRAP:-0}" != "1" ]; then
+			echo "ERROR: provider mode requires BOOTSTRAP_IPS or AUTOCONFIGURE_BOOTSTRAP=1" >&2
+			exit 1
+		fi
+		;;
+esac
+
 if [ "$AUTOCONFIGURE_PUBLIC_IP" = "1" ];
 then
 	if [ -z "$PUBLIC_IP" ];

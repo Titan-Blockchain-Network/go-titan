@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-titan-cli:
+    name: Titan CLI tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Run titan CLI unit tests
+        working-directory: avalanchego
+        run: go test ./cmd/titan/... -count=1 -v
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1.6
+          working-directory: avalanchego
+          args: --timeout=10m ./cmd/titan/...
+
+  build:
+    name: Build binaries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Build titan + avalanchego
+        working-directory: avalanchego
+        run: ./scripts/build-titan.sh
+      - name: Verify binaries exist
+        run: |
+          test -f avalanchego/build/titan
+          test -f avalanchego/build/avalanchego

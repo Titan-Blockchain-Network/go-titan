@@ -47,10 +47,12 @@ func statusMain(args []string) {
 	networkID, err := infoClient.GetNetworkID(ctx)
 	if err != nil {
 		fmt.Printf("! network ID: %v\n", err)
-	} else if networkID == constants.TitanID {
-		fmt.Printf("✓ network ID: %d (Titan)\n", networkID)
+	} else if expectedID, err := deployedNetworkID(); err != nil {
+		fmt.Printf("! network ID: %v\n", err)
+	} else if networkID == expectedID {
+		fmt.Printf("✓ network ID: %d (%s)\n", networkID, deployedNetworkName())
 	} else {
-		fmt.Printf("✗ network ID %d — expected Titan (%d)\n", networkID, constants.TitanID)
+		fmt.Printf("✗ network ID %d — expected %d (%s)\n", networkID, expectedID, deployedNetworkName())
 	}
 
 	for _, chain := range []string{"P", "X", "C"} {
@@ -96,6 +98,12 @@ func statusMain(args []string) {
 			}
 		}
 	}
+
+	printNetworkEconomics()
+
+	fmt.Println("\n--- Staking quick reference ---")
+	fmt.Println("  Bootstrapper onboard provider:  titan provider onboard --from @treasury.key --uri http://JOIN:9650")
+	fmt.Println("  Wallet stake on validator:        titan stake add --from @wallet.key --node-id NodeID-... --amount 100")
 
 	fmt.Println("\n--- Manual curl (must use POST + Content-Type) ---")
 	fmt.Printf(`curl -sS -X POST -H 'Content-Type: application/json' \

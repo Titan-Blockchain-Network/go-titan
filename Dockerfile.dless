@@ -5,14 +5,14 @@ RUN apt-get update -y && \
 
 WORKDIR /app/
 
-COPY ./.git /app/.git
 COPY ./avalanchego /app/avalanchego
 COPY ./config /app/config
 COPY ./coreth /app/coreth
+COPY ./titan-network /app/titan-network
 
 WORKDIR /app/avalanchego/
 
-RUN /app/avalanchego/scripts/build.sh
+RUN /app/avalanchego/scripts/build-titan.sh
 
 RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db /app/data
 
@@ -26,7 +26,8 @@ USER nonroot
 
 WORKDIR /app
 
-ENV HTTP_HOST=0.0.0.0 \
+ENV NODE_MODE="" \
+    HTTP_HOST=0.0.0.0 \
     HTTP_PORT=9650 \
     STAKING_PORT=9651 \
     PUBLIC_IP= \

@@ -25,11 +25,13 @@ build/
 db-*
 logs-*
 
-# JS apps (pnpm monorepo)
+# Network genesis (generated per deployment — never commit)
+titan-network/origin.json
+
+# Local Go build cache (smoke-test / install-dev)
+.gopath/
+.gomodcache/
+
+# Node modules (legacy)
 node_modules/
-apps/*/node_modules/
-.next/
-apps/*/.next/
 .env.local
-apps/*/.env.local
-.pnpm-store/

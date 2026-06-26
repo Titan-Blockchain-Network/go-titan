@@ -1,6 +1,25 @@
 # go-titan / Docker
 
-Docker images for the Titan node (`NETWORK_ID=titan` by default). The image also retains legacy Flare network support via the `NETWORK_ID` environment variable.
+Docker images for Avalanche L1 nodes. Use Docker Compose for bootstrap (genesis) or provider (join) deployments.
+
+## Compose quickstart
+
+**Bootstrap (first node):**
+
+```sh
+./avalanchego/build/titan keys generate --genesis --dir docker/keys
+docker compose -f docker/docker-compose.bootstrap.yml up -d
+```
+
+**Provider (join node):**
+
+```sh
+./avalanchego/build/titan keys generate --dir docker/keys
+BOOTSTRAP_IPS=ATLAS_IP:9651 BOOTSTRAP_IDS=NodeID-... \
+  docker compose -f docker/docker-compose.provider.yml up -d
+```
+
+Set `NODE_MODE=bootstrap` or `NODE_MODE=provider` to auto-configure bootstrap peers.
 
 ## Variants
 Images with `-dless` postfix are build using distroless base and are rootless.  

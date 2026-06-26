@@ -1,0 +1,43 @@
+# Multi-node provider (join) deployment.
+# Set BOOTSTRAP_IPS and BOOTSTRAP_IDS to your bootstrap node.
+#
+#   BOOTSTRAP_IPS=1.2.3.4:9651 BOOTSTRAP_IDS=NodeID-... \
+#     docker compose -f docker/docker-compose.provider.yml up -d
+
+services:
+  titan-provider:
+    image: ghcr.io/titan-blockchain-network/go-titan:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: titan-provider
+    restart: unless-stopped
+    ports:
+      - "9650:9650"
+      - "9651:9651"
+    environment:
+      NODE_MODE: provider
+      NETWORK_ID: titan
+      BOOTSTRAP_IPS: ${BOOTSTRAP_IPS:-}
+      BOOTSTRAP_IDS: ${BOOTSTRAP_IDS:-}
+      AUTOCONFIGURE_PUBLIC_IP: "1"
+      AUTOCONFIGURE_BOOTSTRAP: ${AUTOCONFIGURE_BOOTSTRAP:-0}
+      AUTOCONFIGURE_BOOTSTRAP_ENDPOINT: ${AUTOCONFIGURE_BOOTSTRAP_ENDPOINT:-}
+      HTTP_ALLOWED_HOSTS: "*"
+      LOG_LEVEL: info
+    volumes:
+      - provider-data:/app/data
+      - provider-db:/app/db
+      - provider-logs:/app/logs
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9650/ext/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  provider-data:
+  provider-db:
+  provider-logs:

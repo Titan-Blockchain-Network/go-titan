@@ -1,0 +1,25 @@
+{
+    "allocations": [
+        {
+            "avaxAddr": "X-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn",
+            "ethAddr": "0x0123456789abcdef0123456789abcdef01234567",
+            "initialAmount": 0,
+            "unlockSchedule": [
+                {
+                    "amount": 1000000000000000000,
+                    "locktime": 0
+                }
+            ]
+        }
+    ],
+    "cChainGenesis": "{\"config\":{\"chainId\":888,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0,\"apricotPhase1BlockTimestamp\":0,\"apricotPhase2BlockTimestamp\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x0\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0x0123456789abcdef0123456789abcdef01234567\":{\"balance\":\"0xde0b6b3a7640000\"}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}",
+    "initialStakeDuration": 31536000,
+    "initialStakeDurationOffset": 5400,
+    "initialStakedFunds": [],
+    "initialStakers": [],
+    "message": "titan-example",
+    "networkID": 888,
+    "startTime": 0,
+    "tokenTicker": "TITAN",
+    "blockchainName": "Titan"
+}

@@ -263,6 +263,12 @@ func findGenesisJSONPath() (string, error) {
 }
 
 func findAvalanchegoDir() (string, error) {
+	if root, err := findRepoRoot(); err == nil {
+		avago := filepath.Join(root, "avalanchego")
+		if _, err := os.Stat(avago); err == nil {
+			return avago, nil
+		}
+	}
 	path, err := findGenesisJSONPath()
 	if err != nil {
 		return "", err

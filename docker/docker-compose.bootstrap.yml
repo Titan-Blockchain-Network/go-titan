@@ -1,0 +1,42 @@
+# Single-node bootstrap (genesis) deployment.
+# Mount staking keys at ./keys/ before starting.
+#
+#   docker compose -f docker/docker-compose.bootstrap.yml up -d
+
+services:
+  titan-bootstrap:
+    image: ghcr.io/titan-blockchain-network/go-titan:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: titan-bootstrap
+    restart: unless-stopped
+    ports:
+      - "9650:9650"
+      - "9651:9651"
+      - "9652:9652"
+    environment:
+      NODE_MODE: bootstrap
+      NETWORK_ID: titan
+      BOOTSTRAP_IPS: ""
+      BOOTSTRAP_IDS: ""
+      AUTOCONFIGURE_PUBLIC_IP: "1"
+      AUTOCONFIGURE_BOOTSTRAP: "0"
+      HTTP_ALLOWED_HOSTS: "*"
+      LOG_LEVEL: info
+    volumes:
+      - titan-data:/app/data
+      - titan-db:/app/db
+      - titan-logs:/app/logs
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9650/ext/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  titan-data:
+  titan-db:
+  titan-logs:

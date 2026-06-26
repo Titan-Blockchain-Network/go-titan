@@ -51,8 +51,11 @@ func verifyExportPath(ctx context.Context, nodeURI, masterKeyPath string) export
 	report.staking = snap.pStakingID
 	report.xAvax = snap.xAvaxAliasID
 
-	if snap.networkID != constants.TitanID {
-		fmt.Printf("  ✗ network ID %d is not Titan (%d)\n", snap.networkID, constants.TitanID)
+	expectedID, expectedErr := deployedNetworkID()
+	if expectedErr != nil {
+		fmt.Printf("  ! network ID check: %v\n", expectedErr)
+	} else if snap.networkID != expectedID {
+		fmt.Printf("  ✗ network ID %d does not match genesis (%d)\n", snap.networkID, expectedID)
 		report.ok = false
 	} else {
 		fmt.Printf("  ✓ network ID %d\n", snap.networkID)
@@ -64,7 +67,7 @@ func verifyExportPath(ctx context.Context, nodeURI, masterKeyPath string) export
 	if tip, err := fetchCChainTip(ctx, uri); err != nil {
 		fmt.Printf("  ! C-chain tip lookup failed: %v\n", err)
 	} else {
-		up := upgrade.GetConfig(constants.TitanID)
+		up := upgrade.GetConfig(snap.networkID)
 		ap5Active := up.IsApricotPhase5Activated(time.Unix(int64(tip.timestamp), 0))
 		fmt.Printf("  ✓ C-chain tip block #%d timestamp %d (%s)\n",
 			tip.number, tip.timestamp, time.Unix(int64(tip.timestamp), 0).UTC().Format(time.RFC3339))

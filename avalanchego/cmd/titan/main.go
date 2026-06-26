@@ -47,6 +47,12 @@ func main() {
 		walletMain(os.Args[2:])
 	case "validator":
 		validatorMain(os.Args[2:])
+	case "provider":
+		providerMain(os.Args[2:])
+	case "delegator":
+		delegatorMain(os.Args[2:])
+	case "stake":
+		stakeMain(os.Args[2:])
 	case "status":
 		statusMain(os.Args[2:])
 	case "node":
@@ -67,6 +73,8 @@ For a fresh server (recommended):
   ./scripts/titan-server-bootstrap.sh     # apt update + Go + deps + interactive full setup
 
 Direct CLI usage:
+  titan genesis create                     # interactive genesis wizard
+  titan genesis apply                      # create network config + sync genesis
   titan keys generate [--dir DIR] [--genesis]
   titan genesis align --from http://FIRST_NODE:9652
   titan wallet addresses --from @master.key
@@ -74,7 +82,9 @@ Direct CLI usage:
   titan wallet verify-export --from @/root/master.key   # C→P / validator-add readiness
   titan node bootstrap --first ...
   titan node firewall --apply
+  titan provider onboard --from @treasury.key --uri http://JOIN:9650
   titan validator add --from @master.key [--node-id ... --bls-pub ... --bls-pop ...]
+  titan stake add --from @wallet.key --node-id NodeID-... --amount 100
   titan keys show [--dir /root/keys]   # print ATLAS register command for this node
   titan status
 
@@ -274,8 +284,7 @@ Other subcommands:
   titan node firewall --apply
 
 The bootstrap command builds the running system and ends with a healthcheck.
-First validator is special (baked into genesis).
-`)
+First validator is special (baked into genesis).`)
 		return
 	}
 
@@ -652,10 +661,12 @@ func runHealthcheck(opts healthcheckOpts) {
 
 	if networkID, err := infoClient.GetNetworkID(ctx); err != nil {
 		fmt.Printf("  ! network ID check: %v\n", err)
-	} else if networkID != constants.TitanID {
-		fmt.Printf("  ✗ network ID %d is not Titan (%d) — wrong chain\n", networkID, constants.TitanID)
+	} else if expectedID, err := deployedNetworkID(); err != nil {
+		fmt.Printf("  ! network ID check: %v\n", err)
+	} else if networkID != expectedID {
+		fmt.Printf("  ✗ network ID %d does not match genesis (%d) — wrong chain\n", networkID, expectedID)
 	} else {
-		fmt.Printf("  ✓ network ID %d (titan)\n", networkID)
+		fmt.Printf("  ✓ network ID %d (%s)\n", networkID, deployedNetworkName())
 	}
 
 	if !opts.isFirst {

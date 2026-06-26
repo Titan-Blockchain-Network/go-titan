@@ -27,7 +27,11 @@ type chainAddresses struct {
 }
 
 func deriveChainAddresses(priv *secp256k1.PrivateKey) (chainAddresses, error) {
-	hrp := constants.GetHRP(constants.TitanID)
+	networkID, err := deployedNetworkID()
+	if err != nil {
+		networkID = constants.TitanID
+	}
+	hrp := constants.GetHRP(networkID)
 	shortID := priv.Address()
 	p, err := address.Format("P", hrp, shortID.Bytes())
 	if err != nil {
