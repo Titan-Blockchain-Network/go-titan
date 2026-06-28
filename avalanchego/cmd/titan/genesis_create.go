@@ -500,9 +500,12 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 				reward := p.ask("  P-chain reward address", "")
 				pub := p.ask("  BLS public key (0x...)", "")
 				pop := p.ask("  BLS proof of possession (0x...)", "")
-				stakeAmt := p.ask("  Stake amount (tokens)", "2000000")
+				stakeAmt := p.ask("  Stake amount (tokens)", "2000")
 				nAvax, err := validateTokenAmount(stakeAmt)
 				if err != nil {
+					return err
+				}
+				if err := validateValidatorStake(float64(nAvax) / float64(units.Avax)); err != nil {
 					return err
 				}
 				if len(allocations) == 0 {
