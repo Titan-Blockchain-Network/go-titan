@@ -141,10 +141,12 @@ Binary path: `./avalanchego/build/titan` (or `titan` after `--install`).
 | `titan keys generate [--genesis]` | Staking TLS and BLS keys |
 | `titan node bootstrap --first` | Bootstrap node installation |
 | `titan node bootstrap --join …` | Join node installation |
-| `titan provider onboard --from @key --uri URL` | Fund and register a join validator |
+| `titan provider onboard --from @key --uri URL` | Fund and register a join validator (`--delegation-fee`) |
 | `titan validator add --from @key` | Register validator on-chain |
 | `titan stake add --from @key --node-id ID` | Delegate stake to a validator |
 | `titan status` | Validators, fees, rewards, health |
+
+Validator income, locking, uptime, and fee knobs: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
 
 ## Docker
 

@@ -9,6 +9,37 @@ This document explains how to run the first bootstrapper node and how to add mor
 - C-Chain chainId: `888`
 - Primary asset: **TITAN** (symbol `TITAN`)
 
+## Validator economics
+
+Full reference: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
+
+**Validator income**
+
+- **Staking rewards:** protocol mints new TITAN (10–12% annual rate), split by stake weight and uptime (80% minimum).
+- **Delegation fees:** optional percent of delegator rewards, set at registration with `--delegation-fee` (default `0`).
+- **Not income:** P-chain tx fees and C-chain gas are burned, not paid to validators.
+
+**Locking**
+
+Stake principal is locked on the P-chain for the validator or delegator period. Rewards are separate minted tokens paid to the reward address on the registration transaction.
+
+**Register a join validator**
+
+```bash
+titan provider onboard --from @/root/master.key --uri http://JOIN_IP:9650 \
+  --amount 2000 --duration-days 14 --delegation-fee 0
+```
+
+Or on the treasury node:
+
+```bash
+titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 \
+  --node-id NodeID-... --bls-pub 0x... --bls-pop 0x... \
+  --amount 2000 --duration-days 14 --delegation-fee 0
+```
+
+Inspect rewards and uptime: `titan status`.
+
 ## Important: The Genesis Validator Keys
 
 The genesis file (`avalanchego/genesis/genesis_titan.json`) hardcodes **one initial validator**.
@@ -624,7 +655,8 @@ Healthcheck prints the exact `titan validator add` command for ATLAS.
 
 ```bash
 titan validator add --from @/root/master.key --uri http://127.0.0.1:9650 \
-  --node-id <FROM_PROMETHEUS> --bls-pub 0x... --bls-pop 0x... --amount 2000000
+  --node-id <FROM_PROMETHEUS> --bls-pub 0x... --bls-pop 0x... \
+  --amount 2000 --delegation-fee 0
 ```
 
 ### 4. Verify

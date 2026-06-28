@@ -26,6 +26,9 @@ Logs: `avalanchego/test-results/` (`latest.log` → most recent run).
 | `genesis_cchain_test.go` | C-chain genesis document |
 | `network_config_test.go` | `network_ids.go` updates |
 | `staking_contract_test.go` | Warp messenger injection |
+| `validator_ops_test.go` | Validator stake bounds, delegation fee parsing |
+| `delegator_ops_test.go` | Delegator stake validation |
+| `fees_test.go` | Network economics vs `TitanParams` |
 | `genesis_tls_test.go` | Origin HTTPS server |
 | `deployment_docker_test.go` | Local Docker compose |
 

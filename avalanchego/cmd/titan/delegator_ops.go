@@ -16,6 +16,15 @@ import (
 	"github.com/ava-labs/avalanchego/wallet/subnet/primary"
 )
 
+const minDelegatorStakeTitan = 1
+
+func validateDelegatorStake(amount float64) error {
+	if amount < minDelegatorStakeTitan {
+		return fmt.Errorf("stake must be at least %d token", minDelegatorStakeTitan)
+	}
+	return nil
+}
+
 func delegatorMain(args []string) {
 	if len(args) == 0 || args[0] != "add" {
 		fmt.Fprintln(os.Stderr, "usage: titan delegator add --from @wallet.key --node-id NodeID-... [--amount 100] [--uri http://127.0.0.1:9650]")
@@ -33,8 +42,8 @@ func delegatorMain(args []string) {
 		fmt.Fprintln(os.Stderr, "--from and --node-id are required")
 		os.Exit(1)
 	}
-	if *amount < 1 {
-		fmt.Fprintln(os.Stderr, "stake must be at least 1 token")
+	if err := validateDelegatorStake(*amount); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
@@ -75,9 +84,13 @@ func delegatorMain(args []string) {
 	addr := priv.Address()
 	rewardsOwner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}}
 
-	fmt.Printf("Delegating %.0f tokens to validator %s (ends %s)...\n",
+	fmt.Printf("Delegating %.0f tokens to validator %s (ends %s",
 		*amount, targetNodeID,
 		time.Unix(int64(vdr.EndTime), 0).UTC().Format(time.RFC3339))
+	if vdr.DelegationFee > 0 {
+		fmt.Printf(", validator fee %.2f%%", vdr.DelegationFee)
+	}
+	fmt.Println(")...")
 
 	pw := w.P()
 	tx, err := pw.IssueAddPermissionlessDelegatorTx(
@@ -105,7 +118,6 @@ func delegatorMain(args []string) {
 }
 
 func stakeMain(args []string) {
-	// alias: titan stake add → titan delegator add
 	if len(args) > 0 && args[0] == "add" {
 		delegatorMain(append([]string{"add"}, args[1:]...))
 		return
