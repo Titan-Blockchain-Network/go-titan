@@ -155,6 +155,49 @@ func suggestChainID() uint32 {
 	return uint32(minCustomNetworkID + rand.Intn(maxCustomNetworkID-minCustomNetworkID))
 }
 
+// validateCustomChainID checks the Avalanche network ID and C-chain EVM chainId.
+func validateCustomChainID(raw string) (uint32, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, fmt.Errorf("chain ID is required")
+	}
+	parsed, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a valid whole number", raw)
+	}
+	if parsed < minCustomNetworkID {
+		return 0, fmt.Errorf(
+			"%d is too low — custom L1 networks must use %d or higher (Avalanche reserves lower IDs for mainnet and public testnets)",
+			parsed, minCustomNetworkID,
+		)
+	}
+	if parsed > maxCustomNetworkID {
+		return 0, fmt.Errorf("%d is too high — maximum allowed chain ID is %d", parsed, maxCustomNetworkID)
+	}
+	return uint32(parsed), nil
+}
+
+func chainIDRequirementHelp() string {
+	return fmt.Sprintf(
+		"  Chain ID becomes both your Avalanche network ID and the C-chain EVM chainId.\n"+
+			"  Valid range: %d–%d (below %d is reserved by Avalanche).",
+		minCustomNetworkID, maxCustomNetworkID, minCustomNetworkID,
+	)
+}
+
+func (p *promptReader) askChainID(defaultSuggested string) (uint32, error) {
+	fmt.Println(chainIDRequirementHelp())
+	for {
+		chainIDStr := p.ask("Chain ID (network + C-chain)", defaultSuggested)
+		id, err := validateCustomChainID(chainIDStr)
+		if err == nil {
+			return id, nil
+		}
+		fmt.Printf("  ✗ %v\n", err)
+		fmt.Println("  Please enter a different chain ID.")
+	}
+}
+
 func validateEthAddress(addr string) error {
 	addr = strings.TrimSpace(addr)
 	if !strings.HasPrefix(addr, "0x") || len(addr) != 42 {
@@ -322,6 +365,10 @@ func resolveOriginPath(explicit string) (string, error) {
 }
 
 func runGenesisCreate(args []string) error {
+	return runGenesisCreateFromReader(args, bufio.NewReader(os.Stdin))
+}
+
+func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 	fs := flag.NewFlagSet("genesis create", flag.ExitOnError)
 	out := fs.String("output", "", "output path (default: titan-network/origin.json)")
 	nonInteractive := fs.Bool("non-interactive", false, "use defaults for testing")
@@ -333,7 +380,7 @@ func runGenesisCreate(args []string) error {
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	p := newPromptReader()
+	p := &promptReader{reader: reader}
 
 	fmt.Println("=== Interactive Genesis Creation ===")
 	fmt.Println("This wizard creates titan-network/origin.json for your custom L1.")
@@ -364,12 +411,11 @@ func runGenesisCreate(args []string) error {
 		blockchainName = p.ask("Blockchain name", blockchainName)
 		tokenTicker = strings.ToUpper(p.ask("Token ticker", tokenTicker))
 		suggested := strconv.FormatUint(uint64(suggestChainID()), 10)
-		chainIDStr := p.ask("Chain ID (network + C-chain)", suggested)
-		parsed, err := strconv.ParseUint(chainIDStr, 10, 32)
-		if err != nil || parsed < minCustomNetworkID {
-			return fmt.Errorf("chain ID must be a number >= %d", minCustomNetworkID)
+		var err error
+		chainID, err = p.askChainID(suggested)
+		if err != nil {
+			return err
 		}
-		chainID = uint32(parsed)
 
 		totalSupplyTokens = p.ask("Total supply (tokens)", "1000000000")
 		fmt.Println()

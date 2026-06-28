@@ -1,3 +1,4 @@
+// Feature: network — network_ids.go configuration from genesis metadata.
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 )
 
 func TestSlugNetworkName(t *testing.T) {
+	t.Parallel()
 	tests := map[string]string{
 		"My Custom Chain": "my-custom-chain",
 		"  Titan  ":        "titan",
@@ -22,6 +24,7 @@ func TestSlugNetworkName(t *testing.T) {
 }
 
 func TestSanitizeHRP(t *testing.T) {
+	t.Parallel()
 	got := sanitizeHRP("My Custom Chain")
 	if got != "mycustomchain" {
 		t.Fatalf("sanitizeHRP = %q", got)
@@ -87,5 +90,43 @@ const (
 	}
 	if id != 424242 || name != "acme-chain" || hrp != "acmechain" {
 		t.Fatalf("read back id=%d name=%s hrp=%s", id, name, hrp)
+	}
+}
+
+func TestConfigureNetworkFromGenesisIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	avago := filepath.Join(dir, "avalanchego")
+	constantsDir := filepath.Join(avago, "utils", "constants")
+	genesisDir := filepath.Join(avago, "genesis")
+	for _, p := range []string{constantsDir, genesisDir} {
+		if err := os.MkdirAll(p, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(genesisDir, "genesis_titan.json"), []byte(`{"networkID":888}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sample := `package constants
+
+const (
+	TitanID      uint32 = 888
+	TitanName      = "titan"
+	TitanHRP      = "titan"
+)
+`
+	path := filepath.Join(constantsDir, "network_ids.go")
+	if err := os.WriteFile(path, []byte(sample), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origWD, _ := os.Getwd()
+	if err := os.Chdir(avago); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origWD)
+
+	if err := configureNetworkFromGenesis(888, "Titan"); err != nil {
+		t.Fatalf("idempotent configure failed: %v", err)
 	}
 }

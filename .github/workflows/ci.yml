@@ -17,9 +17,18 @@ jobs:
         with:
           go-version: "1.24.9"
           cache-dependency-path: avalanchego/go.sum
-      - name: Run titan CLI unit tests
+      - name: Install jq (test runner JSON formatter)
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+      - name: Run titan CLI tests (feature suite)
         working-directory: avalanchego
-        run: go test ./cmd/titan/... -count=1 -v
+        run: ./scripts/test-titan.sh --sequential
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: titan-test-log
+          path: avalanchego/test-results/latest.log
+          if-no-files-found: ignore
 
   lint:
     name: golangci-lint

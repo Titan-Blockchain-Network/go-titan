@@ -41,8 +41,22 @@ build_args="$race"
 
 echo "Syncing with sources at GOPATH: $GOPATH"
 
-rsync -ar --delete $AVALANCHE_PATH/* $GOPATH/pkg/mod/github.com/ava-labs/avalanchego@$avalanche_version
-rsync -ar --delete $CORETH_PATH/* $GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version
+avalanche_mod_dir="$GOPATH/pkg/mod/github.com/ava-labs/avalanchego@$avalanche_version"
+coreth_mod_dir="$GOPATH/pkg/mod/github.com/ava-labs/coreth@$coreth_version"
+mkdir -p "$(dirname "$avalanche_mod_dir")" "$(dirname "$coreth_mod_dir")"
+# go mod download -modcacherw leaves the module cache read-only; rsync needs write access.
+if [[ -d "$avalanche_mod_dir" ]]; then
+  chmod -R u+w "$avalanche_mod_dir"
+  rm -rf "$avalanche_mod_dir"
+fi
+if [[ -d "$coreth_mod_dir" ]]; then
+  chmod -R u+w "$coreth_mod_dir"
+  rm -rf "$coreth_mod_dir"
+fi
+mkdir -p "$avalanche_mod_dir" "$coreth_mod_dir"
+
+rsync -ar --delete "$AVALANCHE_PATH"/* "$avalanche_mod_dir"/
+rsync -ar --delete "$CORETH_PATH"/* "$coreth_mod_dir"/
 
 # Build avalanchego
 "$AVALANCHE_PATH"/scripts/build_avalanche.sh $build_args

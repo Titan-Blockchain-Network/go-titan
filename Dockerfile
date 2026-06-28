@@ -13,6 +13,9 @@ COPY ./titan-network /app/titan-network
 
 WORKDIR /app/avalanchego/
 
+ARG AVALANCHEGO_COMMIT=unknown
+ENV AVALANCHEGO_COMMIT=${AVALANCHEGO_COMMIT}
+
 RUN /app/avalanchego/scripts/build-titan.sh
 
 FROM ubuntu:24.04

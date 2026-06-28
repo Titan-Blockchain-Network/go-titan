@@ -89,7 +89,8 @@ func configureNetworkFromGenesis(networkID uint32, blockchainName string) error 
 	updated = reTitanHRP.ReplaceAllString(updated, fmt.Sprintf(`TitanHRP      = "%s"`, hrp))
 
 	if updated == string(data) {
-		return fmt.Errorf("network_ids.go: no Titan constants matched — file format may have changed")
+		fmt.Printf("  Network already configured in %s (ID=%d name=%s hrp=%s)\n", path, networkID, networkName, hrp)
+		return nil
 	}
 
 	tmp := path + ".tmp"

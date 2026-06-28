@@ -31,6 +31,7 @@ titan-network/origin.json
 # Local Go build cache (smoke-test / install-dev)
 .gopath/
 .gomodcache/
+avalanchego/test-results/
 
 # Node modules (legacy)
 node_modules/

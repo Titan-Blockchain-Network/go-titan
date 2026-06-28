@@ -43,10 +43,22 @@ fi
 
 # Current commit (shared between image build and its test script)
 # WARNING: this will use the most recent commit even if there are un-committed changes present
-full_commit_hash="$(git --git-dir="$AVALANCHE_PATH/../.git" rev-parse HEAD)"
+full_commit_hash="${AVALANCHEGO_COMMIT:-}"
+if [[ -z "$full_commit_hash" ]] && git --git-dir="$AVALANCHE_PATH/../.git" rev-parse HEAD >/dev/null 2>&1; then
+  full_commit_hash="$(git --git-dir="$AVALANCHE_PATH/../.git" rev-parse HEAD)"
+fi
+if [[ -z "$full_commit_hash" ]]; then
+  full_commit_hash="unknown"
+fi
 commit_hash="${full_commit_hash::8}"
 
-git_commit=${AVALANCHEGO_COMMIT:-$( git rev-list -1 HEAD )}
+git_commit="${AVALANCHEGO_COMMIT:-}"
+if [[ -z "$git_commit" ]] && git --git-dir="$AVALANCHE_PATH/../.git" rev-parse HEAD >/dev/null 2>&1; then
+  git_commit="$(git --git-dir="$AVALANCHE_PATH/../.git" rev-parse HEAD)"
+fi
+if [[ -z "$git_commit" ]]; then
+  git_commit="unknown"
+fi
 
 # Static compilation
 static_ld_flags=''

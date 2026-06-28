@@ -1,0 +1,50 @@
+# Local-only Titan node (no cloud deploy). Binds API + staking to localhost.
+#
+#   ./docker/docker-local.sh up
+#   ./docker/docker-local.sh down
+#
+# API:    http://127.0.0.1:9650/ext/health
+# Logs:   docker compose -f docker/docker-compose.local.yml logs -f
+
+services:
+  titan-bootstrap:
+    image: go-titan:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        AVALANCHEGO_COMMIT: ${AVALANCHEGO_COMMIT:-local}
+    container_name: titan-local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9650:9650"
+      - "127.0.0.1:9651:9651"
+      - "127.0.0.1:9652:9652"
+    environment:
+      NODE_MODE: bootstrap
+      NETWORK_ID: titan
+      BOOTSTRAP_IPS: ""
+      BOOTSTRAP_IDS: ""
+      PUBLIC_IP: 127.0.0.1
+      AUTOCONFIGURE_PUBLIC_IP: "0"
+      AUTOCONFIGURE_BOOTSTRAP: "0"
+      HTTP_ALLOWED_HOSTS: "*"
+      LOG_LEVEL: debug
+      # Solo local node: no peers, not a genesis validator — relax health for dev.
+      EXTRA_ARGUMENTS: "--network-health-min-conn-peers=0"
+    volumes:
+      - titan-local-data:/app/data
+      - titan-local-db:/app/db
+      - titan-local-logs:/app/logs
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:9650/ext/info", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.getNodeID\"}"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 90s
+
+volumes:
+  titan-local-data:
+  titan-local-db:
+  titan-local-logs:

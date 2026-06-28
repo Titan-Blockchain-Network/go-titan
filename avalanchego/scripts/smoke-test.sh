@@ -27,7 +27,11 @@ fi
 cd "$AVAGO_DIR"
 
 echo "=== [1/4] Unit tests (cmd/titan) ==="
-go test ./cmd/titan/... -count=1 -v
+if [[ -x "$SCRIPT_DIR/test-titan.sh" ]] && command -v jq >/dev/null 2>&1; then
+  "$SCRIPT_DIR/test-titan.sh" --sequential
+else
+  go test ./cmd/titan/... -count=1 -v
+fi
 
 echo ""
 echo "=== [2/4] Build titan + avalanchego ==="

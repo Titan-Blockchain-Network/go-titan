@@ -124,11 +124,11 @@ If you are **already inside** `avalanchego/`, do not `cd avalanchego` again:
 
 ```sh
 # From avalanchego/
-go test ./cmd/titan/... -v
+./scripts/test-titan.sh              # colored live console + log (CI uses this too)
 ./scripts/build-titan.sh
 
 # From repo root:
-cd avalanchego && go test ./cmd/titan/... -v
+cd avalanchego && ./scripts/test-titan.sh
 ```
 
 ### Full chain lifecycle
@@ -157,7 +157,7 @@ GitHub Actions workflows (run when you push — not required for local dev):
 
 ```sh
 cd avalanchego
-go test ./cmd/titan/... -v          # unit tests (network creation, TLS, staking contract)
+./scripts/test-titan.sh             # unit tests (network creation, TLS, staking contract)
 ./scripts/build-titan.sh            # full build
 
 # Optional lint (install golangci-lint first)

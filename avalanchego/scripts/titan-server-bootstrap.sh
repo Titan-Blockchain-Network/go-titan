@@ -72,7 +72,24 @@ apt_update_install() {
         software-properties-common
 }
 
+ensure_go_in_path() {
+    if command -v go >/dev/null 2>&1; then
+        return 0
+    fi
+    if [[ -f /etc/profile.d/go.sh ]]; then
+        # shellcheck source=/dev/null
+        source /etc/profile.d/go.sh
+    fi
+    if [[ -x /usr/local/go/bin/go ]]; then
+        export PATH="/usr/local/go/bin:${PATH}"
+    elif [[ -x "${HOME}/.local/go/bin/go" ]]; then
+        export PATH="${HOME}/.local/go/bin:${PATH}"
+    fi
+    command -v go >/dev/null 2>&1
+}
+
 install_go_if_needed() {
+    ensure_go_in_path
     if command -v go >/dev/null 2>&1; then
         CURRENT_GO=$(go version | awk '{print $3}' | sed 's/go//')
         log "Go already installed: $CURRENT_GO"
@@ -112,6 +129,9 @@ install_go_if_needed() {
 build_titan_tools() {
     log "Building Titan CLI and avalanchego (this may take a few minutes)..."
     cd "$AVALANCHE_DIR"
+
+    ensure_go_in_path
+    export CGO_ENABLED=1
 
     # Use local coreth via replace so relative replace in coreth/go.mod works correctly for avalanchego
     go mod edit -replace github.com/ava-labs/coreth=$REPO_ROOT/coreth
