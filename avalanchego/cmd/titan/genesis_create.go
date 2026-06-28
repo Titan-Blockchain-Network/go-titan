@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	defaultOriginPath     = "titan-network/origin.json"
-	defaultExampleOrigin  = "titan-network/origin.example.json"
-	weiPerToken           = 1_000_000_000_000_000_000
-	minCustomNetworkID    = 100_000
-	maxCustomNetworkID    = 999_999_999
+	defaultOriginPath    = "titan-network/origin.json"
+	defaultExampleOrigin = "titan-network/origin.example.json"
+	weiPerToken          = 1_000_000_000_000_000_000
+	minCustomNetworkID   = 100_000
+	maxCustomNetworkID   = 999_999_999
 )
 
 type originMetadata struct {
@@ -34,9 +34,9 @@ type originMetadata struct {
 }
 
 type originAllocation struct {
-	AVAXAddr       string              `json:"avaxAddr"`
-	EthAddr        string              `json:"ethAddr"`
-	InitialAmount  uint64              `json:"initialAmount"`
+	AVAXAddr       string               `json:"avaxAddr"`
+	EthAddr        string               `json:"ethAddr"`
+	InitialAmount  uint64               `json:"initialAmount"`
 	UnlockSchedule []originLockedAmount `json:"unlockSchedule"`
 }
 
@@ -46,10 +46,10 @@ type originLockedAmount struct {
 }
 
 type originStaker struct {
-	DelegationFee uint32            `json:"delegationFee"`
-	NodeID        string            `json:"nodeID"`
-	RewardAddress string            `json:"rewardAddress"`
-	Signer        *originBLSSigner  `json:"signer,omitempty"`
+	DelegationFee uint32           `json:"delegationFee"`
+	NodeID        string           `json:"nodeID"`
+	RewardAddress string           `json:"rewardAddress"`
+	Signer        *originBLSSigner `json:"signer,omitempty"`
 }
 
 type originBLSSigner struct {
@@ -71,36 +71,36 @@ type originConfig struct {
 }
 
 type cChainGenesisDoc struct {
-	Config   cChainConfig              `json:"config"`
-	Nonce    string                    `json:"nonce"`
-	Timestamp string                   `json:"timestamp"`
-	ExtraData string                   `json:"extraData"`
-	GasLimit  string                   `json:"gasLimit"`
-	Difficulty string                  `json:"difficulty"`
-	MixHash   string                   `json:"mixHash"`
-	Coinbase  string                   `json:"coinbase"`
-	Alloc     map[string]cChainAccount `json:"alloc"`
-	Number    string                   `json:"number"`
-	GasUsed   string                   `json:"gasUsed"`
-	ParentHash string                  `json:"parentHash"`
+	Config     cChainConfig             `json:"config"`
+	Nonce      string                   `json:"nonce"`
+	Timestamp  string                   `json:"timestamp"`
+	ExtraData  string                   `json:"extraData"`
+	GasLimit   string                   `json:"gasLimit"`
+	Difficulty string                   `json:"difficulty"`
+	MixHash    string                   `json:"mixHash"`
+	Coinbase   string                   `json:"coinbase"`
+	Alloc      map[string]cChainAccount `json:"alloc"`
+	Number     string                   `json:"number"`
+	GasUsed    string                   `json:"gasUsed"`
+	ParentHash string                   `json:"parentHash"`
 }
 
 type cChainConfig struct {
-	ChainID                      uint64 `json:"chainId"`
-	HomesteadBlock               uint64 `json:"homesteadBlock"`
-	DaoForkBlock                 uint64 `json:"daoForkBlock"`
-	DaoForkSupport               bool   `json:"daoForkSupport"`
-	Eip150Block                  uint64 `json:"eip150Block"`
-	Eip150Hash                   string `json:"eip150Hash"`
-	Eip155Block                  uint64 `json:"eip155Block"`
-	Eip158Block                  uint64 `json:"eip158Block"`
-	ByzantiumBlock               uint64 `json:"byzantiumBlock"`
-	ConstantinopleBlock          uint64 `json:"constantinopleBlock"`
-	PetersburgBlock              uint64 `json:"petersburgBlock"`
-	IstanbulBlock                uint64 `json:"istanbulBlock"`
-	MuirGlacierBlock             uint64 `json:"muirGlacierBlock"`
-	ApricotPhase1BlockTimestamp  uint64 `json:"apricotPhase1BlockTimestamp"`
-	ApricotPhase2BlockTimestamp  uint64 `json:"apricotPhase2BlockTimestamp"`
+	ChainID                     uint64 `json:"chainId"`
+	HomesteadBlock              uint64 `json:"homesteadBlock"`
+	DaoForkBlock                uint64 `json:"daoForkBlock"`
+	DaoForkSupport              bool   `json:"daoForkSupport"`
+	Eip150Block                 uint64 `json:"eip150Block"`
+	Eip150Hash                  string `json:"eip150Hash"`
+	Eip155Block                 uint64 `json:"eip155Block"`
+	Eip158Block                 uint64 `json:"eip158Block"`
+	ByzantiumBlock              uint64 `json:"byzantiumBlock"`
+	ConstantinopleBlock         uint64 `json:"constantinopleBlock"`
+	PetersburgBlock             uint64 `json:"petersburgBlock"`
+	IstanbulBlock               uint64 `json:"istanbulBlock"`
+	MuirGlacierBlock            uint64 `json:"muirGlacierBlock"`
+	ApricotPhase1BlockTimestamp uint64 `json:"apricotPhase1BlockTimestamp"`
+	ApricotPhase2BlockTimestamp uint64 `json:"apricotPhase2BlockTimestamp"`
 }
 
 type cChainAccount struct {
@@ -110,10 +110,6 @@ type cChainAccount struct {
 
 type promptReader struct {
 	reader *bufio.Reader
-}
-
-func newPromptReader() *promptReader {
-	return &promptReader{reader: bufio.NewReader(os.Stdin)}
 }
 
 func (p *promptReader) ask(label, defaultVal string) string {
@@ -318,7 +314,7 @@ func resolveGenesisJSONPath() (string, error) {
 		return "", err
 	}
 	path := filepath.Join(root, "avalanchego", "genesis", "genesis_titan.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -398,7 +394,6 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 		blockchainName = "TestChain"
 		tokenTicker = "TEST"
 		chainID = 424242
-		totalSupplyTokens = "1000000"
 		allocations = []originAllocation{{
 			EthAddr:       "0x0123456789abcdef0123456789abcdef01234567",
 			AVAXAddr:      "X-titan1qy352euf40x77qfrg4ncn27dauqjx3t8r0zhyn",
@@ -564,7 +559,7 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 		Message:                    strings.ToLower(blockchainName),
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		return err
 	}
 	outBytes, err := json.MarshalIndent(cfg, "", "    ")
@@ -572,7 +567,7 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 		return err
 	}
 	outBytes = append(outBytes, '\n')
-	if err := os.WriteFile(outPath, outBytes, 0644); err != nil {
+	if err := os.WriteFile(outPath, outBytes, 0o644); err != nil {
 		return err
 	}
 
@@ -657,7 +652,7 @@ func runGenesisApply(args []string) error {
 	}
 	out = append(out, '\n')
 	tmp := genesisPath + ".tmp"
-	if err := os.WriteFile(tmp, out, 0644); err != nil {
+	if err := os.WriteFile(tmp, out, 0o644); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, genesisPath); err != nil {
@@ -667,20 +662,4 @@ func runGenesisApply(args []string) error {
 	fmt.Printf("✓ Applied %s → %s\n", originPath, genesisPath)
 	fmt.Println("  Rebuild: cd avalanchego && ./scripts/build-titan.sh")
 	return nil
-}
-
-func syncOriginBeforeBuild() error {
-	originPath, err := resolveOriginPath("")
-	if err != nil {
-		return nil
-	}
-	if _, err := os.Stat(originPath); err != nil {
-		examplePath, _ := resolveOriginPath(defaultExampleOrigin)
-		if _, exErr := os.Stat(examplePath); exErr != nil {
-			return nil
-		}
-		fmt.Println("  No origin.json — using origin.example.json for build")
-		return runGenesisApply([]string{"--from", examplePath})
-	}
-	return runGenesisApply(nil)
 }

@@ -96,7 +96,7 @@ func publishOriginBundle(dataDir string) error {
 	}
 
 	bundleDir := originBundleDir(dataDir)
-	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+	if err := os.MkdirAll(bundleDir, 0o755); err != nil {
 		return err
 	}
 
@@ -109,7 +109,7 @@ func publishOriginBundle(dataDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(bundleDir, originAnchorFile), anchorBytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bundleDir, originAnchorFile), anchorBytes, 0o644); err != nil {
 		return err
 	}
 
@@ -117,7 +117,7 @@ func publishOriginBundle(dataDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(bundleDir, originGenesisFile), genesisBytes, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(bundleDir, originGenesisFile), genesisBytes, 0o644); err != nil {
 		return err
 	}
 	if err := scrubOriginBundleDir(bundleDir); err != nil {
@@ -176,7 +176,7 @@ func downloadOriginGenesis(baseURL, destPath string) error {
 		return err
 	}
 	tmp := destPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return err
 	}
 	return os.Rename(tmp, destPath)
@@ -275,7 +275,7 @@ WantedBy=multi-user.target
 
 	path := fmt.Sprintf("/etc/systemd/system/%s.service", serviceName)
 	tmp := filepath.Join(os.TempDir(), serviceName+".service")
-	if err := os.WriteFile(tmp, []byte(unit), 0644); err != nil {
+	if err := os.WriteFile(tmp, []byte(unit), 0o644); err != nil {
 		return err
 	}
 	if err := runPrivileged("cp", tmp, path); err != nil {
@@ -290,17 +290,6 @@ func shortGenesisHash(hash string) string {
 		return hash[:16] + "..."
 	}
 	return hash
-}
-
-func verifyEmbeddedMatchesAnchor(anchor *TitanOriginAnchor) error {
-	localHash, err := computeEmbeddedGenesisFingerprint()
-	if err != nil {
-		return err
-	}
-	if localHash != anchor.GenesisHash {
-		return fmt.Errorf("embedded genesis %s != origin anchor %s", localHash, anchor.GenesisHash)
-	}
-	return nil
 }
 
 func verifyOnDiskGenesisMatchesAnchor(anchor *TitanOriginAnchor) error {
@@ -370,7 +359,7 @@ func waitAndVerifyLocalOriginServer(publicIP string) error {
 		time.Sleep(2 * time.Second)
 	}
 	if anchor == nil {
-		return fmt.Errorf("origin server not reachable at %s: %v", baseURL, lastErr)
+		return fmt.Errorf("origin server not reachable at %s: %w", baseURL, lastErr)
 	}
 	if err := verifyOnDiskGenesisMatchesAnchor(anchor); err != nil {
 		return fmt.Errorf("origin bundle mismatch: %w", err)

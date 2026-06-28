@@ -93,7 +93,7 @@ func configureNetworkFromGenesis(networkID uint32, blockchainName string) error 
 	}
 
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(updated), 0644); err != nil {
+	if err := os.WriteFile(tmp, []byte(updated), 0o644); err != nil {
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {

@@ -1,0 +1,29 @@
+# Lint policy for cmd/titan (interactive CLI). The upstream avalanchego config
+# enforces test-library and formatting rules that do not fit CLI output code.
+version: "2"
+run:
+  modules-download-mode: readonly
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -SA1019
+        - -QF1008
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+  exclusions:
+    generated: lax

@@ -63,14 +63,14 @@ func installBuiltBinaries(restart bool, services ...string) error {
 }
 
 func installOneBinary(src, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
 	tmp := dst + ".new"
 	if err := copyFile(src, tmp); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp, 0755); err != nil {
+	if err := os.Chmod(tmp, 0o755); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
@@ -78,7 +78,7 @@ func installOneBinary(src, dst string) error {
 		_ = os.Remove(tmp)
 		// Fallback for environments where rename over an existing file fails.
 		if err2 := runPrivileged("cp", "-f", src, dst); err2 != nil {
-			return fmt.Errorf("rename: %v; cp: %w", err, err2)
+			return fmt.Errorf("rename: %w; cp: %w", err, err2)
 		}
 		_ = runPrivileged("chmod", "+x", dst)
 	}
@@ -90,5 +90,5 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(dst, in, 0755)
+	return os.WriteFile(dst, in, 0o755)
 }

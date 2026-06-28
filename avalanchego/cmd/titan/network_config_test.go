@@ -12,9 +12,9 @@ func TestSlugNetworkName(t *testing.T) {
 	t.Parallel()
 	tests := map[string]string{
 		"My Custom Chain": "my-custom-chain",
-		"  Titan  ":        "titan",
-		"!!!":              "titan",
-		"Chain_9000":       "chain-9000",
+		"  Titan  ":       "titan",
+		"!!!":             "titan",
+		"Chain_9000":      "chain-9000",
 	}
 	for in, want := range tests {
 		if got := slugNetworkName(in); got != want {
@@ -35,14 +35,14 @@ func TestConfigureNetworkFromGenesis(t *testing.T) {
 	dir := t.TempDir()
 	avago := filepath.Join(dir, "avalanchego")
 	constantsDir := filepath.Join(avago, "utils", "constants")
-	if err := os.MkdirAll(constantsDir, 0755); err != nil {
+	if err := os.MkdirAll(constantsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	genesisDir := filepath.Join(avago, "genesis")
-	if err := os.MkdirAll(genesisDir, 0755); err != nil {
+	if err := os.MkdirAll(genesisDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(genesisDir, "genesis_titan.json"), []byte(`{"networkID":1}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genesisDir, "genesis_titan.json"), []byte(`{"networkID":1}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,7 +55,7 @@ const (
 )
 `
 	path := filepath.Join(constantsDir, "network_ids.go")
-	if err := os.WriteFile(path, []byte(sample), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(sample), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,11 +99,11 @@ func TestConfigureNetworkFromGenesisIdempotent(t *testing.T) {
 	constantsDir := filepath.Join(avago, "utils", "constants")
 	genesisDir := filepath.Join(avago, "genesis")
 	for _, p := range []string{constantsDir, genesisDir} {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(genesisDir, "genesis_titan.json"), []byte(`{"networkID":888}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(genesisDir, "genesis_titan.json"), []byte(`{"networkID":888}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,7 +116,7 @@ const (
 )
 `
 	path := filepath.Join(constantsDir, "network_ids.go")
-	if err := os.WriteFile(path, []byte(sample), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(sample), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

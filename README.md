@@ -173,7 +173,7 @@ Local pre-push:
 cd avalanchego
 ./scripts/test-titan.sh
 ./scripts/build-titan.sh
-golangci-lint run ./cmd/titan/...
+golangci-lint run --config .golangci-titan.yml ./cmd/titan/...
 ```
 
 ## Security

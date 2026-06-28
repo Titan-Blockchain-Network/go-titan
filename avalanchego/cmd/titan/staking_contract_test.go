@@ -11,10 +11,10 @@ import (
 func TestInjectStakingContracts(t *testing.T) {
 	dir := t.TempDir()
 	contractsDir := filepath.Join(dir, "titan-network", "contracts")
-	if err := os.MkdirAll(contractsDir, 0755); err != nil {
+	if err := os.MkdirAll(contractsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,10 +52,10 @@ func TestStakingContractPresentFalse(t *testing.T) {
 func TestDefaultCChainIncludesStakingAfterInject(t *testing.T) {
 	dir := t.TempDir()
 	contractsDir := filepath.Join(dir, "titan-network", "contracts")
-	if err := os.MkdirAll(contractsDir, 0755); err != nil {
+	if err := os.MkdirAll(contractsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

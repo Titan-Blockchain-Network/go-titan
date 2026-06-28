@@ -6,11 +6,11 @@ import (
 )
 
 type rateLimiter struct {
-	mu       sync.Mutex
-	limit    int
-	window   time.Duration
-	counts   map[string]int
-	resetAt  map[string]time.Time
+	mu      sync.Mutex
+	limit   int
+	window  time.Duration
+	counts  map[string]int
+	resetAt map[string]time.Time
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {

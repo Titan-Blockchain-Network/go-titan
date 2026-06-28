@@ -43,7 +43,7 @@ jobs:
         with:
           version: v2.1.6
           working-directory: avalanchego
-          args: --timeout=10m ./cmd/titan/...
+          args: --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
 
   build:
     name: Build binaries

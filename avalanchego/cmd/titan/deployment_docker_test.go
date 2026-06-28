@@ -41,7 +41,7 @@ func TestDockerLocalScriptExists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode()&0111 == 0 {
+	if info.Mode()&0o111 == 0 {
 		t.Fatal("docker-local.sh should be executable")
 	}
 }

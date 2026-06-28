@@ -9,10 +9,10 @@ import (
 )
 
 type originServeConfig struct {
-	dataDir  string
-	port     string
-	tlsCert  string
-	tlsKey   string
+	dataDir string
+	port    string
+	tlsCert string
+	tlsKey  string
 }
 
 func (c originServeConfig) validate() error {

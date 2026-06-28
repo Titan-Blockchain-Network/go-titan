@@ -14,15 +14,15 @@ func TestRunGenesisCreateNonInteractive(t *testing.T) {
 	networkDir := filepath.Join(dir, "titan-network")
 	contractsDir := filepath.Join(networkDir, "contracts")
 	for _, p := range []string{networkDir, contractsDir} {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	example := filepath.Join(networkDir, "origin.example.json")
-	if err := os.WriteFile(example, []byte(`{}`), 0644); err != nil {
+	if err := os.WriteFile(example, []byte(`{}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,11 +59,11 @@ func TestRunGenesisApply(t *testing.T) {
 	genesisDir := filepath.Join(dir, "avalanchego", "genesis")
 	constantsDir := filepath.Join(dir, "avalanchego", "utils", "constants")
 	for _, p := range []string{originDir, contractsDir, genesisDir, constantsDir} {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	networkIDs := `package constants
@@ -74,7 +74,7 @@ const (
 	TitanHRP      = "titan"
 )
 `
-	if err := os.WriteFile(filepath.Join(constantsDir, "network_ids.go"), []byte(networkIDs), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(constantsDir, "network_ids.go"), []byte(networkIDs), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +92,7 @@ const (
 		"blockchainName": "Test Chain",
 		"tokenTicker": "TST"
 	}`
-	if err := os.WriteFile(origin, []byte(originBody), 0644); err != nil {
+	if err := os.WriteFile(origin, []byte(originBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,11 +145,11 @@ func TestRunGenesisApplyIdempotentWhenNetworkAlreadyConfigured(t *testing.T) {
 	genesisDir := filepath.Join(dir, "avalanchego", "genesis")
 	constantsDir := filepath.Join(dir, "avalanchego", "utils", "constants")
 	for _, p := range []string{originDir, contractsDir, genesisDir, constantsDir} {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ const (
 	TitanHRP      = "titan"
 )
 `
-	if err := os.WriteFile(filepath.Join(constantsDir, "network_ids.go"), []byte(networkIDs), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(constantsDir, "network_ids.go"), []byte(networkIDs), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +179,7 @@ const (
 		"blockchainName": "Titan",
 		"tokenTicker": "TITAN"
 	}`
-	if err := os.WriteFile(origin, []byte(originBody), 0644); err != nil {
+	if err := os.WriteFile(origin, []byte(originBody), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

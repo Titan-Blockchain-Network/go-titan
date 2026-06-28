@@ -40,7 +40,7 @@ func copyFilePreservePerm(src, dst string) error {
 	}
 	perm := info.Mode().Perm()
 	if strings.HasSuffix(dst, ".key") {
-		perm = 0600
+		perm = 0o600
 	}
 	if err := os.WriteFile(dst, data, perm); err != nil {
 		return fmt.Errorf("write %s: %w", dst, err)
@@ -53,7 +53,7 @@ func archiveExistingGenesisBackup(backupDir string) error {
 		return nil
 	}
 	snapshot := filepath.Join(backupDir, "snapshots", time.Now().UTC().Format("2006-01-02T15-04-05Z"))
-	if err := os.MkdirAll(snapshot, 0700); err != nil {
+	if err := os.MkdirAll(snapshot, 0o700); err != nil {
 		return err
 	}
 	for _, name := range append(append([]string{}, genesisKeyFilenames...), "genesis_titan.json", "anchor.json", "backup-info.json", "README.txt") {
@@ -84,7 +84,7 @@ func backupGenesisKeys(keysDir, dataDir, backupDir string) error {
 	if err := archiveExistingGenesisBackup(backupDir); err != nil {
 		return fmt.Errorf("archive previous backup: %w", err)
 	}
-	if err := os.MkdirAll(backupDir, 0700); err != nil {
+	if err := os.MkdirAll(backupDir, 0o700); err != nil {
 		return err
 	}
 
@@ -117,7 +117,7 @@ func backupGenesisKeys(keysDir, dataDir, backupDir string) error {
 		"blsPublicKey":  staker.PublicKey,
 	}
 	infoBytes, _ := json.MarshalIndent(info, "", "  ")
-	if err := os.WriteFile(filepath.Join(backupDir, "backup-info.json"), infoBytes, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(backupDir, "backup-info.json"), infoBytes, 0o600); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ Files:
 Copy this entire directory offline (USB, vault, etc.). Anyone with these keys
 controls the genesis validator.
 `, info["backedUpAt"], staker.NodeID, keysDir)
-	if err := os.WriteFile(filepath.Join(backupDir, "README.txt"), []byte(readme), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(backupDir, "README.txt"), []byte(readme), 0o600); err != nil {
 		return err
 	}
 
@@ -148,7 +148,7 @@ controls the genesis validator.
 }
 
 func generateTitanKeys(outDir string, genesis bool) error {
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("create directory %s: %w", outDir, err)
 	}
 
@@ -159,10 +159,10 @@ func generateTitanKeys(outDir string, genesis bool) error {
 
 	certPath := filepath.Join(outDir, "staker.crt")
 	keyPath := filepath.Join(outDir, "staker.key")
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", certPath, err)
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", keyPath, err)
 	}
 
@@ -187,7 +187,7 @@ func generateTitanKeys(outDir string, genesis bool) error {
 		return fmt.Errorf("generate BLS signer key: %w", err)
 	}
 	signerPath := filepath.Join(outDir, "signer.key")
-	if err := os.WriteFile(signerPath, blsSk.ToBytes(), 0600); err != nil {
+	if err := os.WriteFile(signerPath, blsSk.ToBytes(), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", signerPath, err)
 	}
 
@@ -253,7 +253,7 @@ func keysShowMain(args []string) {
 }
 
 func secureKeysDir(dir string) error {
-	if err := os.Chmod(dir, 0700); err != nil {
+	if err := os.Chmod(dir, 0o700); err != nil {
 		return fmt.Errorf("chmod %s: %w", dir, err)
 	}
 	return nil

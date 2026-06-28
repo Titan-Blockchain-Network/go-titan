@@ -111,7 +111,7 @@ func writeGenesisConfigMap(genesisPath string, cfg map[string]json.RawMessage) e
 	}
 	out = append(out, '\n')
 	tmp := genesisPath + ".tmp"
-	if err := os.WriteFile(tmp, out, 0644); err != nil {
+	if err := os.WriteFile(tmp, out, 0o644); err != nil {
 		return fmt.Errorf("write temp genesis: %w", err)
 	}
 	return os.Rename(tmp, genesisPath)
@@ -369,8 +369,8 @@ func wipeDataDir(dataDir string) error {
 	for _, name := range []string{"process.json", "staking", "plugins"} {
 		_ = os.RemoveAll(filepath.Join(dataDir, name))
 	}
-	os.MkdirAll(filepath.Join(dataDir, "db"), 0755)
-	os.MkdirAll(filepath.Join(dataDir, "logs"), 0755)
+	os.MkdirAll(filepath.Join(dataDir, "db"), 0o755)
+	os.MkdirAll(filepath.Join(dataDir, "logs"), 0o755)
 	return nil
 }
 
@@ -460,4 +460,3 @@ func prepareGenesisNodeKeys(keysDir, dataDir, rewardAddress string, skipRebuild,
 	fmt.Println("  Genesis and keys are aligned.")
 	return nil
 }
-

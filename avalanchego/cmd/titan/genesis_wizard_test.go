@@ -42,11 +42,11 @@ func TestRunGenesisCreateInteractiveRejectsThenAcceptsChainID(t *testing.T) {
 	networkDir := filepath.Join(dir, "titan-network")
 	contractsDir := filepath.Join(networkDir, "contracts")
 	for _, p := range []string{networkDir, contractsDir} {
-		if err := os.MkdirAll(p, 0755); err != nil {
+		if err := os.MkdirAll(p, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

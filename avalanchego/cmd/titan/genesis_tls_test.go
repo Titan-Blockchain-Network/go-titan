@@ -12,10 +12,10 @@ func TestOriginServeConfigValidateTLS(t *testing.T) {
 	dir := t.TempDir()
 	cert := filepath.Join(dir, "cert.pem")
 	key := filepath.Join(dir, "key.pem")
-	if err := os.WriteFile(cert, []byte("cert"), 0644); err != nil {
+	if err := os.WriteFile(cert, []byte("cert"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(key, []byte("key"), 0644); err != nil {
+	if err := os.WriteFile(key, []byte("key"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

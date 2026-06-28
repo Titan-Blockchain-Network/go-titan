@@ -317,8 +317,8 @@ func setupMain(args []string) {
 		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, "", "", "0.0.0.0")
 
 		cfgPath := filepath.Join(*dataDir, "config.json")
-		os.MkdirAll(*dataDir, 0755)
-		if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err == nil {
+		os.MkdirAll(*dataDir, 0o755)
+		if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err == nil {
 			fmt.Printf("Wrote config: %s\n", cfgPath)
 		}
 
@@ -339,8 +339,8 @@ func setupMain(args []string) {
 
 		cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, *joinIP, *joinID, "0.0.0.0")
 		cfgPath := filepath.Join(*dataDir, "config.json")
-		os.MkdirAll(*dataDir, 0755)
-		if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err == nil {
+		os.MkdirAll(*dataDir, 0o755)
+		if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err == nil {
 			fmt.Printf("Wrote config: %s\n", cfgPath)
 		}
 
@@ -393,9 +393,6 @@ func bootstrapMain(args []string) {
 		fmt.Print("Public IP for this node: ")
 		fmt.Scanln(publicIP)
 	}
-	if *keysDir == "/root/keys" && *first {
-		// already good default
-	}
 	if !*first && *join == "" {
 		fmt.Print("Bootstrap IP:port (e.g. 165.22.0.208:9651): ")
 		fmt.Scanln(join)
@@ -405,9 +402,9 @@ func bootstrapMain(args []string) {
 
 	fmt.Println("=== Titan node bootstrap ===")
 
-	os.MkdirAll(*dataDir, 0755)
-	os.MkdirAll(filepath.Join(*dataDir, "db"), 0755)
-	os.MkdirAll(filepath.Join(*dataDir, "logs"), 0755)
+	os.MkdirAll(*dataDir, 0o755)
+	os.MkdirAll(filepath.Join(*dataDir, "db"), 0o755)
+	os.MkdirAll(filepath.Join(*dataDir, "logs"), 0o755)
 
 	bootIPs, bootIDs := bootstrapValues(*first, *join, *bootstrapID)
 	if !*first && (bootIPs == "" || bootIDs == "") {
@@ -460,7 +457,7 @@ func bootstrapMain(args []string) {
 	cfgPath := filepath.Join(*dataDir, "config.json")
 	cfg := nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs, httpHost)
 
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		fmt.Printf("Warning: could not write config: %v\n", err)
 	} else {
 		fmt.Printf("Wrote %s\n", cfgPath)
@@ -565,7 +562,7 @@ WantedBy=multi-user.target
 
 	path := fmt.Sprintf("/etc/systemd/system/%s.service", name)
 	tmp := filepath.Join(os.TempDir(), name+".service")
-	if err := os.WriteFile(tmp, []byte(unit), 0644); err != nil {
+	if err := os.WriteFile(tmp, []byte(unit), 0o644); err != nil {
 		fmt.Printf("  Could not write temp unit: %v\n", err)
 		return
 	}
@@ -791,8 +788,8 @@ func installSystemdMain(args []string) {
 	}
 
 	cfgPath := filepath.Join(*dataDir, "config.json")
-	os.MkdirAll(*dataDir, 0755)
-	if err := os.WriteFile(cfgPath, []byte(nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs, httpHost)), 0644); err != nil {
+	os.MkdirAll(*dataDir, 0o755)
+	if err := os.WriteFile(cfgPath, []byte(nodeConfigJSON(*dataDir, *publicIP, *keysDir, bootIPs, bootIDs, httpHost)), 0o644); err != nil {
 		fmt.Printf("Failed to write %s: %v\n", cfgPath, err)
 		os.Exit(1)
 	}
@@ -820,7 +817,7 @@ func firewallMain(args []string) {
 	}
 
 	fmt.Println("Applying firewall rules with ufw...")
-		if err := applyUFWFirewall(*allowAPI, false); err != nil {
+	if err := applyUFWFirewall(*allowAPI, false); err != nil {
 		fmt.Printf("Failed to apply some rules: %v\n", err)
 	}
 	fmt.Println("Firewall configuration complete. Current status:")
