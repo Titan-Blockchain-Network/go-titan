@@ -47,7 +47,7 @@ jobs:
       - name: Build image for scanning
         run: docker build -t go-titan:scan -f Dockerfile .
       - name: Run Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: go-titan:scan
           format: table
