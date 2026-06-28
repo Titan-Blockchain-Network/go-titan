@@ -491,6 +491,7 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 
 		if p.askYesNo("Add initial genesis validator(s)?", true) {
 			fmt.Println("  Generate staking keys with: titan keys generate --genesis --dir <path>")
+			var genesisStakedTotal uint64
 			for i := 1; ; i++ {
 				nodeID := p.ask(fmt.Sprintf("Staker %d — NodeID (blank to finish)", i), "")
 				if nodeID == "" {
@@ -499,6 +500,21 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 				reward := p.ask("  P-chain reward address", "")
 				pub := p.ask("  BLS public key (0x...)", "")
 				pop := p.ask("  BLS proof of possession (0x...)", "")
+				stakeAmt := p.ask("  Stake amount (tokens)", "2000000")
+				nAvax, err := validateTokenAmount(stakeAmt)
+				if err != nil {
+					return err
+				}
+				if len(allocations) == 0 {
+					return fmt.Errorf("at least one allocation is required before adding genesis validators")
+				}
+				fundAddr := allocations[0].AVAXAddr
+				if genesisStakedTotal+nAvax > allocations[0].UnlockSchedule[0].Amount {
+					return fmt.Errorf("genesis validator stake exceeds allocation on %s", fundAddr)
+				}
+				if reward == "" {
+					reward = strings.Replace(fundAddr, "X-", "P-", 1)
+				}
 				stakers = append(stakers, originStaker{
 					NodeID:        nodeID,
 					RewardAddress: reward,
@@ -508,17 +524,8 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 						ProofOfPossession: pop,
 					},
 				})
-				stakeAmt := p.ask("  Stake amount (tokens)", "2000000")
-				nAvax, err := validateTokenAmount(stakeAmt)
-				if err != nil {
-					return err
-				}
-				if reward == "" && len(allocations) > 0 {
-					reward = strings.Replace(allocations[0].AVAXAddr, "X-", "P-", 1)
-					stakers[len(stakers)-1].RewardAddress = reward
-				}
-				stakedFunds = append(stakedFunds, allocations[0].AVAXAddr)
-				_ = nAvax
+				stakedFunds = append(stakedFunds, fundAddr)
+				genesisStakedTotal += nAvax
 			}
 		}
 	}

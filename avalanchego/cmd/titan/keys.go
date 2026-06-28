@@ -229,7 +229,7 @@ func generateTitanKeys(outDir string, genesis bool) error {
 			NodeID:            nodeID.String(),
 			PublicKey:         "0x" + pkHex,
 			ProofOfPossession: "0x" + popHex,
-		}, defaultValidatorStakeTitan)
+		}, defaultValidatorStakeTitan, defaultDelegationFeePercent)
 	}
 	fmt.Println("---")
 	fmt.Println("Store private keys offline.")
@@ -249,7 +249,7 @@ func keysShowMain(args []string) {
 	}
 	fmt.Printf("NodeID:         %s\n", staker.NodeID)
 	fmt.Printf("BLS Public Key: %s\n", staker.PublicKey)
-	printAtlasValidatorAddCommand(staker, *amount)
+	printAtlasValidatorAddCommand(staker, *amount, defaultDelegationFeePercent)
 }
 
 func secureKeysDir(dir string) error {

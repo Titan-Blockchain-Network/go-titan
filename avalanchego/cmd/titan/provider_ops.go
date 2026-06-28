@@ -15,6 +15,7 @@ func providerMain(args []string) {
 
   titan provider onboard --from @treasury.key --uri http://JOIN_NODE:9650
       Fund (C→P) and register a join node as permissionless validator.
+      Optional: --amount, --duration-days, --delegation-fee (percent).
       Run from the bootstrap node after the join node is synced.
 
   titan provider list [--uri http://127.0.0.1:9650]
@@ -38,6 +39,7 @@ func providerOnboardMain(args []string) {
 	from := fs.String("from", "", "treasury key @file on bootstrap node")
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "tokens to stake for the provider")
 	days := fs.Int("duration-days", 14, "validator duration")
+	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
 	uri := fs.String("uri", "", "join node API (required)")
 	nodeID := fs.String("node-id", "", "optional NodeID if auto-detect fails")
 	pub := fs.String("bls-pub", "", "optional BLS public key")
@@ -61,6 +63,7 @@ func providerOnboardMain(args []string) {
 		"--target-uri", strings.TrimRight(*uri, "/"),
 		"--amount", strconv.FormatFloat(*amount, 'f', -1, 64),
 		"--duration-days", strconv.Itoa(*days),
+		"--delegation-fee", strconv.FormatFloat(*delegationFee, 'f', -1, 64),
 	}
 	if *nodeID != "" {
 		validatorArgs = append(validatorArgs, "--node-id", *nodeID)

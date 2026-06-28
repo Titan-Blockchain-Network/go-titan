@@ -89,12 +89,28 @@ func statusMain(args []string) {
 				time.Unix(int64(v.StartTime), 0).UTC().Format(time.RFC3339),
 				time.Unix(int64(v.EndTime), 0).UTC().Format(time.RFC3339),
 			)
+			var details []string
+			if v.DelegationFee > 0 {
+				details = append(details, fmt.Sprintf("delegation fee=%.2f%%", v.DelegationFee))
+			}
+			if v.PotentialReward != nil {
+				details = append(details, fmt.Sprintf("potential reward=%.4f TITAN",
+					float64(*v.PotentialReward)/float64(units.Avax)))
+			}
+			if v.DelegatorCount != nil && *v.DelegatorCount > 0 {
+				details = append(details, fmt.Sprintf("delegators=%d", *v.DelegatorCount))
+			}
 			if v.Connected != nil {
-				fmt.Printf("    connected=%v", *v.Connected)
+				line := fmt.Sprintf("connected=%v", *v.Connected)
 				if v.Uptime != nil {
-					fmt.Printf(" uptime=%.1f%%", formatValidatorUptime(*v.Uptime))
+					line += fmt.Sprintf(" uptime=%.1f%%", formatValidatorUptime(*v.Uptime))
 				}
-				fmt.Println()
+				details = append(details, line)
+			} else if v.Uptime != nil {
+				details = append(details, fmt.Sprintf("uptime=%.1f%%", formatValidatorUptime(*v.Uptime)))
+			}
+			if len(details) > 0 {
+				fmt.Printf("    %s\n", strings.Join(details, "  "))
 			}
 		}
 	}

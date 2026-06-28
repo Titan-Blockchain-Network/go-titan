@@ -18,7 +18,7 @@ import (
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/units"
 	"github.com/ava-labs/avalanchego/vms/platformvm"
-	"github.com/ava-labs/avalanchego/vms/platformvm/reward"
+
 	"github.com/ava-labs/avalanchego/vms/platformvm/signer"
 	"github.com/ava-labs/avalanchego/vms/platformvm/txs"
 	"github.com/ava-labs/avalanchego/vms/secp256k1fx"
@@ -113,7 +113,7 @@ func keysMain(args []string) {
 
 func validatorMain(args []string) {
 	if len(args) == 0 || args[0] != "add" {
-		fmt.Fprintln(os.Stderr, "usage: titan validator add --from @master.key [--uri http://127.0.0.1:9650] [--node-id ... --bls-pub ... --bls-pop ...]")
+		fmt.Fprintln(os.Stderr, "usage: titan validator add --from @master.key [--amount 2000] [--duration-days 14] [--delegation-fee 0] [--uri http://127.0.0.1:9650] [--node-id ... --bls-pub ... --bls-pop ...]")
 		os.Exit(1)
 	}
 
@@ -121,6 +121,7 @@ func validatorMain(args []string) {
 	from := fs.String("from", "", "treasury privkey hex or @file (required)")
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "TITAN to stake")
 	days := fs.Int("duration-days", 14, "duration")
+	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
 	uri := fs.String("uri", "http://127.0.0.1:9650", "local node API for wallet txs (run on ATLAS)")
 	targetURI := fs.String("target-uri", "", "optional: fetch NodeID/BLS from another node (SSH tunnel); prefer --node-id on ATLAS")
 	nodeIDFlag := fs.String("node-id", "", "join node NodeID (required on ATLAS unless --target-uri set)")
@@ -138,13 +139,13 @@ func validatorMain(args []string) {
 		fmt.Fprintf(os.Stderr, "bad key: %v\n", err)
 		os.Exit(1)
 	}
-	const maxValidatorStakeTitan = 10000
-	if *amount > maxValidatorStakeTitan {
-		fmt.Fprintf(os.Stderr, "stake %.0f TITAN exceeds network max (%d TITAN per validator)\n", *amount, maxValidatorStakeTitan)
+	if err := validateValidatorStake(*amount); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
-	if *amount < 1 {
-		fmt.Fprintf(os.Stderr, "stake must be at least 1 TITAN\n")
+	delegationFeeShares, err := parseDelegationFeePercent(*delegationFee)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
@@ -161,7 +162,7 @@ func validatorMain(args []string) {
 	cw := w.C()
 	pw := w.P()
 
-	amt := uint64(*amount * float64(units.Avax))
+	amt := validatorStakeAmountNAVAX(*amount)
 	owner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}}
 
 	pCtx := pw.Builder().Context()
@@ -170,7 +171,7 @@ func validatorMain(args []string) {
 	if pBalErr == nil {
 		pBal = pBalMap[pCtx.AVAXAssetID]
 	}
-	fundTarget := amt + pChainFundingBuffer
+	fundTarget := validatorFundingTargetNAVAX(*amount)
 	switch {
 	case pBal >= fundTarget:
 		fmt.Printf("P-chain already has %.4f TITAN (need %.0f stake + fee buffer) — skipping C→P\n",
@@ -241,7 +242,8 @@ func validatorMain(args []string) {
 	start := time.Now().Add(5 * time.Minute).Unix()
 	end := time.Now().Add(time.Duration(*days)*24*time.Hour + 5*time.Minute).Unix()
 
-	fmt.Printf("Adding validator %s ...\n", nodeID)
+	fmt.Printf("Adding validator %s (stake %.0f TITAN, delegation fee %.2f%%)...\n",
+		nodeID, *amount, *delegationFee)
 	tx, err := pw.IssueAddPermissionlessValidatorTx(
 		&txs.SubnetValidator{Validator: txs.Validator{
 			NodeID: nodeID, Start: uint64(start), End: uint64(end), Wght: amt,
@@ -250,7 +252,7 @@ func validatorMain(args []string) {
 		pw.Builder().Context().AVAXAssetID,
 		&secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}},
 		&secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{addr}},
-		reward.PercentDenominator/4,
+		delegationFeeShares,
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "add failed: %v\n", err)
@@ -450,7 +452,7 @@ func bootstrapMain(args []string) {
 		_ = secureKeysDir(*keysDir)
 		if staker, err := deriveStakerFromKeys(*keysDir); err == nil {
 			fmt.Println("Join node keys ready. After sync, register from ATLAS:")
-			printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan)
+			printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan, defaultDelegationFeePercent)
 		}
 	}
 
@@ -700,10 +702,10 @@ func runHealthcheck(opts healthcheckOpts) {
 		}
 		fmt.Printf("  ✓ Join node %s synced — register from ATLAS (treasury), not from this server:\n", nodeID)
 		if joinStaker != nil {
-			printAtlasValidatorAddCommand(joinStaker, defaultValidatorStakeTitan)
+			printAtlasValidatorAddCommand(joinStaker, defaultValidatorStakeTitan, defaultDelegationFeePercent)
 		} else if opts.keysDir != "" {
 			if staker, err := deriveStakerFromKeys(opts.keysDir); err == nil {
-				printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan)
+				printAtlasValidatorAddCommand(staker, defaultValidatorStakeTitan, defaultDelegationFeePercent)
 			}
 		}
 		if opts.originURL != "" {
