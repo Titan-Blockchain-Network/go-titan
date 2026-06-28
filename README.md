@@ -11,7 +11,7 @@ go-titan/
 ├── avalanchego/          # Node + titan CLI (cmd/titan)
 ├── coreth/               # C-chain EVM
 ├── config/               # Chain configuration templates
-├── docker/               # Docker Compose (bootstrap + provider modes)
+├── docker/               # Docker Compose + docker-local.sh (localhost dev)
 ├── titan-network/        # Your network genesis (origin.json — generated, not committed)
 ├── entrypoint/           # Distroless entrypoint (Go)
 ├── Dockerfile            # Standard image
@@ -32,6 +32,8 @@ cd go-titan/avalanchego
 
 The interactive wizard asks for blockchain name, token ticker, chain ID, allocations, total supply, and optional initial validators. Output is saved to `titan-network/origin.json` (gitignored).
 
+**Chain ID rules:** must be **100,000–999,999,999** (Avalanche reserves lower IDs for mainnet and public testnets). The same value is used as both the Avalanche network ID and the C-chain EVM `chainId`. If you enter an invalid ID, the wizard explains why and asks again — it does not exit.
+
 ### 2. Apply genesis and build
 
 ```sh
@@ -49,7 +51,16 @@ The interactive wizard asks for blockchain name, token ticker, chain ID, allocat
 ./build/titan node bootstrap --first
 ```
 
-**Docker (single-node bootstrap):**
+**Docker — local testing (localhost only, no cloud deploy):**
+
+```sh
+# From repo root — builds image, applies example genesis, starts on 127.0.0.1:9650
+./docker/docker-local.sh up
+./docker/docker-local.sh status
+./docker/docker-local.sh down
+```
+
+**Docker — production bootstrap (server / public IP):**
 
 ```sh
 # Generate keys first: ./build/titan keys generate --genesis --dir docker/keys
@@ -124,12 +135,20 @@ If you are **already inside** `avalanchego/`, do not `cd avalanchego` again:
 
 ```sh
 # From avalanchego/
-./scripts/test-titan.sh              # colored live console + log (CI uses this too)
+./scripts/test-titan.sh                    # green ✓ / red ✗ live console + log file
+./scripts/test-titan.sh --sequential       # one test at a time (cleaner output)
+./scripts/test-titan.sh --run TestValidateCustomChainID   # single feature
+./scripts/test-titan.sh --verbose-output     # show each test's stdout/stderr
 ./scripts/build-titan.sh
+./scripts/smoke-test.sh                      # tests → build → genesis create/apply
 
 # From repo root:
 cd avalanchego && ./scripts/test-titan.sh
 ```
+
+Test logs: `avalanchego/test-results/latest.log` (symlink to the last run).
+
+Tests are organized **by feature** under `avalanchego/cmd/titan/` — see [avalanchego/cmd/titan/TESTING.md](./avalanchego/cmd/titan/TESTING.md) for the file map and TDD workflow.
 
 ### Full chain lifecycle
 
@@ -148,7 +167,7 @@ GitHub Actions workflows (run when you push — not required for local dev):
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `ci.yml` | push/PR to `main` | Titan CLI tests, golangci-lint, binary build |
+| `ci.yml` | push/PR to `main` | `./scripts/test-titan.sh --sequential`, golangci-lint, binary build |
 | `security.yml` | push/PR + weekly | gosec + Trivy image scan |
 | `build-container.yml` | push to `main`, tags | Multi-arch Docker images + Cosign |
 | `release.yml` | `v*` tags | GitHub release with binaries |
