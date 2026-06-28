@@ -20,8 +20,9 @@ jobs:
       - name: Install jq (test runner JSON formatter)
         run: sudo apt-get update -y && sudo apt-get install -y jq
       - name: Run titan CLI tests (feature suite)
-        working-directory: avalanchego
-        run: ./scripts/test-titan.sh --sequential
+        run: |
+          cd avalanchego
+          ./scripts/test-titan.sh --sequential
       - name: Upload test log
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,8 +55,9 @@ jobs:
           go-version: "1.24.9"
           cache-dependency-path: avalanchego/go.sum
       - name: Build titan + avalanchego
-        working-directory: avalanchego
-        run: ./scripts/build-titan.sh
+        run: |
+          cd avalanchego
+          ./scripts/build-titan.sh
       - name: Verify binaries exist
         run: |
           test -f avalanchego/build/titan

@@ -6,21 +6,50 @@ on:
     branches: [ "main", "release/**" ]
     tags: [ "v*" ]
 
+permissions:
+  contents: read
+
 jobs:
+  test:
+    name: Titan CLI tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+      - name: Run titan CLI tests
+        run: |
+          cd avalanchego
+          ./scripts/test-titan.sh --sequential
+
   build:
-    name: Build go-flare with SLSA
+    name: Build go-titan with SLSA
+    needs: [test]
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+      attestations: write
+      packages: write
     uses: ./.github/workflows/build-go-slsa3.yaml
     with:
-      go_version: "1.23.12"
+      go_version: "1.24.9"
       ubuntu_version: "24.04"
       build_artifact_name: "avalanchego"
 
   build-verification:
     if: github.ref_type == 'tag'
     name: Go Verification Build
+    needs: [test]
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-go-verification.yaml
     with:
-      go_version: "1.23.12"
+      go_version: "1.24.9"
       ubuntu_version: "24.04"
       build_artifact_name: "avalanchego-verification"
 
@@ -35,10 +64,10 @@ jobs:
     steps:
       - name: Install diffoscope
         run: sudo apt-get update -y && sudo apt-get install -y diffoscope-minimal
-      
+
       - name: Install slsa-verifier
         uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6 # v2.7.1
-      
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3
 
@@ -67,14 +96,14 @@ jobs:
         run: |
           HASH_MAIN=$(sha256sum ${{ env.AVALANCHEGO_BINARY }} | awk '{print $1}')
           HASH_VERIFY=$(sha256sum ${{ env.AVALANCHEGO_VERIFICATION_BINARY }} | awk '{print $1}')
-          
+
           if [ "$HASH_MAIN" = "$HASH_VERIFY" ]; then
             echo "Hashes match"
           else
             echo "Hashes don't match"
 
             diffoscope ${{ env.AVALANCHEGO_BINARY }} ${{ env.AVALANCHEGO_VERIFICATION_BINARY }} || true
-            
+
             exit 1
           fi
 
@@ -93,14 +122,14 @@ jobs:
       - name: Package release
         run: |
           RELEASE_TAG="${{ github.ref_name }}"
-          ARTIFACT_NAME="go-flare-${RELEASE_TAG}-linux-amd64.zip"
-          
+          ARTIFACT_NAME="go-titan-${RELEASE_TAG}-linux-amd64.zip"
+
           cd release
           zip -r ../$ARTIFACT_NAME .
 
           mv ../${{ env.SLSA_PROVENANCE }} ../$ARTIFACT_NAME.build.slsa
-          
-          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV      
+
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
 
       - name: Sign release binary
         shell: bash

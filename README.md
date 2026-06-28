@@ -183,7 +183,7 @@ cd avalanchego
 golangci-lint run ./cmd/titan/...
 ```
 
-**Trigger CI on GitHub:** push your branch or open a PR against `main`. Workflows start automatically — check the Actions tab on the repo.
+**Trigger CI on GitHub:** push your branch or open a PR against `main`. Workflows start automatically — check the Actions tab on the repo. All test jobs run from repo root with `cd avalanchego && ./scripts/test-titan.sh`.
 
 **Run a workflow manually on GitHub:** Actions → select `CI` or `Security` → **Run workflow** → choose branch → Run.
 

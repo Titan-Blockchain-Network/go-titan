@@ -17,12 +17,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
       - name: Run CLI tests
-        working-directory: avalanchego
-        run: go test ./cmd/titan/... -count=1
+        run: |
+          cd avalanchego
+          ./scripts/test-titan.sh --sequential
       - name: Build
-        working-directory: avalanchego
-        run: ./scripts/build-titan.sh
+        run: |
+          cd avalanchego
+          ./scripts/build-titan.sh
       - name: Package binaries
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
