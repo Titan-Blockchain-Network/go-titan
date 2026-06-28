@@ -35,11 +35,19 @@ func parseDelegationFeePercent(percent float64) (uint32, error) {
 	if percent < 0 || percent > maxDelegationFeePercent {
 		return 0, fmt.Errorf("delegation fee must be between 0 and %d%%", maxDelegationFeePercent)
 	}
-	minFee := float64(genesis.TitanParams.MinDelegationFee) / float64(reward.PercentDenominator) * 100
-	if percent < minFee {
+
+	// Convert percent (0–100) to reward shares (0–PercentDenominator) with rounding
+	// to avoid off-by-one errors from float truncation.
+	shares := uint64(percent*float64(reward.PercentDenominator)/100 + 0.5)
+	if shares > uint64(reward.PercentDenominator) {
+		shares = uint64(reward.PercentDenominator)
+	}
+
+	minShares := uint64(genesis.TitanParams.MinDelegationFee)
+	if shares < minShares {
+		minFee := formatDelegationFeePercent(uint32(minShares))
 		return 0, fmt.Errorf("delegation fee %.2f%% is below network minimum (%.2f%%)", percent, minFee)
 	}
-	shares := uint64(percent / 100 * float64(reward.PercentDenominator))
 	return uint32(shares), nil
 }
 
