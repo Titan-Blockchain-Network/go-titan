@@ -31,7 +31,7 @@ jobs:
     needs: [test]
     permissions:
       id-token: write
-      contents: read
+      contents: write
       actions: read
       attestations: write
       packages: write
