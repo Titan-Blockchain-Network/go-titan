@@ -201,6 +201,8 @@ Test output: `avalanchego/test-results/`. Suite layout: [avalanchego/cmd/titan/T
 | `build-container.yml` | `main`, tags | Multi-arch images, Cosign |
 | `release.yml` | `v*` tags | Release binaries |
 
+Production readiness checklist: [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md).
+
 ## Security
 
 - `titan-network/origin.json` and staking key material are excluded from git
