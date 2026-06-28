@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# Automated smoke test with default values — no prompts.
-# Runs unit tests, builds binaries, exercises genesis create/apply with defaults.
+# End-to-end smoke test: unit tests, build, genesis create/apply (non-interactive).
 #
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-// Feature: genesis — interactive wizard prompts (stdin-driven).
+// Genesis interactive prompt tests.
 package main
 
 import (

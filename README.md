@@ -1,26 +1,28 @@
 # go-titan
 
-Production-ready toolkit for launching and operating custom Avalanche L1 blockchains. Fork this repository, generate your genesis interactively, build the node binary, and deploy with Docker or bare metal.
+Toolkit for building and operating Avalanche L1 networks. Fork the repository, define genesis, compile node binaries, and deploy on bare metal or Docker.
 
-Derived from [go-flare](https://github.com/flare-foundation/go-flare) (AvalancheGo v1.14 / Coreth v0.16).
+Fork of [go-flare](https://github.com/flare-foundation/go-flare) (AvalancheGo v1.14 / Coreth v0.16).
 
 ## Project structure
 
 ```
 go-titan/
-├── avalanchego/          # Node + titan CLI (cmd/titan)
-├── coreth/               # C-chain EVM
+├── avalanchego/          # AvalancheGo node and Titan CLI (cmd/titan)
+├── coreth/               # C-chain EVM implementation
 ├── config/               # Chain configuration templates
-├── docker/               # Docker Compose + docker-local.sh (localhost dev)
-├── titan-network/        # Your network genesis (origin.json — generated, not committed)
-├── entrypoint/           # Distroless entrypoint (Go)
-├── Dockerfile            # Standard image
-└── Dockerfile.dless      # Distroless / rootless image
+├── docker/               # Docker Compose manifests and local dev scripts
+├── titan-network/        # Network genesis source (origin.json)
+├── entrypoint/           # Container entrypoint (distroless variant)
+├── Dockerfile            # Standard container image
+└── Dockerfile.dless      # Distroless rootless image
 ```
+
+`origin.json` is operator-generated and excluded from version control. See `titan-network/origin.example.json` for the schema.
 
 ## Quick start
 
-### 1. Create your genesis
+### 1. Genesis
 
 ```sh
 git clone https://github.com/Titan-Blockchain-Network/go-titan.git
@@ -30,169 +32,156 @@ cd go-titan/avalanchego
 ./build/titan genesis create
 ```
 
-The interactive wizard asks for blockchain name, token ticker, chain ID, allocations, total supply, and optional initial validators. Output is saved to `titan-network/origin.json` (gitignored).
+Prompts cover network name, token ticker, chain ID, allocations, supply, and optional genesis validators. Output: `titan-network/origin.json`.
 
-**Chain ID rules:** must be **100,000–999,999,999** (Avalanche reserves lower IDs for mainnet and public testnets). The same value is used as both the Avalanche network ID and the C-chain EVM `chainId`. If you enter an invalid ID, the wizard explains why and asks again — it does not exit.
+**Chain ID:** `100000`–`999999999`. Values below `100000` are reserved by Avalanche (mainnet, Fuji, Local, etc.). The ID is used as both the Avalanche network ID and the C-chain EVM `chainId`. Invalid entries are rejected with a re-prompt.
 
-### 2. Apply genesis and build
+### 2. Apply and build
 
 ```sh
 ./build/titan genesis apply
 ./scripts/build-titan.sh
 ```
 
-`genesis apply` syncs `origin.json` → `avalanchego/genesis/genesis_titan.json`, **creates the network config** in `network_ids.go`, and injects the C-chain Warp Messenger contract. No manual code edits required.
+`genesis apply` writes `avalanchego/genesis/genesis_titan.json`, patches `network_ids.go`, and injects the C-chain Warp Messenger precompile.
 
-### 3. Deploy bootstrap node
+### 3. Bootstrap node
 
-**Bare metal (recommended for production):**
+**Bare metal:**
 
 ```sh
 ./build/titan node bootstrap --first
 ```
 
-**Docker — local testing (localhost only, no cloud deploy):**
+**Docker (local development):**
 
 ```sh
-# From repo root — builds image, applies example genesis, starts on 127.0.0.1:9650
 ./docker/docker-local.sh up
 ./docker/docker-local.sh status
 ./docker/docker-local.sh down
 ```
 
-**Docker — production bootstrap (server / public IP):**
+**Docker (production bootstrap):**
 
 ```sh
-# Generate keys first: ./build/titan keys generate --genesis --dir docker/keys
+./build/titan keys generate --genesis --dir docker/keys
 docker compose -f docker/docker-compose.bootstrap.yml up -d
 ```
 
-### 4. Add provider (join) nodes
+### 4. Join nodes
 
 ```sh
-# On the join machine
 ./build/titan genesis align --from http://BOOTSTRAP_IP:9652
 ./build/titan keys generate --dir /path/to/keys
 ./build/titan node bootstrap --join BOOTSTRAP_IP:9651 --bootstrap-id NodeID-...
 ```
 
-**Docker provider mode:**
+**Docker (provider):**
 
 ```sh
 BOOTSTRAP_IPS=1.2.3.4:9651 BOOTSTRAP_IDS=NodeID-... \
   docker compose -f docker/docker-compose.provider.yml up -d
 ```
 
-## Titan CLI reference
+## Titan CLI
 
 | Command | Description |
 |---------|-------------|
-| `titan genesis create` | Interactive genesis wizard |
-| `titan genesis apply` | Sync origin.json → genesis_titan.json |
-| `titan genesis align --from URL` | Download genesis from bootstrap node |
-| `titan genesis fingerprint` | Show embedded genesis hash |
-| `titan keys generate [--genesis]` | Create staking TLS + BLS keys |
-| `titan node bootstrap --first` | Full bootstrap node setup |
-| `titan node bootstrap --join ...` | Join node setup |
-| `titan provider onboard --from @key --uri URL` | Bootstrapper funds + registers join node |
-| `titan validator add --from @key` | Register a validator on-chain |
-| `titan stake add --from @key --node-id ID` | Delegate tokens to a validator |
+| `titan genesis create` | Genesis configuration wizard |
+| `titan genesis apply` | Apply `origin.json` to embedded genesis |
+| `titan genesis align --from URL` | Fetch genesis from bootstrap origin server |
+| `titan genesis fingerprint` | Embedded genesis hash |
+| `titan keys generate [--genesis]` | Staking TLS and BLS keys |
+| `titan node bootstrap --first` | Bootstrap node installation |
+| `titan node bootstrap --join ...` | Join node installation |
+| `titan provider onboard --from @key --uri URL` | Fund and register a join validator |
+| `titan validator add --from @key` | Register validator on-chain |
+| `titan stake add --from @key --node-id ID` | Delegate stake to a validator |
 | `titan status` | Validators, fees, rewards, health |
 
-See [TITAN_DEPLOY.md](./TITAN_DEPLOY.md) for the complete operational guide.
+Operational procedures: [TITAN_DEPLOY.md](./TITAN_DEPLOY.md).
 
 ## Docker
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NODE_MODE` | _(empty)_ | `bootstrap` (genesis node) or `provider` (join node) |
+| `NODE_MODE` | _(empty)_ | `bootstrap` or `provider` |
 | `NETWORK_ID` | `titan` | Network identifier |
-| `BOOTSTRAP_IPS` | _(empty)_ | Bootstrap peer IPs |
+| `BOOTSTRAP_IPS` | _(empty)_ | Bootstrap peer addresses |
 | `BOOTSTRAP_IDS` | _(empty)_ | Bootstrap peer NodeIDs |
 | `AUTOCONFIGURE_PUBLIC_IP` | `1` | Auto-detect public IP |
-| `AUTOCONFIGURE_BOOTSTRAP` | `0` | Auto-discover bootstrap from endpoint |
+| `AUTOCONFIGURE_BOOTSTRAP` | `0` | Discover bootstrap peers from endpoint |
 
-Images are published to `ghcr.io/titan-blockchain-network/go-titan`. See [README-docker.md](./README-docker.md) for full configuration.
+Images: `ghcr.io/titan-blockchain-network/go-titan`. Configuration reference: [README-docker.md](./README-docker.md).
 
 ## Development
 
 ### Requirements
 
-- Go 1.24+ and gcc (for CGO/BLS)
+- Go 1.24+, gcc (CGO/BLS)
 - jq, curl
 
-**Do not use `apt install golang-go`** if it conflicts on your distro — use the repo installer instead:
+Install Go via `install-dev.sh` rather than distro `golang-go` packages when they conflict:
 
 ```sh
-# From repo root (or anywhere):
 ./avalanchego/scripts/install-dev.sh
 export PATH="$HOME/.local/go/bin:$PATH"
 ```
 
-### Build & test
-
-If you are **already inside** `avalanchego/`, do not `cd avalanchego` again:
-
-```sh
-# From avalanchego/
-./scripts/test-titan.sh                    # green ✓ / red ✗ live console + log file
-./scripts/test-titan.sh --sequential       # one test at a time (cleaner output)
-./scripts/test-titan.sh --run TestValidateCustomChainID   # single feature
-./scripts/test-titan.sh --verbose-output     # show each test's stdout/stderr
-./scripts/build-titan.sh
-./scripts/smoke-test.sh                      # tests → build → genesis create/apply
-
-# From repo root:
-cd avalanchego && ./scripts/test-titan.sh
-```
-
-Test logs: `avalanchego/test-results/latest.log` (symlink to the last run).
-
-Tests are organized **by feature** under `avalanchego/cmd/titan/` — see [avalanchego/cmd/titan/TESTING.md](./avalanchego/cmd/titan/TESTING.md) for the file map and TDD workflow.
-
-### Full chain lifecycle
-
-| Step | Command |
-|------|---------|
-| 1. Create genesis | `titan genesis create` → `titan genesis apply` → `build-titan.sh` |
-| 2. Bootstrap node | `titan node bootstrap --first` |
-| 3. Join node | `titan genesis align --from http://BOOTSTRAP:9652` then `titan node bootstrap --join ...` |
-| 4. Onboard provider | On bootstrap: `titan provider onboard --from @treasury.key --uri http://JOIN:9650` |
-| 5. Wallet delegates | `titan stake add --from @wallet.key --node-id NodeID-... --amount 100` |
-| 6. Check rewards/fees | `titan status` (shows validators, fee config, reward rates) |
-
-## CI/CD
-
-GitHub Actions workflows (run when you push — not required for local dev):
-
-| Workflow | Trigger | What it does |
-|----------|---------|--------------|
-| `ci.yml` | push/PR to `main` | `./scripts/test-titan.sh --sequential`, golangci-lint, binary build |
-| `security.yml` | push/PR + weekly | gosec + Trivy image scan |
-| `build-container.yml` | push to `main`, tags | Multi-arch Docker images + Cosign |
-| `release.yml` | `v*` tags | GitHub release with binaries |
-
-**Run CI locally before pushing:**
+### Build and test
 
 ```sh
 cd avalanchego
-./scripts/test-titan.sh             # unit tests (network creation, TLS, staking contract)
-./scripts/build-titan.sh            # full build
+./scripts/test-titan.sh
+./scripts/test-titan.sh --sequential
+./scripts/test-titan.sh --run TestValidateCustomChainID
+./scripts/build-titan.sh
+./scripts/smoke-test.sh
+```
 
-# Optional lint (install golangci-lint first)
+Test output is logged to `avalanchego/test-results/`. Suite layout: [avalanchego/cmd/titan/TESTING.md](./avalanchego/cmd/titan/TESTING.md).
+
+### Lifecycle
+
+| Step | Command |
+|------|---------|
+| Genesis | `titan genesis create` → `titan genesis apply` → `build-titan.sh` |
+| Bootstrap | `titan node bootstrap --first` |
+| Join | `titan genesis align --from http://BOOTSTRAP:9652` → `titan node bootstrap --join ...` |
+| Onboard | `titan provider onboard --from @treasury.key --uri http://JOIN:9650` |
+| Delegate | `titan stake add --from @wallet.key --node-id NodeID-... --amount 100` |
+| Status | `titan status` |
+
+## CI/CD
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| `ci.yml` | push/PR to `main` | `test-titan.sh`, golangci-lint, build |
+| `security.yml` | push/PR, weekly | gosec, Trivy |
+| `build-container.yml` | `main`, tags | Multi-arch images, Cosign |
+| `release.yml` | `v*` tags | Release binaries |
+
+Tests run from the repository root:
+
+```sh
+cd avalanchego && ./scripts/test-titan.sh --sequential
+```
+
+Local pre-push:
+
+```sh
+cd avalanchego
+./scripts/test-titan.sh
+./scripts/build-titan.sh
 golangci-lint run ./cmd/titan/...
 ```
 
-**Trigger CI on GitHub:** push your branch or open a PR against `main`. Workflows start automatically — check the Actions tab on the repo. All test jobs run from repo root with `cd avalanchego && ./scripts/test-titan.sh`.
-
-**Run a workflow manually on GitHub:** Actions → select `CI` or `Security` → **Run workflow** → choose branch → Run.
-
 ## Security
 
-- `titan-network/origin.json` and staking private keys are gitignored
-- Origin HTTP server uses path whitelisting, rate limiting, and security headers
-- Use `--restrict-api` in production to bind HTTP to localhost
-- Never commit `*.key`, `staker.crt`, or `signer.key`
+- `titan-network/origin.json` and staking key material are excluded from git
+- Origin HTTP server: path whitelist, rate limits, security headers
+- Production: `--restrict-api` binds HTTP to localhost
+- Do not commit `*.key`, `staker.crt`, or `signer.key`
 
 ## License
 

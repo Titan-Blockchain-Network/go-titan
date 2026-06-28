@@ -1,8 +1,4 @@
-# Multi-node provider (join) deployment.
-# Set BOOTSTRAP_IPS and BOOTSTRAP_IDS to your bootstrap node.
-#
-#   BOOTSTRAP_IPS=1.2.3.4:9651 BOOTSTRAP_IDS=NodeID-... \
-#     docker compose -f docker/docker-compose.provider.yml up -d
+# Provider (join) node. Set BOOTSTRAP_IPS and BOOTSTRAP_IDS.
 
 services:
   titan-provider:

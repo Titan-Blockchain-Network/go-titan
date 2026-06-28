@@ -199,8 +199,8 @@ func generateTitanKeys(outDir string, genesis bool) error {
 	pkHex := hex.EncodeToString(pop.PublicKey[:])
 	popHex := hex.EncodeToString(pop.ProofOfPossession[:])
 
-	fmt.Println("================================================================")
-	fmt.Printf("Titan node keys generated successfully!\n\n")
+	fmt.Println("--- Staking keys ---")
+	fmt.Printf("Generated.\n\n")
 	fmt.Printf("Output directory: %s\n\n", outDir)
 	fmt.Printf("NodeID:              %s\n", nodeID)
 	fmt.Printf("BLS Public Key:      0x%s\n", pkHex)
@@ -211,8 +211,7 @@ func generateTitanKeys(outDir string, genesis bool) error {
 	fmt.Printf("  %s\n\n", signerPath)
 
 	if genesis {
-		fmt.Println(">>> THIS SET IS FOR THE GENESIS BOOTSTRAPPER <<<")
-		fmt.Println("Update initialStakers in genesis/genesis_titan.json, rebuild, and wipe data dirs.")
+		fmt.Println("Genesis bootstrap validator — add to initialStakers in genesis_titan.json, rebuild, reset data directories.")
 		stakerEntry := map[string]interface{}{
 			"nodeID":        nodeID.String(),
 			"rewardAddress": "P-titan1REPLACE_WITH_YOUR_P_TITAN_ADDRESS",
@@ -225,15 +224,15 @@ func generateTitanKeys(outDir string, genesis bool) error {
 		pretty, _ := json.MarshalIndent(stakerEntry, "", "  ")
 		fmt.Println(string(pretty))
 	} else {
-		fmt.Println(">>> Keys for an additional Titan node <<<")
+		fmt.Println("Join node — register on bootstrap:")
 		printAtlasValidatorAddCommand(&genesisStakerExpectation{
 			NodeID:            nodeID.String(),
 			PublicKey:         "0x" + pkHex,
 			ProofOfPossession: "0x" + popHex,
 		}, defaultValidatorStakeTitan)
 	}
-	fmt.Println("================================================================")
-	fmt.Println("BACK UP THE .key FILES NOW.")
+	fmt.Println("---")
+	fmt.Println("Store private keys offline.")
 	return secureKeysDir(outDir)
 }
 

@@ -1,7 +1,4 @@
-# Single-node bootstrap (genesis) deployment.
-# Mount staking keys at ./keys/ before starting.
-#
-#   docker compose -f docker/docker-compose.bootstrap.yml up -d
+# Bootstrap (genesis) node. Requires staking keys in ./keys/.
 
 services:
   titan-bootstrap:

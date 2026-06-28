@@ -179,8 +179,8 @@ func validateCustomChainID(raw string) (uint32, error) {
 
 func chainIDRequirementHelp() string {
 	return fmt.Sprintf(
-		"  Chain ID becomes both your Avalanche network ID and the C-chain EVM chainId.\n"+
-			"  Valid range: %d–%d (below %d is reserved by Avalanche).",
+		"  Chain ID is the Avalanche network ID and C-chain EVM chainId.\n"+
+			"  Valid range: %d–%d (IDs below %d are reserved).",
 		minCustomNetworkID, maxCustomNetworkID, minCustomNetworkID,
 	)
 }
@@ -382,8 +382,8 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 	rand.Seed(time.Now().UnixNano())
 	p := &promptReader{reader: reader}
 
-	fmt.Println("=== Interactive Genesis Creation ===")
-	fmt.Println("This wizard creates titan-network/origin.json for your custom L1.")
+	fmt.Println("Genesis configuration")
+	fmt.Println("Output: titan-network/origin.json")
 	fmt.Println()
 
 	blockchainName := "MyChain"
@@ -419,8 +419,8 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 
 		totalSupplyTokens = p.ask("Total supply (tokens)", "1000000000")
 		fmt.Println()
-		fmt.Println("Add initial allocations (wallet + amount). Enter blank line to finish.")
-		fmt.Println("  Tip: provide a private key to auto-derive C/P/X addresses.")
+		fmt.Println("Initial allocations (blank line to finish).")
+		fmt.Println("  Private key (0x...) derives C/P/X addresses automatically.")
 
 		var runningTotal uint64
 		for i := 1; ; i++ {
@@ -579,10 +579,10 @@ func runGenesisCreateFromReader(args []string, reader *bufio.Reader) error {
 	fmt.Println()
 	fmt.Printf("✓ Genesis saved to %s\n", outPath)
 	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("  1. titan genesis apply          # create network config + embed genesis")
-	fmt.Println("  2. cd avalanchego && ./scripts/build-titan.sh")
-	fmt.Println("  3. titan node bootstrap --first # start bootstrap node")
+	fmt.Println("Next:")
+	fmt.Println("  titan genesis apply")
+	fmt.Println("  ./scripts/build-titan.sh")
+	fmt.Println("  titan node bootstrap --first")
 	return nil
 }
 
@@ -598,7 +598,7 @@ func runGenesisApply(args []string) error {
 	if _, err := os.Stat(originPath); err != nil {
 		examplePath, _ := resolveOriginPath(defaultExampleOrigin)
 		if _, exErr := os.Stat(examplePath); exErr == nil {
-			return fmt.Errorf("%s not found — run: titan genesis create", originPath)
+			return fmt.Errorf("%s not found; run: titan genesis create", originPath)
 		}
 		return fmt.Errorf("read %s: %w", originPath, err)
 	}
@@ -665,8 +665,7 @@ func runGenesisApply(args []string) error {
 	}
 
 	fmt.Printf("✓ Applied %s → %s\n", originPath, genesisPath)
-	fmt.Println("  Network configured from genesis (no manual code edits).")
-	fmt.Println("  Rebuild to embed: cd avalanchego && ./scripts/build-titan.sh")
+	fmt.Println("  Rebuild: cd avalanchego && ./scripts/build-titan.sh")
 	return nil
 }
 

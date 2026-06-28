@@ -68,8 +68,7 @@ func findNetworkIDsPath() (string, error) {
 	return filepath.Join(avagoDir, networkIDsRelPath), nil
 }
 
-// configureNetworkFromGenesis registers the custom L1 in network_ids.go from origin.json.
-// This is the "network creation" step — no manual code edits before build/deploy.
+// configureNetworkFromGenesis patches network_ids.go from origin.json metadata.
 func configureNetworkFromGenesis(networkID uint32, blockchainName string) error {
 	networkName := slugNetworkName(blockchainName)
 	hrp := sanitizeHRP(blockchainName)

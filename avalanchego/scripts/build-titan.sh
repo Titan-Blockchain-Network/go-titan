@@ -122,11 +122,3 @@ if curl -sf --max-time 2 "http://127.0.0.1:9650/ext/health" >/dev/null 2>&1; the
   echo
 fi
 
-echo "Fresh server bootstrap (recommended after reset):"
-echo "  cd go-titan && ./avalanchego/scripts/titan-server-bootstrap.sh"
-echo
-echo "Rebuild + install on a running node:"
-echo "  ./scripts/build-titan.sh --install --restart"
-echo
-echo "CLI (before install):  ./build/titan --help"
-echo "CLI (after bootstrap): titan --help"

@@ -1,4 +1,4 @@
-// Feature: genesis — validation helpers (chain ID, addresses, amounts).
+// Genesis validation tests.
 package main
 
 import (

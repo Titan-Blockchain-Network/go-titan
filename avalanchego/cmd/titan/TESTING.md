@@ -1,37 +1,39 @@
-# Titan CLI tests
+# Titan CLI test suite
 
-Go's built-in `testing` package (table-driven tests). Run from `avalanchego/`:
+Standard library `testing` package with table-driven tests.
+
+## Run
 
 ```sh
-./scripts/test-titan.sh                    # colored live console + log file
+cd avalanchego
+./scripts/test-titan.sh
 ./scripts/test-titan.sh --run TestValidateCustomChainID
-./scripts/test-titan.sh --sequential       # one test at a time (less mixed output)
-./scripts/test-titan.sh --verbose-output   # show each test's stdout/stderr
+./scripts/test-titan.sh --sequential
+./scripts/test-titan.sh --verbose-output
 
-# Plain Go output (CI-style):
-go test ./cmd/titan/... -count=1 -v
+go test ./cmd/titan/... -count=1 -v   # plain output
 ```
 
-Logs are written under `avalanchego/test-results/` (`latest.log` symlink points at the last run).
+Logs: `avalanchego/test-results/` (`latest.log` → most recent run).
 
-## Layout (by feature)
+## Layout
 
-| File | Feature |
-|------|---------|
-| `genesis_validation_test.go` | Chain ID, addresses, token amounts |
-| `genesis_wizard_test.go` | Interactive prompts (stdin injection) |
-| `genesis_apply_test.go` | `genesis create` / `genesis apply` flows |
-| `genesis_cchain_test.go` | C-chain genesis JSON |
-| `network_config_test.go` | `network_ids.go` patching |
+| File | Scope |
+|------|-------|
+| `genesis_validation_test.go` | Chain ID, addresses, amounts |
+| `genesis_wizard_test.go` | Interactive prompts |
+| `genesis_apply_test.go` | `genesis create` / `genesis apply` |
+| `genesis_cchain_test.go` | C-chain genesis document |
+| `network_config_test.go` | `network_ids.go` updates |
 | `staking_contract_test.go` | Warp messenger injection |
 | `genesis_tls_test.go` | Origin HTTPS server |
-| `deployment_docker_test.go` | Local Docker compose contracts |
+| `deployment_docker_test.go` | Local Docker compose |
 
-## TDD workflow
+## Workflow
 
-1. Add a failing test in the feature file that matches your change.
-2. Implement the fix in the matching `.go` source file.
-3. Run `go test ./cmd/titan/... -count=1`.
-4. CI runs the same suite on push (`.github/workflows/ci.yml`).
+1. Add a failing test in the matching `*_test.go` file.
+2. Implement the change in the corresponding source file.
+3. Run `./scripts/test-titan.sh` or `go test ./cmd/titan/... -count=1`.
+4. CI executes the same suite on push and pull requests (`.github/workflows/ci.yml`).
 
-Integration / smoke (build + docker up) stays in `avalanchego/scripts/smoke-test.sh` and `docker/docker-local.sh`.
+Integration: `avalanchego/scripts/smoke-test.sh`, `docker/docker-local.sh`.

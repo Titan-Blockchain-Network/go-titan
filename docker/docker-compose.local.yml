@@ -1,10 +1,5 @@
-# Local-only Titan node (no cloud deploy). Binds API + staking to localhost.
-#
-#   ./docker/docker-local.sh up
-#   ./docker/docker-local.sh down
-#
-# API:    http://127.0.0.1:9650/ext/health
-# Logs:   docker compose -f docker/docker-compose.local.yml logs -f
+# Local development node. API and staking bound to 127.0.0.1.
+# Managed by docker/docker-local.sh
 
 services:
   titan-bootstrap:

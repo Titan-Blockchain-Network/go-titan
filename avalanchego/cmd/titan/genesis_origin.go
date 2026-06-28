@@ -489,7 +489,7 @@ func genesisMain(args []string) {
 	if len(args) == 0 {
 		fmt.Println(`titan genesis - create, apply, and align chain genesis
 
-  titan genesis create                   # interactive wizard → titan-network/origin.json
+  titan genesis create                   # writes titan-network/origin.json
   titan genesis apply                    # create network config + sync genesis
   titan genesis fingerprint              # show embedded genesis hash
   titan genesis publish --data-dir DIR   # write origin bundle (first node)

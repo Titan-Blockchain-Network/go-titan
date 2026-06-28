@@ -1,4 +1,4 @@
-// Feature: genesis — apply origin.json to embedded genesis + network config.
+// Genesis apply tests.
 package main
 
 import (

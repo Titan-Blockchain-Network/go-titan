@@ -1,4 +1,4 @@
-// Feature: deployment — local Docker compose + helper script contract.
+// Local Docker deployment tests.
 package main
 
 import (

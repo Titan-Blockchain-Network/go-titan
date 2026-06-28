@@ -1,4 +1,4 @@
-// Feature: network — network_ids.go configuration from genesis metadata.
+// Network configuration tests.
 package main
 
 import (

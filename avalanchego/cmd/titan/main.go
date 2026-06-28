@@ -1,11 +1,4 @@
-// titan - friendly CLI for operating the Titan blockchain.
-//
-// Build:
-//   cd avalanchego
-//   go build -o build/titan ./cmd/titan
-//
-// This gives operators a much better experience than raw avalanchego +
-// manual hex private keys + many curls.
+// Titan network operations CLI.
 
 package main
 
@@ -67,14 +60,14 @@ func main() {
 }
 
 func usage() {
-	fmt.Println(`titan - Titan blockchain operations CLI
+	fmt.Println(`titan - Titan network operations CLI
 
-For a fresh server (recommended):
-  ./scripts/titan-server-bootstrap.sh     # apt update + Go + deps + interactive full setup
+Server bootstrap:
+  ./scripts/titan-server-bootstrap.sh
 
-Direct CLI usage:
-  titan genesis create                     # interactive genesis wizard
-  titan genesis apply                      # create network config + sync genesis
+Commands:
+  titan genesis create
+  titan genesis apply
   titan keys generate [--dir DIR] [--genesis]
   titan genesis align --from http://FIRST_NODE:9652
   titan wallet addresses --from @master.key
@@ -88,8 +81,7 @@ Direct CLI usage:
   titan keys show [--dir /root/keys]   # print ATLAS register command for this node
   titan status
 
-See TITAN_DEPLOY.md for the complete reset-and-launch flow.
-The bootstrap command ends with a healthcheck.`)
+See TITAN_DEPLOY.md for deployment procedures.`)
 }
 
 func keysMain(args []string) {
@@ -382,10 +374,10 @@ func bootstrapMain(args []string) {
 	rewardAddr := fs.String("reward-address", defaultGenesisRewardAddress, "P-chain reward address for genesis validator")
 	originURL := fs.String("origin-url", "", "origin bundle URL for join nodes (default: http://<join-host>:9652)")
 	skipOriginAlign := fs.Bool("skip-origin-align", false, "DANGEROUS: skip genesis alignment with first node")
-	skipRebuild := fs.Bool("skip-rebuild", false, "skip binary rebuild after genesis update (not recommended)")
+	skipRebuild := fs.Bool("skip-rebuild", false, "skip binary rebuild after genesis update")
 	noWipeData := fs.Bool("no-wipe-data", false, "do not wipe data dir after genesis update")
 	applyFirewall := fs.Bool("apply-firewall", true, "programmatically configure ufw firewall")
-	restrictAPI := fs.Bool("restrict-api", false, "bind HTTP API to 127.0.0.1 only; do not open port 9650 in firewall (recommended for production)")
+	restrictAPI := fs.Bool("restrict-api", false, "bind HTTP API to 127.0.0.1; exclude port 9650 from firewall")
 	skipSystemd := fs.Bool("skip-systemd", false, "do not install/start systemd")
 	masterKey := fs.String("master-key", defaultMasterKeyPath, "treasury private key file (ATLAS validator add)")
 	fs.Parse(args)

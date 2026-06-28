@@ -11,7 +11,7 @@ import (
 // provider onboard — bootstrapper funds a join node and registers it as validator.
 func providerMain(args []string) {
 	if len(args) == 0 {
-		fmt.Println(`titan provider - onboard validators to your L1
+		fmt.Println(`titan provider - onboard validators
 
   titan provider onboard --from @treasury.key --uri http://JOIN_NODE:9650
       Fund (C→P) and register a join node as permissionless validator.

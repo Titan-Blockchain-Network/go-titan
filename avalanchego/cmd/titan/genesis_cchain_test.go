@@ -1,4 +1,4 @@
-// Feature: genesis — C-chain genesis document helpers.
+// C-chain genesis document tests.
 package main
 
 import (

@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 #
-# Colored, live-streaming test runner for cmd/titan (Jest-style console + log file).
+# Titan CLI test runner with structured console output and JSON log capture.
 #
-# Usage (from avalanchego/ or repo root):
-#   ./scripts/test-titan.sh
-#   ./scripts/test-titan.sh --run TestValidateCustomChainID
-#   ./scripts/test-titan.sh --sequential          # less interleaved wizard output
-#   ./scripts/test-titan.sh --verbose-output      # print each test's stdout/stderr
+#   ./scripts/test-titan.sh [--run PATTERN] [--sequential] [--verbose-output]
 #
 set -euo pipefail
 

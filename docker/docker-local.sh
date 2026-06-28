@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run a single Titan bootstrap node locally in Docker (localhost only).
-# Does not install systemd, open cloud firewalls, or deploy anywhere.
-#
-# Usage (from repo root):
-#   ./docker/docker-local.sh up        # build image + start
-#   ./docker/docker-local.sh status    # health + node info
-#   ./docker/docker-local.sh logs      # follow logs
-#   ./docker/docker-local.sh down      # stop + remove container
-#   ./docker/docker-local.sh reset     # down + wipe volumes
+# Local Docker bootstrap node (127.0.0.1). Usage: up | status | logs | down | reset
 #
 set -euo pipefail
 
