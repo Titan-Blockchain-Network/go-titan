@@ -29,6 +29,7 @@ Logs: `avalanchego/test-results/` (`latest.log` → most recent run).
 | `validator_ops_test.go` | Validator stake bounds, delegation fee parsing |
 | `delegator_ops_test.go` | Delegator stake validation |
 | `fees_test.go` | Network economics vs `TitanParams` |
+| `satellite_ops_test.go` | Satellite registration eligibility |
 | `genesis_tls_test.go` | Origin HTTPS server |
 | `deployment_docker_test.go` | Local Docker compose |
 

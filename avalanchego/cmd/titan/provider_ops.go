@@ -40,6 +40,7 @@ func providerOnboardMain(args []string) {
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "tokens to stake for the provider")
 	days := fs.Int("duration-days", 14, "validator duration")
 	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
+	satellite := fs.Bool("satellite", false, "register as FTSO satellite oracle provider")
 	uri := fs.String("uri", "", "join node API (required)")
 	nodeID := fs.String("node-id", "", "optional NodeID if auto-detect fails")
 	pub := fs.String("bls-pub", "", "optional BLS public key")
@@ -64,6 +65,9 @@ func providerOnboardMain(args []string) {
 		"--amount", strconv.FormatFloat(*amount, 'f', -1, 64),
 		"--duration-days", strconv.Itoa(*days),
 		"--delegation-fee", strconv.FormatFloat(*delegationFee, 'f', -1, 64),
+	}
+	if *satellite {
+		validatorArgs = append(validatorArgs, "--satellite")
 	}
 	if *nodeID != "" {
 		validatorArgs = append(validatorArgs, "--node-id", *nodeID)

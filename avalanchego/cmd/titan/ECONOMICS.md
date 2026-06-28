@@ -4,19 +4,39 @@ How Titan nodes earn tokens, what is locked, and which parameters operators can 
 
 ## Income sources
 
-| Source | Paid to | Mechanism |
-|--------|---------|-----------|
-| Staking rewards | Validator and delegator P-chain reward addresses | Protocol mints new TITAN (10–12% annual consumption rate) |
-| Delegation fees | Validator reward address | Percent of delegator staking rewards (`--delegation-fee`) |
-| Treasury stake | Reward address on the registration tx | `provider onboard` locks treasury tokens as validator weight; income is minting on that stake |
+| Source | Status | Paid to | Mechanism |
+|--------|--------|---------|-----------|
+| Staking rewards | Active | Validator and delegator P-chain reward addresses | Protocol mints new TITAN (10–12% annual consumption rate) |
+| Delegation fees | Active | Validator reward address | Percent of delegator staking rewards (`--delegation-fee`) |
+| Treasury stake | Active | Reward address on the registration tx | `provider onboard` locks treasury tokens as validator weight |
+| C-chain fee share | Phase 2 | Validator reward pool | Configured in `EconomicsConfig.feeDistribution` (default 50%, disabled) |
+| P-chain fee share | Phase 2 | Validator reward pool | Configured in `EconomicsConfig.feeDistribution` (default 0%, disabled) |
+| Satellite oracle rewards | Phase 2 | Satellite validators | FTSO-style feeds; config in `EconomicsConfig.satelliteOracle` |
 
-## Not validator income
+## Not validator income (today)
 
 | Item | Behavior |
 |------|----------|
-| P-chain transaction fees | Burned |
-| C-chain gas | EVM fee market; not routed to P-chain validators by default |
-| Locked stake principal | Returned when the stake period ends; not a payout |
+| P-chain transaction fees | Burned until `feeDistribution.pChainTxFeeToValidatorsPercent` is enabled |
+| C-chain base fees | Routed to fee sink (`0xdead`) on Flare execution path; validator share pending Phase 2 pool |
+| Locked stake principal | Returned when the stake period ends |
+
+## Phased rollout
+
+### Phase 1 (current branch)
+
+- Modular `NetworkEconomicsConfig` in `genesis/genesis_titan.go`
+- Titan wired into Flare C-chain state transition path (`coreth/core/state_transition_params.go`)
+- C-chain genesis uses Flare system coinbase (`0x0100…`)
+- `--satellite` flag on `validator add` / `provider onboard` (eligibility checks; contracts Phase 2)
+- Economics displayed in `titan status`
+
+### Phase 2
+
+- Deploy Daemon (`0x1000…0002`) and FTSO (`0x1000…0003`) system contracts in C-chain genesis
+- Enable `feeDistribution.enabled` and reward-pool routing in coreth
+- Enable `satelliteOracle.enabled` and oracle submission daemon
+- Governance hooks for post-launch parameter updates
 
 ## Token locking
 
@@ -28,52 +48,37 @@ Validators must meet **80% uptime** (`UptimeRequirement` in `genesis/genesis_tit
 
 ## Adjustable parameters
 
-### Network-wide (code change + rebuild)
-
-File: `avalanchego/genesis/genesis_titan.go`
+### Network-wide (`genesis/genesis_titan.go`)
 
 | Parameter | Default | Effect |
 |-----------|---------|--------|
 | `MinConsumptionRate` / `MaxConsumptionRate` | 10% – 12% annual | Minting rate for staking rewards |
 | `UptimeRequirement` | 80% | Minimum uptime for full rewards |
-| `MinValidatorStake` / `MaxValidatorStake` | 1 – 10,000 TITAN | Stake bounds |
-| `MinDelegationFee` | 0% | Floor for `--delegation-fee` |
-| `TxFee` | 0.001 TITAN | P-chain base fee (burned) |
+| `economicsConfig.feeDistribution` | 50% C-chain target, disabled | Future validator fee share |
+| `economicsConfig.satelliteOracle` | min 2000 TITAN, disabled | FTSO satellite requirements |
 
 ### Per registration (CLI)
 
 | Command | Flags | Effect |
 |---------|-------|--------|
-| `titan validator add` | `--amount`, `--duration-days`, `--delegation-fee` | Stake size, period, delegator fee share |
+| `titan validator add` | `--amount`, `--duration-days`, `--delegation-fee`, `--satellite` | Stake, period, delegator fee, oracle provider |
 | `titan provider onboard` | same flags forwarded | Treasury funds and registers a join node |
 | `titan stake add` | `--amount`, `--node-id` | Wallet delegation to a validator |
 
-Default join-validator delegation fee: **0%** (matches genesis validator). Set explicitly when registering, for example `--delegation-fee 5`.
-
-### Genesis bootstrap validator
-
-Configured in `origin.json` / bootstrap: `rewardAddress`, `delegationFee` (default 0), locked allocation in `initialStakedFunds`.
-
 ## Typical flows
 
-**Genesis validator**
+**Provider / satellite validator**
 
-1. Bootstrap locks genesis allocation as stake.
-2. Rewards mint to `rewardAddress`.
-3. Delegation fee 0% unless changed in genesis.
-
-**Join / provider validator**
-
-1. Treasury runs `titan provider onboard --from @treasury.key --uri http://JOIN:9650 --amount 2000 --delegation-fee 0`.
-2. Treasury tokens are locked as that node's stake.
-3. Minting rewards accrue to the treasury P-chain address on the registration tx.
-4. Wallets may delegate with `titan stake add`; validator keeps `--delegation-fee` percent of delegator rewards.
+```sh
+titan provider onboard --from @treasury.key --uri http://JOIN:9650 \
+  --amount 2000 --delegation-fee 5 --satellite
+```
 
 **Wallet delegator**
 
-1. `titan stake add --from @wallet.key --node-id NodeID-... --amount 100`
-2. Wallet tokens locked for the validator's remaining stake period.
-3. Minting rewards accrue to the wallet P-chain address minus validator delegation fee.
+```sh
+titan stake add --from @wallet.key --node-id NodeID-... --amount 100
+```
 
 ## Inspection
 
@@ -81,8 +86,15 @@ Configured in `origin.json` / bootstrap: `rewardAddress`, `delegationFee` (defau
 ./avalanchego/build/titan status
 ```
 
-Shows validators, weight, delegation fee, potential reward, uptime, and the economics block from genesis.
+Shows validators, economics config, delegation fees, potential rewards, and uptime.
 
-## Treasury subsidies
+## Configuration reference
 
-Fixed payouts from a genesis allocation wallet (outside minting) require explicit P-chain transfers from the treasury. `provider onboard` stakes treasury funds; it does not send unlocked salary tokens.
+Structs: `avalanchego/genesis/economics_config.go`
+
+Tests:
+
+```sh
+cd avalanchego && go test ./genesis/... ./cmd/titan/... -count=1
+cd ../coreth && go test ./core/... -run 'Titan|StateTransition' -count=1
+```

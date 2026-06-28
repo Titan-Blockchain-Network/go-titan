@@ -146,7 +146,7 @@ Binary path: `./avalanchego/build/titan` (or `titan` after `--install`).
 | `titan stake add --from @key --node-id ID` | Delegate stake to a validator |
 | `titan status` | Validators, fees, rewards, health |
 
-Validator income, locking, uptime, and fee knobs: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
+Validator income, fee distribution (phased), and satellite oracle config: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
 
 ## Docker
 
