@@ -209,27 +209,28 @@ func fetchCChainTip(ctx context.Context, nodeURI string) (*cChainTip, error) {
 		return nil, fmt.Errorf("eth_getBlockByNumber returned null")
 	}
 
-	parseHexUint := func(s string) (uint64, error) {
-		s = strings.TrimSpace(strings.TrimPrefix(s, "0x"))
-		if s == "" {
-			return 0, nil
-		}
-		var n uint64
-		if _, err := fmt.Sscanf(s, "%x", &n); err != nil {
-			return 0, fmt.Errorf("parse hex %q: %w", s, err)
-		}
-		return n, nil
-	}
-
-	number, err := parseHexUint(envelope.Result.Number)
+	number, err := parseHexUint64(envelope.Result.Number)
 	if err != nil {
 		return nil, err
 	}
-	timestamp, err := parseHexUint(envelope.Result.Timestamp)
+	timestamp, err := parseHexUint64(envelope.Result.Timestamp)
 	if err != nil {
 		return nil, err
 	}
 	return &cChainTip{number: number, timestamp: timestamp}, nil
+}
+
+func parseHexUint64(s string) (uint64, error) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(strings.ToLower(s), "0x")
+	if s == "" {
+		return 0, nil
+	}
+	var n uint64
+	if _, err := fmt.Sscanf(s, "%x", &n); err != nil {
+		return 0, fmt.Errorf("parse hex %q: %w", s, err)
+	}
+	return n, nil
 }
 
 func expectedTreasuryEthAddr() (string, error) {

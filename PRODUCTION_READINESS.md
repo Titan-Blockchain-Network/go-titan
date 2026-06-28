@@ -2,7 +2,7 @@
 
 Track progress toward a controlled private L1 (Phase A) and a public / DeFi-facing network (Phase B). Check items when done; link PRs or issues in the Notes column as needed.
 
-**Current baseline (Phase 1 economics):** 58 Titan CLI unit tests, CI lint/build, gosec + Trivy (OS), modular economics config (fee share and satellite disabled on-chain).
+**Current baseline (Phase 1 economics):** 65+ Titan CLI unit tests, CI lint/build/smoke, gosec (HIGH gate) + Trivy (OS) + govulncheck (informational), modular economics config (fee share and satellite disabled on-chain).
 
 ---
 
@@ -12,10 +12,10 @@ Raise comfort for development and trusted-operator networks.
 
 ### CI pipeline
 
-- [ ] Add `go test ./genesis/... -run Economics` to `ci.yml`
-- [ ] Add `go test ./core/... -run 'Titan|StateTransitionParams'` to `ci.yml` (coreth job or matrix step)
-- [ ] Run `avalanchego/scripts/smoke-test.sh` in CI (genesis create → apply → build → fingerprint)
-- [ ] Add `cache-dependency-path: avalanchego/go.sum` to lint job `setup-go` (remove cache warning)
+- [x] Add `go test ./genesis/... -run Economics` to `ci.yml`
+- [x] Add `go test ./core/... -run 'Titan|StateTransitionParams'` to `ci.yml` (coreth job or matrix step)
+- [x] Run `avalanchego/scripts/smoke-test.sh` in CI (genesis create → apply → build → fingerprint)
+- [x] Add `cache-dependency-path: avalanchego/go.sum` to lint job `setup-go` (remove cache warning)
 - [ ] Optional: `docker-local.sh up` smoke job (localhost node, health check, teardown)
 
 ### Integration tests (live node)
@@ -29,9 +29,9 @@ Raise comfort for development and trusted-operator networks.
 
 ### Unit test gaps
 
-- [ ] `transfer_test.go` — C→P base fee parsing and error paths
-- [ ] `export_path_test.go` — `verify-export` / validator-add readiness
-- [ ] `provider_ops_test.go` — arg forwarding to `validator add`
+- [x] `transfer_test.go` — C→P base fee parsing and error paths
+- [x] `export_path_test.go` — `verify-export` / validator-add readiness
+- [x] `provider_ops_test.go` — arg forwarding to `validator add`
 - [ ] Post-registration on-chain assertions (delegation fee matches `--delegation-fee` flag)
 
 ---
@@ -42,14 +42,14 @@ Move from awareness to enforcement.
 
 ### Static analysis
 
-- [ ] Remove `-no-fail` from gosec (or fail CI on HIGH/CRITICAL in `cmd/titan`)
-- [ ] Pin `securego/gosec` to a release tag (not `@master`)
-- [ ] Add `govulncheck ./avalanchego/cmd/titan/...` to `security.yml`
+- [x] Remove `-no-fail` from gosec (or fail CI on HIGH/CRITICAL in `cmd/titan`)
+- [x] Pin `securego/gosec` to a release tag (not `@master`)
+- [x] Add `govulncheck ./avalanchego/cmd/titan/...` to `security.yml` (informational until Go/stdlib bump)
 - [ ] Extend gosec scope incrementally (document exclusions for upstream paths)
 
 ### Container and supply chain
 
-- [ ] Document Trivy policy: OS-only gate vs optional library scan (`exit-code: 0` informational)
+- [x] Document Trivy policy: OS-only gate vs optional library scan (`exit-code: 0` informational)
 - [ ] Re-enable container build/push when ready; verify Cosign signatures
 - [ ] Pin base image digests in `Dockerfile` / `Dockerfile.dless`
 - [ ] Secret scanning: ensure `*.key`, `staker.key`, `signer.key` never committed (pre-commit or GitHub secret scan)
@@ -150,7 +150,7 @@ go test ./genesis/... -count=1 -run Economics
 # Coreth Titan wiring
 cd ../coreth && go test ./core/... -count=1 -run 'Titan|StateTransitionParams'
 
-# Smoke (not yet in CI)
+# Smoke (CI job: smoke)
 cd avalanchego && ./scripts/smoke-test.sh
 
 # Local node
@@ -174,4 +174,5 @@ cd .. && ./docker/docker-local.sh up && ./docker/docker-local.sh status
 | Item | PR / issue | Date |
 |------|------------|------|
 | Phase 1 economics foundation | `feature/provider-economics-phase1` | |
+| Phase A CI + unit tests | `feature/provider-economics-phase1` | 2026-06-28 |
 | | | |

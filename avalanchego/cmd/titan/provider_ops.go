@@ -57,26 +57,52 @@ func providerOnboardMain(args []string) {
 	}
 
 	fmt.Println("=== Provider onboarding (fund + register validator) ===")
-	validatorArgs := []string{
+	validatorMain(buildProviderValidatorArgs(providerOnboardParams{
+		from:          *from,
+		amount:        *amount,
+		days:          *days,
+		delegationFee: *delegationFee,
+		satellite:     *satellite,
+		uri:           *uri,
+		nodeID:        *nodeID,
+		blsPub:        *pub,
+		blsPop:        *pop,
+	}))
+}
+
+type providerOnboardParams struct {
+	from          string
+	amount        float64
+	days          int
+	delegationFee float64
+	satellite     bool
+	uri           string
+	nodeID        string
+	blsPub        string
+	blsPop        string
+}
+
+func buildProviderValidatorArgs(p providerOnboardParams) []string {
+	args := []string{
 		"add",
-		"--from", *from,
+		"--from", p.from,
 		"--uri", "http://127.0.0.1:9650",
-		"--target-uri", strings.TrimRight(*uri, "/"),
-		"--amount", strconv.FormatFloat(*amount, 'f', -1, 64),
-		"--duration-days", strconv.Itoa(*days),
-		"--delegation-fee", strconv.FormatFloat(*delegationFee, 'f', -1, 64),
+		"--target-uri", strings.TrimRight(p.uri, "/"),
+		"--amount", strconv.FormatFloat(p.amount, 'f', -1, 64),
+		"--duration-days", strconv.Itoa(p.days),
+		"--delegation-fee", strconv.FormatFloat(p.delegationFee, 'f', -1, 64),
 	}
-	if *satellite {
-		validatorArgs = append(validatorArgs, "--satellite")
+	if p.satellite {
+		args = append(args, "--satellite")
 	}
-	if *nodeID != "" {
-		validatorArgs = append(validatorArgs, "--node-id", *nodeID)
+	if p.nodeID != "" {
+		args = append(args, "--node-id", p.nodeID)
 	}
-	if *pub != "" {
-		validatorArgs = append(validatorArgs, "--bls-pub", *pub)
+	if p.blsPub != "" {
+		args = append(args, "--bls-pub", p.blsPub)
 	}
-	if *pop != "" {
-		validatorArgs = append(validatorArgs, "--bls-pop", *pop)
+	if p.blsPop != "" {
+		args = append(args, "--bls-pop", p.blsPop)
 	}
-	validatorMain(validatorArgs)
+	return args
 }

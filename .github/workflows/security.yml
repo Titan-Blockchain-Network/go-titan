@@ -24,10 +24,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
-      - name: Run gosec
-        uses: securego/gosec@master
+      - name: Run gosec (HIGH severity, HIGH confidence)
+        uses: securego/gosec@v2.27.1
         with:
-          args: "-no-fail -fmt sarif -out gosec.sarif ./avalanchego/cmd/titan/..."
+          args: "-severity high -confidence high -fmt sarif -out gosec.sarif ./avalanchego/cmd/titan/..."
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v4
         if: >-
@@ -37,6 +37,23 @@ jobs:
         with:
           sarif_file: gosec.sarif
 
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-24.04
+    continue-on-error: true # informational until Go/stdlib + otel dependency bumps
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Scan cmd/titan
+        run: |
+          cd avalanchego
+          govulncheck ./cmd/titan/...
+
   trivy:
     name: Trivy image scan
     runs-on: ubuntu-24.04
@@ -44,6 +61,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      # Policy: OS packages only (vuln-type: os). Fails CI on unfixed CRITICAL/HIGH in the
+      # base image. Library scan is intentionally omitted here — enable separately with
+      # vuln-type: library and exit-code: 0 for informational reporting if desired.
       - name: Build image for scanning
         run: docker build -t go-titan:scan -f Dockerfile .
       - name: Run Trivy (OS packages)

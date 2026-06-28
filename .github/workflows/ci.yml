@@ -31,6 +31,50 @@ jobs:
           path: avalanchego/test-results/latest.log
           if-no-files-found: ignore
 
+  test-genesis-economics:
+    name: Genesis economics tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Run genesis economics tests
+        run: |
+          cd avalanchego
+          go test ./genesis/... -count=1 -run Economics
+
+  test-coreth-titan:
+    name: Coreth Titan wiring tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: coreth/go.sum
+      - name: Run coreth Titan / StateTransitionParams tests
+        run: |
+          cd coreth
+          go test ./core/... -count=1 -run 'Titan|StateTransitionParams'
+
+  smoke:
+    name: Smoke test (genesis + build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Run smoke test
+        run: |
+          cd avalanchego
+          ./scripts/smoke-test.sh
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-24.04
@@ -39,6 +83,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.1.6
@@ -54,6 +99,8 @@ jobs:
         with:
           go-version: "1.24.9"
           cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential
       - name: Build titan + avalanchego
         run: |
           cd avalanchego
