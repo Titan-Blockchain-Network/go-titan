@@ -47,11 +47,11 @@ func TestParseDelegationFeePercent(t *testing.T) {
 	}{
 		{name: "zero", percent: 0, want: 0},
 		{name: "five percent", percent: 5, want: 50_000},
+		{name: "one eighth percent", percent: 0.125, want: 1_250},
 		{name: "twenty five percent", percent: 25, want: 250_000},
 		{name: "max", percent: 100, want: 1_000_000},
 		{name: "negative", percent: -1, wantErr: true},
 		{name: "over max", percent: 100.1, wantErr: true},
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
