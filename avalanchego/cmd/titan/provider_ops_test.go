@@ -42,10 +42,10 @@ func TestBuildProviderValidatorArgs(t *testing.T) {
 func TestBuildProviderValidatorArgsMinimal(t *testing.T) {
 	t.Parallel()
 	args := buildProviderValidatorArgs(providerOnboardParams{
-		from:  "@k",
-		uri:   "http://join:9650",
+		from:   "@k",
+		uri:    "http://join:9650",
 		amount: defaultValidatorStakeTitan,
-		days:  14,
+		days:   14,
 	})
 	if args[0] != "add" {
 		t.Fatalf("first arg = %q, want add", args[0])

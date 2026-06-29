@@ -30,14 +30,14 @@ type networkEconomics struct {
 
 func networkEconomicsFromParams(params genesis.Params, networkID uint32, networkName string) networkEconomics {
 	return networkEconomics{
-		BaseTxFeeTokens:       float64(params.TxFee) / float64(units.Avax),
-		MinValidatorStake:     float64(params.MinValidatorStake) / float64(units.Avax),
-		MaxValidatorStake:     float64(params.MaxValidatorStake) / float64(units.Avax),
-		MinDelegatorStake:     float64(params.MinDelegatorStake) / float64(units.Avax),
-		MinDelegationFeePct:   formatDelegationFeePercent(params.MinDelegationFee),
-		MinConsumptionRatePct: float64(params.RewardConfig.MinConsumptionRate) / float64(reward.PercentDenominator) * 100,
-		MaxConsumptionRatePct: float64(params.RewardConfig.MaxConsumptionRate) / float64(reward.PercentDenominator) * 100,
-		UptimeRequirementPct:  params.UptimeRequirement * 100,
+		BaseTxFeeTokens:              float64(params.TxFee) / float64(units.Avax),
+		MinValidatorStake:            float64(params.MinValidatorStake) / float64(units.Avax),
+		MaxValidatorStake:            float64(params.MaxValidatorStake) / float64(units.Avax),
+		MinDelegatorStake:            float64(params.MinDelegatorStake) / float64(units.Avax),
+		MinDelegationFeePct:          formatDelegationFeePercent(params.MinDelegationFee),
+		MinConsumptionRatePct:        float64(params.RewardConfig.MinConsumptionRate) / float64(reward.PercentDenominator) * 100,
+		MaxConsumptionRatePct:        float64(params.RewardConfig.MaxConsumptionRate) / float64(reward.PercentDenominator) * 100,
+		UptimeRequirementPct:         params.UptimeRequirement * 100,
 		DynamicFeeMinPrice:           uint64(params.DynamicFeeConfig.MinPrice),
 		FeeDistributionEnabled:       params.EconomicsConfig.FeeDistribution.Enabled,
 		CChainFeeToValidatorsPercent: params.EconomicsConfig.FeeDistribution.CChainBaseFeeToValidatorsPercent,

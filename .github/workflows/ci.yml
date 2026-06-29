@@ -84,11 +84,13 @@ jobs:
         with:
           go-version: "1.24.9"
           cache-dependency-path: avalanchego/go.sum
-      - uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.1.6
-          working-directory: avalanchego
-          args: --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
+      # Install via Go (avoids golangci-lint-action's deprecated Node 20 runtime).
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+      - name: Run golangci-lint
+        run: |
+          cd avalanchego
+          golangci-lint run --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
 
   integration:
     name: Live node integration (docker-local)

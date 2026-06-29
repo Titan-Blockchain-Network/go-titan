@@ -46,14 +46,14 @@ Move from awareness to enforcement.
 - [x] Remove `-no-fail` from gosec (or fail CI on HIGH/CRITICAL in `cmd/titan`)
 - [x] Pin `securego/gosec` to a release tag (not `@master`)
 - [x] Add `govulncheck ./avalanchego/cmd/titan/...` to `security.yml` (informational until Go/stdlib bump)
-- [ ] Extend gosec scope incrementally (document exclusions for upstream paths)
+- [x] Extend gosec scope incrementally (document exclusions for upstream paths)
 
 ### Container and supply chain
 
 - [x] Document Trivy policy: OS-only gate vs optional library scan (`exit-code: 0` informational)
 - [ ] Re-enable container build/push when ready; verify Cosign signatures
-- [ ] Pin base image digests in `Dockerfile` / `Dockerfile.dless`
-- [ ] Secret scanning: ensure `*.key`, `staker.key`, `signer.key` never committed (pre-commit or GitHub secret scan)
+- [x] Pin base image digests in `Dockerfile` / `Dockerfile.dless`
+- [x] Secret scanning: ensure `*.key`, `staker.key`, `signer.key` never committed (pre-commit or GitHub secret scan)
 
 ### Runtime and operations
 
@@ -183,4 +183,6 @@ cd avalanchego && ./scripts/e2e-four-validators.sh
 | Phase 1 economics foundation | `feature/provider-economics-phase1` | |
 | Phase A CI + unit tests | `feature/provider-economics-phase1` | 2026-06-28 |
 | Phase A live integration | `feature/provider-economics-phase1` | 2026-06-28 |
+| E2E fixes + genesis nAVAX | `feature/provider-economics-phase1` | 2026-06-29 |
+| Phase A security (secret scan, digests, lint CI) | `feature/provider-economics-phase1` | 2026-06-29 |
 | | | |
