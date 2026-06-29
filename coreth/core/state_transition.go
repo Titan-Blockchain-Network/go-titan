@@ -522,7 +522,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	chainID = st.evm.ChainConfig().ChainID
 	timestamp = st.evm.Context.Time
 
-	burnAddress, nominalGasPrice, isFlare, isSongbird, err := stateTransitionVariants.GetValue(chainID)(st)
+	_, nominalGasPrice, isFlare, isSongbird, err := stateTransitionVariants.GetValue(chainID)(st)
 	if err != nil {
 		return nil, err
 	}
@@ -555,14 +555,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if actualFee.Cmp(nominalFee) > 0 {
 			feeRefund := new(uint256.Int).Sub(actualFee, nominalFee)
 			st.state.AddBalance(st.msg.From, feeRefund)
-			st.state.AddBalance(burnAddress, nominalFee)
+			st.creditCChainFees(nominalFee, nominalGasUsed)
 		} else {
-			st.state.AddBalance(burnAddress, actualFee)
+			st.creditCChainFees(actualFee, st.gasUsed())
 		}
 	} else {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, price)
-		st.state.AddBalance(burnAddress, fee)
+		st.creditCChainFees(fee, st.gasUsed())
 	}
 
 	// Call the daemon if there is no vm error

@@ -51,7 +51,7 @@ Move from awareness to enforcement.
 ### Container and supply chain
 
 - [x] Document Trivy policy: OS-only gate vs optional library scan (`exit-code: 0` informational)
-- [ ] Re-enable container build/push when ready; verify Cosign signatures
+- [x] Re-enable container build/push when ready; verify Cosign signatures
 - [x] Pin base image digests in `Dockerfile` / `Dockerfile.dless`
 - [x] Secret scanning: ensure `*.key`, `staker.key`, `signer.key` never committed (pre-commit or GitHub secret scan)
 
@@ -70,11 +70,11 @@ Config exists; routing is not active until these are done.
 
 ### C-chain fee distribution
 
-- [ ] Deploy reward-pool contract (or Flare Distribution `0x1000…0004`) in C-chain genesis
-- [ ] Implement coreth routing: `feeDistribution.enabled` → % of base fee to pool
-- [ ] Unit tests: fee split math matches `CChainBaseFeeToValidatorsPercent`
-- [ ] Integration test: N txs → measurable pool balance increase
-- [ ] Document burn vs validator share in `ECONOMICS.md` after enablement
+- [x] Deploy reward-pool contract (or Flare Distribution `0x1000…0004`) in C-chain genesis
+- [x] Implement coreth routing: `feeDistribution.enabled` → % of base fee to pool
+- [x] Unit tests: fee split math matches `CChainBaseFeeToValidatorsPercent`
+- [x] Integration test: N txs → measurable pool balance increase
+- [x] Document burn vs validator share in `ECONOMICS.md` after enablement
 - [ ] Governance or admin path to change % post-launch (or document rebuild requirement)
 
 ### P-chain fee distribution (optional)
@@ -186,4 +186,6 @@ cd avalanchego && ./scripts/e2e-four-validators.sh
 | E2E fixes + genesis nAVAX | `feature/provider-economics-phase1` | 2026-06-29 |
 | Phase A security (secret scan, digests, lint CI) | `feature/provider-economics-phase1` | 2026-06-29 |
 | Phase A runtime ops (restrict-api, origin tests, key docs) | `feature/provider-economics-phase1` | 2026-06-29 |
+| Container build/push + Cosign | `feature/provider-economics-phase1` | 2026-06-29 |
+| Phase B C-chain fee distribution | `feature/provider-economics-phase1` | 2026-06-29 |
 | | | |

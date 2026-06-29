@@ -45,10 +45,10 @@ func DefaultTitanNetworkEconomicsConfig() NetworkEconomicsConfig {
 		CChainSystemCoinbase: FlareSystemCoinbaseAddress,
 		CChainFeeSink:        FlareFeeSinkAddress,
 		FeeDistribution: FeeDistributionConfig{
-			Enabled:                          false,
+			Enabled:                          true,
 			CChainBaseFeeToValidatorsPercent: 50,
 			PChainTxFeeToValidatorsPercent:   0,
-			RewardPoolAddress:                "0x0000000000000000000000000000000000000001",
+			RewardPoolAddress:                "0x1000000000000000000000000000000000000004",
 		},
 		SatelliteOracle: SatelliteOracleConfig{
 			Enabled:                 false,

@@ -9,21 +9,33 @@ How Titan nodes earn tokens, what is locked, and which parameters operators can 
 | Staking rewards | Active | Validator and delegator P-chain reward addresses | Protocol mints new TITAN (10–12% annual consumption rate) |
 | Delegation fees | Active | Validator reward address | Percent of delegator staking rewards (`--delegation-fee`) |
 | Treasury stake | Active | Reward address on the registration tx | `provider onboard` locks treasury tokens as validator weight |
-| C-chain fee share | Phase 2 | Validator reward pool | Configured in `EconomicsConfig.feeDistribution` (default 50%, disabled) |
+| C-chain fee share | **Active** | Distribution pool `0x1000…0004` | 50% of base fee per tx (`feeDistribution.enabled`) |
 | P-chain fee share | Phase 2 | Validator reward pool | Configured in `EconomicsConfig.feeDistribution` (default 0%, disabled) |
 | Satellite oracle rewards | Phase 2 | Satellite validators | FTSO-style feeds; config in `EconomicsConfig.satelliteOracle` |
+
+## C-chain fee split (active)
+
+On Titan (chain ID 888), each C-chain transaction fee is split as follows:
+
+| Portion | Destination | Share |
+|---------|-------------|-------|
+| Base fee | Distribution pool (`0x1000…0004`) | `cChainBaseFeeToValidatorsPercent` (default **50%**) |
+| Base fee remainder + tips | Fee sink (`0x000…dEaD`) | Remaining 50% of base fee + all priority tips |
+
+Routing is enforced in `coreth/core/fee_distribution.go` when `economicsConfig.feeDistribution.enabled` is true. The pool contract bytecode is predeployed at genesis (Flare Distribution implementation).
+
+**Changing the percent today** requires updating `genesis/genesis_titan.go` (`EconomicsConfig`) and rebuilding nodes. On-chain governance for live parameter updates is planned for a later phase.
 
 ## Not validator income (today)
 
 | Item | Behavior |
 |------|----------|
 | P-chain transaction fees | Burned until `feeDistribution.pChainTxFeeToValidatorsPercent` is enabled |
-| C-chain base fees | Routed to fee sink (`0xdead`) on Flare execution path; validator share pending Phase 2 pool |
 | Locked stake principal | Returned when the stake period ends |
 
 ## Phased rollout
 
-### Phase 1 (current branch)
+### Phase 1 — foundation
 
 - Modular `NetworkEconomicsConfig` in `genesis/genesis_titan.go`
 - Titan wired into Flare C-chain state transition path (`coreth/core/state_transition_params.go`)
@@ -31,12 +43,13 @@ How Titan nodes earn tokens, what is locked, and which parameters operators can 
 - `--satellite` flag on `validator add` / `provider onboard` (eligibility checks; contracts Phase 2)
 - Economics displayed in `titan status`
 
-### Phase 2
+### Phase 2 — in progress
 
-- Deploy Daemon (`0x1000…0002`) and FTSO (`0x1000…0003`) system contracts in C-chain genesis
-- Enable `feeDistribution.enabled` and reward-pool routing in coreth
-- Enable `satelliteOracle.enabled` and oracle submission daemon
-- Governance hooks for post-launch parameter updates
+- [x] Distribution pool (`0x1000…0004`) in C-chain genesis
+- [x] `feeDistribution.enabled` and base-fee routing in coreth
+- [ ] Daemon (`0x1000…0002`) and FTSO (`0x1000…0003`) system contracts
+- [ ] `satelliteOracle.enabled` and oracle submission daemon
+- [ ] Governance hooks for post-launch parameter updates
 
 ## Token locking
 
@@ -54,7 +67,7 @@ Validators must meet **80% uptime** (`UptimeRequirement` in `genesis/genesis_tit
 |-----------|---------|--------|
 | `MinConsumptionRate` / `MaxConsumptionRate` | 10% – 12% annual | Minting rate for staking rewards |
 | `UptimeRequirement` | 80% | Minimum uptime for full rewards |
-| `economicsConfig.feeDistribution` | 50% C-chain target, disabled | Future validator fee share |
+| `economicsConfig.feeDistribution` | 50% C-chain, **enabled** | Validator base-fee share to distribution pool |
 | `economicsConfig.satelliteOracle` | min 2000 TITAN, disabled | FTSO satellite requirements |
 
 ### Per registration (CLI)
@@ -96,5 +109,5 @@ Tests:
 
 ```sh
 cd avalanchego && go test ./genesis/... ./cmd/titan/... -count=1
-cd ../coreth && go test ./core/... -run 'Titan|StateTransition' -count=1
+cd ../coreth && go test ./core/... -run 'Titan|StateTransition|FeeDistribution' -count=1
 ```

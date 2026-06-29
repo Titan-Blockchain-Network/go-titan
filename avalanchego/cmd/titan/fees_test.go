@@ -46,8 +46,8 @@ func TestNetworkEconomicsFromParams(t *testing.T) {
 	if e.CChainFeeToValidatorsPercent != 50 {
 		t.Fatalf("CChainFeeToValidatorsPercent = %d, want 50", e.CChainFeeToValidatorsPercent)
 	}
-	if e.FeeDistributionEnabled {
-		t.Fatal("fee distribution should be disabled in Phase 1 defaults")
+	if !e.FeeDistributionEnabled {
+		t.Fatal("fee distribution should be enabled for Phase B")
 	}
 	if e.SatelliteMinStakeTokens != 2000 {
 		t.Fatalf("SatelliteMinStakeTokens = %d, want 2000", e.SatelliteMinStakeTokens)

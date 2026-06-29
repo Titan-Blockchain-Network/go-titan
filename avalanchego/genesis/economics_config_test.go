@@ -20,6 +20,12 @@ func TestDefaultTitanNetworkEconomicsConfigValid(t *testing.T) {
 	if cfg.FeeDistribution.CChainBaseFeeToValidatorsPercent != 50 {
 		t.Fatalf("c-chain fee share = %d, want 50", cfg.FeeDistribution.CChainBaseFeeToValidatorsPercent)
 	}
+	if !cfg.FeeDistribution.Enabled {
+		t.Fatal("fee distribution should be enabled")
+	}
+	if cfg.FeeDistribution.RewardPoolAddress != "0x1000000000000000000000000000000000000004" {
+		t.Fatalf("reward pool = %q", cfg.FeeDistribution.RewardPoolAddress)
+	}
 }
 
 func TestTitanParamsEconomicsConfigValid(t *testing.T) {
