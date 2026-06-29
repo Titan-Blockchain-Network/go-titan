@@ -6,7 +6,7 @@
             "initialAmount": 0,
             "unlockSchedule": [
                 {
-                    "amount": 1000000000000000000,
+                    "amount": 1000000000,
                     "locktime": 0
                 }
             ]
@@ -17,7 +17,7 @@
             "initialAmount": 0,
             "unlockSchedule": [
                 {
-                    "amount": 1000000000000000000,
+                    "amount": 20000000000,
                     "locktime": 0
                 }
             ]

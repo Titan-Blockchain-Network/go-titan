@@ -24,7 +24,9 @@ import (
 const (
 	integrationDelegationFeePercent = 5.0
 	integrationValidatorStake       = 10.0
-	integrationDelegatorStake       = 5.0
+	// Genesis validator stakes 1 TITAN (nAVAX scale). Use a small delegation that fits
+	// under maxValidatorWeightFactor × validator weight.
+	integrationDelegatorStake = 1.0
 )
 
 func TestIntegrationLiveNetwork(t *testing.T) {
@@ -109,6 +111,14 @@ func TestIntegrationLiveNetwork(t *testing.T) {
 
 	t.Run("StakeAdd", func(t *testing.T) {
 		waitForAPI(t, ctx, uri)
+		fundOut, err := exec.CommandContext(ctx, titanBin, "wallet", "fund-p",
+			"--from", "@"+delegatorKey,
+			"--uri", uri,
+			"--amount", fmt.Sprintf("%.0f", integrationDelegatorStake+1),
+		).CombinedOutput()
+		if err != nil {
+			t.Fatalf("delegator fund-p failed: %v\n%s", err, fundOut)
+		}
 		out, err := exec.CommandContext(ctx, titanBin, "stake", "add",
 			"--from", "@"+delegatorKey,
 			"--node-id", nodeID.String(),

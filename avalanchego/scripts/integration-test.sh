@@ -76,7 +76,7 @@ log "Funding delegator P-chain for stake-add test..."
 ./build/titan wallet fund-p \
   --from "@$REPO_ROOT/docker/integration/delegator.key" \
   --uri "$TITAN_NODE_URI" \
-  --amount 6
+  --amount 2
 
 log "Running live integration tests..."
 export TITAN_INTEGRATION=1
