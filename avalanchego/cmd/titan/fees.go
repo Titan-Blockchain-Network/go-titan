@@ -73,8 +73,12 @@ func printNetworkEconomics() {
 	fmt.Printf("  Uptime required: %.0f%%\n", e.UptimeRequirementPct)
 	fmt.Printf("  Dynamic gas:     min price %d (P-chain fee market)\n", e.DynamicFeeMinPrice)
 	if e.FeeDistributionEnabled {
-		fmt.Printf("  C-chain fee share: %d%% to validators (active)\n", e.CChainFeeToValidatorsPercent)
-		fmt.Printf("  P-chain fee share: %d%% to validators (active)\n", e.PChainFeeToValidatorsPercent)
+		fmt.Printf("  C-chain fee share: %d%% to pool 0x1000…0004 (active)\n", e.CChainFeeToValidatorsPercent)
+		if e.PChainFeeToValidatorsPercent > 0 {
+			fmt.Printf("  P-chain fee share: %d%% to validators (active)\n", e.PChainFeeToValidatorsPercent)
+		} else {
+			fmt.Printf("  P-chain fee share: disabled (0%% configured)\n")
+		}
 	} else {
 		fmt.Printf("  Fee distribution:  disabled (C-chain target %d%%, P-chain target %d%% when enabled)\n",
 			e.CChainFeeToValidatorsPercent, e.PChainFeeToValidatorsPercent)

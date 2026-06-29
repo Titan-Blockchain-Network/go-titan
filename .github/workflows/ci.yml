@@ -57,7 +57,7 @@ jobs:
       - name: Run coreth Titan / StateTransitionParams tests
         run: |
           cd coreth
-          go test ./core/... -count=1 -run 'Titan|StateTransitionParams'
+          go test ./core/... -count=1 -run 'Titan|StateTransition|FeeDistribution|SplitCChain'
 
   smoke:
     name: Smoke test (genesis + build)

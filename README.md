@@ -146,7 +146,7 @@ Binary path: `./avalanchego/build/titan` (or `titan` after `--install`).
 | `titan stake add --from @key --node-id ID` | Delegate stake to a validator |
 | `titan status` | Validators, fees, rewards, health |
 
-Validator income, fee distribution (phased), and satellite oracle config: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
+Validator income, C-chain fee share (50% base fee → distribution pool), and satellite oracle config: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECONOMICS.md).
 
 ## Docker
 
@@ -198,7 +198,7 @@ Test output: `avalanchego/test-results/`. Suite layout: [avalanchego/cmd/titan/T
 |----------|---------|------|
 | `ci.yml` | push/PR to `main` | `test-titan.sh`, golangci-lint, build |
 | `security.yml` | push/PR, weekly | gosec, Trivy |
-| `build-container.yml` | `main`, tags | Multi-arch images, Cosign |
+| `build-container.yml` | `main`, `feature/**`, tags | Multi-arch images → GHCR (+ Docker Hub when secrets set), Cosign |
 | `release.yml` | `v*` tags | Release binaries |
 
 Production readiness checklist: [PRODUCTION_READINESS.md](./PRODUCTION_READINESS.md).

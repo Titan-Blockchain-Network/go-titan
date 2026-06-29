@@ -2,7 +2,7 @@
 
 Track progress toward a controlled private L1 (Phase A) and a public / DeFi-facing network (Phase B). Check items when done; link PRs or issues in the Notes column as needed.
 
-**Current baseline (Phase 1 economics):** 65+ Titan CLI unit tests, CI lint/build/smoke, gosec (HIGH gate) + Trivy (OS) + govulncheck (informational), modular economics config (fee share and satellite disabled on-chain).
+**Current baseline:** 72 Titan CLI unit tests, CI lint/build/smoke, gosec (HIGH gate) + Trivy (OS) + govulncheck (informational), container images (GHCR + Cosign), modular economics config with **C-chain fee share active** (50% base fee → distribution pool `0x1000…0004`); P-chain fee share and satellite oracle remain disabled.
 
 ---
 
@@ -66,7 +66,7 @@ Move from awareness to enforcement.
 
 ## Phase B — Economics on-chain (fee share)
 
-Config exists; routing is not active until these are done.
+C-chain base-fee routing is live on Titan (chain ID 888). P-chain recycle and satellite rewards are still pending.
 
 ### C-chain fee distribution
 
@@ -75,7 +75,7 @@ Config exists; routing is not active until these are done.
 - [x] Unit tests: fee split math matches `CChainBaseFeeToValidatorsPercent`
 - [x] Integration test: N txs → measurable pool balance increase
 - [x] Document burn vs validator share in `ECONOMICS.md` after enablement
-- [ ] Governance or admin path to change % post-launch (or document rebuild requirement)
+- [x] Governance or admin path to change % post-launch (or document rebuild requirement) — **rebuild required today**; see `ECONOMICS.md`
 
 ### P-chain fee distribution (optional)
 
@@ -131,7 +131,7 @@ Large surface from AvalancheGo + Coreth + go-flare fork.
 
 ## Phase B — Documentation and operator readiness
 
-- [ ] `ECONOMICS.md` reflects enabled features only (no “disabled” items presented as live)
+- [x] `ECONOMICS.md` reflects enabled features only (no “disabled” items presented as live)
 - [ ] `TITAN_DEPLOY.md` runbook: bootstrap → join → onboard → delegate → verify
 - [ ] Incident runbook: node down, below-uptime, treasury key compromise, genesis mismatch
 - [ ] Parameter change runbook: what requires rebuild vs on-chain governance
@@ -148,8 +148,11 @@ cd avalanchego && ./scripts/test-titan.sh --sequential
 # Genesis economics
 go test ./genesis/... -count=1 -run Economics
 
-# Coreth Titan wiring
-cd ../coreth && go test ./core/... -count=1 -run 'Titan|StateTransitionParams'
+# Coreth Titan wiring + fee distribution
+cd ../coreth && go test ./core/... -count=1 -run 'Titan|StateTransition|FeeDistribution|SplitCChain'
+
+# Verify distribution pool balance after txs (coreth blockchain test)
+cd ../coreth && go test ./core/... -count=1 -run TestTitanFeeDistributionIncreasesPoolBalance
 
 # Smoke (CI job: smoke)
 cd avalanchego && ./scripts/smoke-test.sh
@@ -188,4 +191,5 @@ cd avalanchego && ./scripts/e2e-four-validators.sh
 | Phase A runtime ops (restrict-api, origin tests, key docs) | `feature/provider-economics-phase1` | 2026-06-29 |
 | Container build/push + Cosign | `feature/provider-economics-phase1` | 2026-06-29 |
 | Phase B C-chain fee distribution | `feature/provider-economics-phase1` | 2026-06-29 |
+| Docs + contracts README cleanup | `feature/provider-economics-phase1` | 2026-06-29 |
 | | | |

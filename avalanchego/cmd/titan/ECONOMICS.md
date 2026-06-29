@@ -26,6 +26,14 @@ Routing is enforced in `coreth/core/fee_distribution.go` when `economicsConfig.f
 
 **Changing the percent today** requires updating `genesis/genesis_titan.go` (`EconomicsConfig`) and rebuilding nodes. On-chain governance for live parameter updates is planned for a later phase.
 
+**Verify pool accrual** (C-chain JSON-RPC on port 9650):
+
+```sh
+curl -s -X POST http://127.0.0.1:9650/ext/bc/C/rpc \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","method":"eth_getBalance","params":["0x1000000000000000000000000000000000000004","latest"],"id":1}'
+```
+
 ## Not validator income (today)
 
 | Item | Behavior |
