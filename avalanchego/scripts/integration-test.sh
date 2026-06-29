@@ -72,6 +72,12 @@ log "Starting docker-local node..."
 "$REPO_ROOT/docker/docker-local.sh" reset 2>/dev/null || true
 "$REPO_ROOT/docker/docker-local.sh" up
 
+log "Funding delegator P-chain for stake-add test..."
+./build/titan wallet fund-p \
+  --from "@$REPO_ROOT/docker/integration/delegator.key" \
+  --uri "$TITAN_NODE_URI" \
+  --amount 6
+
 log "Running live integration tests..."
 export TITAN_INTEGRATION=1
 go test -tags=integration ./cmd/titan/... -count=1 -v -timeout=15m -run TestIntegrationLiveNetwork

@@ -141,6 +141,15 @@ for uri in "${PROVIDER_URIS[@]}"; do
   log "  synced: $uri"
 done
 
+log "Funding delegator P-chain for stake-add test..."
+if ! ./build/titan wallet fund-p \
+  --from "@$REPO_ROOT/docker/integration/delegator.key" \
+  --uri "$TITAN_NODE_URI" \
+  --amount 6; then
+  echo "delegator fund-p failed" >&2
+  exit 1
+fi
+
 log "Onboarding 3 providers from treasury (bootstrap perspective)..."
 for uri in "${PROVIDER_URIS[@]}"; do
   log "  provider onboard → $uri"
