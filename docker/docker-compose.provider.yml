@@ -9,7 +9,6 @@ services:
     container_name: titan-provider
     restart: unless-stopped
     ports:
-      - "9650:9650"
       - "9651:9651"
     environment:
       NODE_MODE: provider
@@ -19,6 +18,7 @@ services:
       AUTOCONFIGURE_PUBLIC_IP: "1"
       AUTOCONFIGURE_BOOTSTRAP: ${AUTOCONFIGURE_BOOTSTRAP:-0}
       AUTOCONFIGURE_BOOTSTRAP_ENDPOINT: ${AUTOCONFIGURE_BOOTSTRAP_ENDPOINT:-}
+      RESTRICT_API: "1"
       HTTP_ALLOWED_HOSTS: "*"
       LOG_LEVEL: info
     volumes:

@@ -57,10 +57,10 @@ Move from awareness to enforcement.
 
 ### Runtime and operations
 
-- [ ] Production nodes use `--restrict-api` (localhost-only API)
-- [ ] Origin server (`:9652`): TLS, rate limits, path whitelist verified under load
-- [ ] Treasury / master keys: documented backup, rotation, and least-privilege access
-- [ ] Staking keys: chmod 600, offline backup, never in git
+- [x] Production nodes use `--restrict-api` (localhost-only API)
+- [x] Origin server (`:9652`): TLS, rate limits, path whitelist verified under load
+- [x] Treasury / master keys: documented backup, rotation, and least-privilege access
+- [x] Staking keys: chmod 600, offline backup, never in git
 
 ---
 
@@ -185,4 +185,5 @@ cd avalanchego && ./scripts/e2e-four-validators.sh
 | Phase A live integration | `feature/provider-economics-phase1` | 2026-06-28 |
 | E2E fixes + genesis nAVAX | `feature/provider-economics-phase1` | 2026-06-29 |
 | Phase A security (secret scan, digests, lint CI) | `feature/provider-economics-phase1` | 2026-06-29 |
+| Phase A runtime ops (restrict-api, origin tests, key docs) | `feature/provider-economics-phase1` | 2026-06-29 |
 | | | |
