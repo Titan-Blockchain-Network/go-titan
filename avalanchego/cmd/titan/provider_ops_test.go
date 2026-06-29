@@ -3,6 +3,7 @@ package main
 import (
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestBuildProviderValidatorArgs(t *testing.T) {
@@ -12,6 +13,7 @@ func TestBuildProviderValidatorArgs(t *testing.T) {
 		amount:        2000,
 		days:          14,
 		delegationFee: 5,
+		startOffset:   5 * time.Minute,
 		satellite:     true,
 		uri:           "http://10.0.0.2:9650/",
 		nodeID:        "NodeID-abc",
@@ -26,6 +28,7 @@ func TestBuildProviderValidatorArgs(t *testing.T) {
 		"--amount", "2000",
 		"--duration-days", "14",
 		"--delegation-fee", "5",
+		"--start-offset", "5m0s",
 		"--satellite",
 		"--node-id", "NodeID-abc",
 		"--bls-pub", "0x01",

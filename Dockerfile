@@ -14,7 +14,9 @@ COPY ./titan-network /app/titan-network
 WORKDIR /app/avalanchego/
 
 ARG AVALANCHEGO_COMMIT=unknown
+ARG TITAN_ORIGIN=
 ENV AVALANCHEGO_COMMIT=${AVALANCHEGO_COMMIT}
+ENV TITAN_ORIGIN=${TITAN_ORIGIN}
 
 RUN /app/avalanchego/scripts/build-titan.sh
 

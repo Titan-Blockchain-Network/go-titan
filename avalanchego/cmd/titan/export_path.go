@@ -234,7 +234,10 @@ func parseHexUint64(s string) (uint64, error) {
 }
 
 func expectedTreasuryEthAddr() (string, error) {
-	cfg := genesis.GetConfig(constants.TitanID)
+	cfg, err := loadDiskGenesisConfig()
+	if err != nil {
+		cfg = genesis.GetConfig(constants.TitanID)
+	}
 	if len(cfg.Allocations) == 0 {
 		return "", fmt.Errorf("genesis has no allocations")
 	}

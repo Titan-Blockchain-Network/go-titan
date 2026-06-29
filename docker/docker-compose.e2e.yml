@@ -1,0 +1,141 @@
+# E2E: 1 bootstrap (genesis validator) + 3 provider join nodes → 4 validators total.
+# Managed by avalanchego/scripts/e2e-four-validators.sh
+
+name: titan-e2e
+
+x-provider-env: &provider-env
+  NODE_MODE: provider
+  NETWORK_ID: titan
+  BOOTSTRAP_IPS: bootstrap:9651
+  BOOTSTRAP_IDS: NodeID-DvJvi3HDFnpupwuvegZm2ZyaG8vGCeBZw
+  AUTOCONFIGURE_PUBLIC_IP: "0"
+  AUTOCONFIGURE_BOOTSTRAP: "0"
+  HTTP_HOST: 0.0.0.0
+  HTTP_ALLOWED_HOSTS: "*"
+  LOG_LEVEL: info
+
+x-provider-build: &provider-build
+  context: ..
+  dockerfile: Dockerfile
+  args:
+    AVALANCHEGO_COMMIT: ${AVALANCHEGO_COMMIT:-local}
+    TITAN_ORIGIN: ${TITAN_ORIGIN:-}
+
+services:
+  bootstrap:
+    image: go-titan:e2e
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        AVALANCHEGO_COMMIT: ${AVALANCHEGO_COMMIT:-local}
+        TITAN_ORIGIN: ${TITAN_ORIGIN:-}
+    container_name: titan-e2e-bootstrap
+    hostname: bootstrap
+    networks: [titan-e2e]
+    ports:
+      - "127.0.0.1:9650:9650"
+      - "127.0.0.1:9651:9651"
+    environment:
+      NODE_MODE: bootstrap
+      NETWORK_ID: titan
+      BOOTSTRAP_IPS: ""
+      BOOTSTRAP_IDS: ""
+      PUBLIC_IP: bootstrap
+      AUTOCONFIGURE_PUBLIC_IP: "0"
+      AUTOCONFIGURE_BOOTSTRAP: "0"
+      HTTP_HOST: 0.0.0.0
+      HTTP_ALLOWED_HOSTS: "*"
+      LOG_LEVEL: info
+    volumes:
+      - e2e-bootstrap-data:/app/data
+      - e2e-bootstrap-db:/app/db
+      - e2e-bootstrap-logs:/app/logs
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "http://localhost:9650/ext/info", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"info.getNodeID\"}"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 120s
+
+  provider-1:
+    image: go-titan:e2e
+    build: *provider-build
+    container_name: titan-e2e-provider-1
+    hostname: provider-1
+    networks: [titan-e2e]
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:19650:9650"
+      - "127.0.0.1:19651:9651"
+    environment:
+      <<: *provider-env
+      PUBLIC_IP: provider-1
+    volumes:
+      - e2e-provider-1-data:/app/data
+      - e2e-provider-1-db:/app/db
+      - e2e-provider-1-logs:/app/logs
+      - ./e2e/keys/provider-1:/app/keys:ro
+
+  provider-2:
+    image: go-titan:e2e
+    build: *provider-build
+    container_name: titan-e2e-provider-2
+    hostname: provider-2
+    networks: [titan-e2e]
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:19750:9650"
+      - "127.0.0.1:19751:9651"
+    environment:
+      <<: *provider-env
+      PUBLIC_IP: provider-2
+    volumes:
+      - e2e-provider-2-data:/app/data
+      - e2e-provider-2-db:/app/db
+      - e2e-provider-2-logs:/app/logs
+      - ./e2e/keys/provider-2:/app/keys:ro
+
+  provider-3:
+    image: go-titan:e2e
+    build: *provider-build
+    container_name: titan-e2e-provider-3
+    hostname: provider-3
+    networks: [titan-e2e]
+    depends_on:
+      bootstrap:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:19850:9650"
+      - "127.0.0.1:19851:9651"
+    environment:
+      <<: *provider-env
+      PUBLIC_IP: provider-3
+    volumes:
+      - e2e-provider-3-data:/app/data
+      - e2e-provider-3-db:/app/db
+      - e2e-provider-3-logs:/app/logs
+      - ./e2e/keys/provider-3:/app/keys:ro
+
+networks:
+  titan-e2e:
+    driver: bridge
+
+volumes:
+  e2e-bootstrap-data:
+  e2e-bootstrap-db:
+  e2e-bootstrap-logs:
+  e2e-provider-1-data:
+  e2e-provider-1-db:
+  e2e-provider-1-logs:
+  e2e-provider-2-data:
+  e2e-provider-2-db:
+  e2e-provider-2-logs:
+  e2e-provider-3-data:
+  e2e-provider-3-db:
+  e2e-provider-3-logs:

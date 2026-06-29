@@ -90,6 +90,42 @@ jobs:
           working-directory: avalanchego
           args: --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
 
+  integration:
+    name: Live node integration (docker-local)
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Run integration test
+        run: |
+          cd avalanchego
+          ./scripts/integration-test.sh
+
+  e2e-four-validators:
+    name: E2E four-validator network
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Run four-validator E2E
+        run: |
+          cd avalanchego
+          ./scripts/e2e-four-validators.sh
+
   build:
     name: Build binaries
     runs-on: ubuntu-24.04

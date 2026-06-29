@@ -75,9 +75,13 @@ REPO_ROOT="$(cd "$AVAGO_DIR/.." && pwd)"
 if ! grep -q 'replace github.com/ava-labs/coreth => ../coreth' "$AVAGO_DIR/go.mod" 2>/dev/null; then
   (cd "$AVAGO_DIR" && go mod edit -replace "github.com/ava-labs/coreth=../coreth")
 fi
-if [[ -f "$REPO_ROOT/titan-network/origin.json" || -f "$REPO_ROOT/titan-network/origin.example.json" ]]; then
+if [[ -f "${TITAN_ORIGIN:-}" || -f "$REPO_ROOT/titan-network/origin.json" || -f "$REPO_ROOT/titan-network/origin.example.json" ]]; then
   echo "Syncing genesis from titan-network/..."
-  (cd "$AVAGO_DIR" && go run ./cmd/titan genesis apply 2>/dev/null) || true
+  apply_from=()
+  if [[ -n "${TITAN_ORIGIN:-}" && -f "$TITAN_ORIGIN" ]]; then
+    apply_from=(--from "$TITAN_ORIGIN")
+  fi
+  (cd "$AVAGO_DIR" && go run ./cmd/titan genesis apply "${apply_from[@]}" 2>/dev/null) || true
 fi
 
 echo "Building titan CLI..."

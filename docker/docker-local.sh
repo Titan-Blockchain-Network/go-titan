@@ -9,7 +9,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 AVAGO_DIR="$REPO_ROOT/avalanchego"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.local.yml"
 KEYS_DIR="$SCRIPT_DIR/keys"
-ORIGIN_EXAMPLE="$REPO_ROOT/titan-network/origin.example.json"
+ORIGIN_EXAMPLE="${TITAN_ORIGIN:-$REPO_ROOT/titan-network/origin.example.json}"
 
 log() { echo "[docker-local] $*"; }
 err() { echo "[docker-local] ERROR: $*" >&2; }
@@ -67,7 +67,7 @@ cmd_up() {
   fi
 
   log "Building Docker image (first run may take several minutes)..."
-  AVALANCHEGO_COMMIT="$git_commit" compose build
+  AVALANCHEGO_COMMIT="$git_commit" TITAN_ORIGIN="$ORIGIN_EXAMPLE" compose build --build-arg "TITAN_ORIGIN=$ORIGIN_EXAMPLE"
 
   log "Starting local node (localhost:9650)..."
   compose up -d

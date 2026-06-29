@@ -657,6 +657,10 @@ func runGenesisApply(args []string) error {
 	delete(raw, "blockchainName")
 	delete(raw, "tokenTicker")
 
+	if _, err := applyGenesisStartTime(raw); err != nil {
+		return fmt.Errorf("set genesis startTime: %w", err)
+	}
+
 	out, err := json.MarshalIndent(raw, "", "    ")
 	if err != nil {
 		return err

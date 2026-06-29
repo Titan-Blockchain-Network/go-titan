@@ -16,23 +16,24 @@ Raise comfort for development and trusted-operator networks.
 - [x] Add `go test ./core/... -run 'Titan|StateTransitionParams'` to `ci.yml` (coreth job or matrix step)
 - [x] Run `avalanchego/scripts/smoke-test.sh` in CI (genesis create → apply → build → fingerprint)
 - [x] Add `cache-dependency-path: avalanchego/go.sum` to lint job `setup-go` (remove cache warning)
-- [ ] Optional: `docker-local.sh up` smoke job (localhost node, health check, teardown)
+- [x] Optional: `docker-local.sh up` smoke job (localhost node, health check, teardown) — CI `integration` job on main / workflow_dispatch
 
 ### Integration tests (live node)
 
-- [ ] Docker-local bootstrap: node starts and `/ext/health` returns healthy
-- [ ] `validator add` (or `provider onboard`): validator appears in `platform.getCurrentValidators`
-- [ ] `stake add`: delegator weight increases on target validator
-- [ ] `titan status`: shows validator uptime, delegation fee, potential reward after registration
-- [ ] C→P funding path: treasury can fund validator registration without manual intervention
-- [ ] Idempotent `genesis apply` on already-configured network (regression)
+- [x] Docker-local bootstrap: node starts and `/ext/health` returns healthy
+- [x] `validator add` (or `provider onboard`): validator appears in `platform.getCurrentValidators`
+- [x] E2E four-validator network: bootstrap + 3 providers via `provider onboard` (`scripts/e2e-four-validators.sh`)
+- [x] `stake add`: delegator weight increases on target validator
+- [x] `titan status`: shows validator uptime, delegation fee, potential reward after registration
+- [x] C→P funding path: treasury can fund validator registration without manual intervention
+- [x] Idempotent `genesis apply` on already-configured network (regression)
 
 ### Unit test gaps
 
 - [x] `transfer_test.go` — C→P base fee parsing and error paths
 - [x] `export_path_test.go` — `verify-export` / validator-add readiness
 - [x] `provider_ops_test.go` — arg forwarding to `validator add`
-- [ ] Post-registration on-chain assertions (delegation fee matches `--delegation-fee` flag)
+- [x] Post-registration on-chain assertions (delegation fee matches `--delegation-fee` flag)
 
 ---
 
@@ -155,6 +156,12 @@ cd avalanchego && ./scripts/smoke-test.sh
 
 # Local node
 cd .. && ./docker/docker-local.sh up && ./docker/docker-local.sh status
+
+# Live integration (docker-local + validator/stake)
+cd avalanchego && ./scripts/integration-test.sh
+
+# E2E: developer bootstrap + 3 providers (4 validators)
+cd avalanchego && ./scripts/e2e-four-validators.sh
 ```
 
 ---
@@ -175,4 +182,5 @@ cd .. && ./docker/docker-local.sh up && ./docker/docker-local.sh status
 |------|------------|------|
 | Phase 1 economics foundation | `feature/provider-economics-phase1` | |
 | Phase A CI + unit tests | `feature/provider-economics-phase1` | 2026-06-28 |
+| Phase A live integration | `feature/provider-economics-phase1` | 2026-06-28 |
 | | | |

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // provider onboard — bootstrapper funds a join node and registers it as validator.
@@ -40,6 +41,7 @@ func providerOnboardMain(args []string) {
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "tokens to stake for the provider")
 	days := fs.Int("duration-days", 14, "validator duration")
 	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
+	startOffset := fs.Duration("start-offset", 5*time.Minute, "delay before validator start time")
 	satellite := fs.Bool("satellite", false, "register as FTSO satellite oracle provider")
 	uri := fs.String("uri", "", "join node API (required)")
 	nodeID := fs.String("node-id", "", "optional NodeID if auto-detect fails")
@@ -62,6 +64,7 @@ func providerOnboardMain(args []string) {
 		amount:        *amount,
 		days:          *days,
 		delegationFee: *delegationFee,
+		startOffset:   *startOffset,
 		satellite:     *satellite,
 		uri:           *uri,
 		nodeID:        *nodeID,
@@ -75,6 +78,7 @@ type providerOnboardParams struct {
 	amount        float64
 	days          int
 	delegationFee float64
+	startOffset   time.Duration
 	satellite     bool
 	uri           string
 	nodeID        string
@@ -91,6 +95,7 @@ func buildProviderValidatorArgs(p providerOnboardParams) []string {
 		"--amount", strconv.FormatFloat(p.amount, 'f', -1, 64),
 		"--duration-days", strconv.Itoa(p.days),
 		"--delegation-fee", strconv.FormatFloat(p.delegationFee, 'f', -1, 64),
+		"--start-offset", p.startOffset.String(),
 	}
 	if p.satellite {
 		args = append(args, "--satellite")
