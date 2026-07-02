@@ -14,15 +14,18 @@ COPY ./titan-network /app/titan-network
 WORKDIR /app/avalanchego/
 
 ARG AVALANCHEGO_COMMIT=unknown
+ARG TITAN_ORIGIN=
 ENV AVALANCHEGO_COMMIT=${AVALANCHEGO_COMMIT}
+ENV TITAN_ORIGIN=${TITAN_ORIGIN}
 
 RUN /app/avalanchego/scripts/build-titan.sh
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
 
 WORKDIR /app
 
 ENV NODE_MODE="" \
+    RESTRICT_API=0 \
     HTTP_HOST=0.0.0.0 \
     HTTP_PORT=9650 \
     STAKING_PORT=9651 \

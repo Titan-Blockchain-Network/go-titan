@@ -12,7 +12,7 @@ import (
 
 var (
 	stateTransitionVariants = utils.NewChainValue(nonFlareChain).
-		AddValues([]*big.Int{params.FlareChainID, params.CostwoChainID, params.LocalFlareChainID}, stateTransitionParamsFlare).
+		AddValues([]*big.Int{params.FlareChainID, params.CostwoChainID, params.LocalFlareChainID, params.TitanChainID}, stateTransitionParamsFlare).
 		AddValues([]*big.Int{params.SongbirdChainID, params.CostonChainID, params.LocalChainID}, stateTransitionParamsSongbird)
 )
 

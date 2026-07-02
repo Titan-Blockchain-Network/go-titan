@@ -63,6 +63,7 @@ These are the environment variables you can edit and their default values:
 | Name | Default | Description |
 |:--|:--|:--|
 | `HTTP_HOST` | `0.0.0.0` | The bind address of the service |
+| `RESTRICT_API` | `0` | Set to `1` to bind HTTP API to `127.0.0.1` only (production bootstrap/provider compose) |
 | `HTTP_PORT` | `9650` | The port on which the API is served |
 | `STAKING_PORT` | `9651` | The staking port for bootstrapping nodes |
 | `PUBLIC_IP` | _(empty)_ | The public IP of the service |

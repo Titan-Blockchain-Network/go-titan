@@ -43,6 +43,15 @@ func TestNetworkEconomicsFromParams(t *testing.T) {
 	if e.NetworkID != constants.TitanID {
 		t.Fatalf("NetworkID = %d, want %d", e.NetworkID, constants.TitanID)
 	}
+	if e.CChainFeeToValidatorsPercent != 50 {
+		t.Fatalf("CChainFeeToValidatorsPercent = %d, want 50", e.CChainFeeToValidatorsPercent)
+	}
+	if !e.FeeDistributionEnabled {
+		t.Fatal("fee distribution should be enabled for Phase B")
+	}
+	if e.SatelliteMinStakeTokens != 2000 {
+		t.Fatalf("SatelliteMinStakeTokens = %d, want 2000", e.SatelliteMinStakeTokens)
+	}
 }
 
 func TestFormatDelegationFeePercentMatchesRewardShares(t *testing.T) {

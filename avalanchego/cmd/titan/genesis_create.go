@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ava-labs/avalanchego/genesis"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
@@ -292,7 +293,7 @@ func defaultCChainGenesis(chainID uint32, alloc map[string]cChainAccount) (strin
 		GasLimit:   "0x5f5e100",
 		Difficulty: "0x0",
 		MixHash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase:   "0x0000000000000000000000000000000000000000",
+		Coinbase:   genesis.FlareSystemCoinbaseAddress,
 		Alloc:      alloc,
 		Number:     "0x0",
 		GasUsed:    "0x0",
@@ -655,6 +656,10 @@ func runGenesisApply(args []string) error {
 
 	delete(raw, "blockchainName")
 	delete(raw, "tokenTicker")
+
+	if _, err := applyGenesisStartTime(raw); err != nil {
+		return fmt.Errorf("set genesis startTime: %w", err)
+	}
 
 	out, err := json.MarshalIndent(raw, "", "    ")
 	if err != nil {
