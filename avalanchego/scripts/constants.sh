@@ -32,7 +32,7 @@ coreth_path="$AVALANCHE_PATH/../coreth"
 
 
 # TODO: fix "fatal: No names found, cannot describe anything" in github CI
-image_tag=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match || true)
+image_tag=$(git symbolic-ref -q --short HEAD 2>/dev/null || git describe --tags --exact-match 2>/dev/null || true)
 if [[ -z $image_tag ]]; then
   # Supply a default tag when one is not discovered
   image_tag=ci_dummy

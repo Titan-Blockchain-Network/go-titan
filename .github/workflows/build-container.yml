@@ -9,6 +9,7 @@ jobs:
   build-and-push:
     name: Build & Push
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: write
@@ -58,46 +59,50 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_UID }}
         password: ${{ secrets.DOCKER_HUB_PAT }}
 
-    - name: Build standard image
-      env:
-        USE_DOCKER_HUB: ${{ steps.dockerhub.outputs.use }}
+    - name: Build standard image (GHCR)
       run: |
-        TAGS="--tag ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}"
-
-        if [ "${USE_DOCKER_HUB}" = "true" ]; then
-          TAGS="$TAGS --tag ${{ secrets.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}"
-        fi
-
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          $TAGS \
+          --tag ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }} \
+          --build-arg AVALANCHEGO_COMMIT=${{ github.sha }} \
           --file ./Dockerfile \
           --output type=image,push=true \
           --iidfile std.digest \
           .
+
+    - name: Mirror standard image to Docker Hub
+      id: mirror-std
+      if: steps.dockerhub.outputs.use == 'true'
+      continue-on-error: true
+      run: |
+        docker buildx imagetools create \
+          -t ${{ secrets.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }} \
+          ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}
 
     - name: Export standard image digest
       run: |
         DIG=$(cat std.digest)
         echo "IMAGE_DIGEST=$DIG" >> $GITHUB_ENV
 
-    - name: Build distroless image
-      env:
-        USE_DOCKER_HUB: ${{ steps.dockerhub.outputs.use }}
+    - name: Build distroless image (GHCR)
       run: |
-        TAGS="--tag ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}-dless"
-
-        if [ "${USE_DOCKER_HUB}" = "true" ]; then
-          TAGS="$TAGS --tag ${{ secrets.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}-dless"
-        fi
-
         docker buildx build \
           --platform linux/amd64,linux/arm64 \
-          $TAGS \
+          --tag ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}-dless \
+          --build-arg AVALANCHEGO_COMMIT=${{ github.sha }} \
           --file ./Dockerfile.dless \
           --output type=image,push=true \
           --iidfile dless.digest \
           .
+
+    - name: Mirror distroless image to Docker Hub
+      id: mirror-dless
+      if: steps.dockerhub.outputs.use == 'true'
+      continue-on-error: true
+      run: |
+        docker buildx imagetools create \
+          -t ${{ secrets.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}-dless \
+          ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}-dless
 
     - name: Export distroless image digest
       run: |
@@ -116,7 +121,7 @@ jobs:
           cosign sign --yes ${{ env.GHCR_IMAGE }}@${{ env.DLESS_IMAGE_DIGEST }}
 
     - name: Sign docker hub images
-      if: steps.dockerhub.outputs.use == 'true'
+      if: steps.dockerhub.outputs.use == 'true' && steps.mirror-std.outcome == 'success' && steps.mirror-dless.outcome == 'success'
       shell: bash
       env:
         COSIGN_EXPERIMENTAL: 1
@@ -140,7 +145,7 @@ jobs:
           "${{ env.GHCR_IMAGE }}@${{ env.DLESS_IMAGE_DIGEST }}"
 
     - name: Verify docker hub image signatures
-      if: steps.dockerhub.outputs.use == 'true'
+      if: steps.dockerhub.outputs.use == 'true' && steps.mirror-std.outcome == 'success' && steps.mirror-dless.outcome == 'success'
       shell: bash
       env:
         COSIGN_EXPERIMENTAL: 1
@@ -154,3 +159,8 @@ jobs:
           --certificate-identity=https://github.com/${{ github.repository }}/.github/workflows/build-container.yml@${{ github.ref }} \
           --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
           "${{ secrets.DOCKER_HUB_REPO }}@${{ env.DLESS_IMAGE_DIGEST }}"
+
+    - name: Docker Hub mirror warning
+      if: steps.dockerhub.outputs.use == 'true' && (steps.mirror-std.outcome != 'success' || steps.mirror-dless.outcome != 'success')
+      run: |
+        echo "::warning title=Docker Hub mirror::GHCR images published successfully but Docker Hub mirror failed (check DOCKER_HUB_PAT scope and DOCKER_HUB_REPO)."

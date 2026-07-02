@@ -12,6 +12,9 @@ COPY ./titan-network /app/titan-network
 
 WORKDIR /app/avalanchego/
 
+ARG AVALANCHEGO_COMMIT=unknown
+ENV AVALANCHEGO_COMMIT=${AVALANCHEGO_COMMIT}
+
 RUN /app/avalanchego/scripts/build-titan.sh
 
 RUN mkdir -p /app/conf/C /app/keys /app/logs /app/db /app/data
