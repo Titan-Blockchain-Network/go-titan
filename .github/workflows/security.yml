@@ -48,9 +48,8 @@ jobs:
           sarif_file: gosec.sarif
 
   govulncheck:
-    name: govulncheck
+    name: govulncheck (informational)
     runs-on: ubuntu-24.04
-    continue-on-error: true # informational until Go/stdlib + otel dependency bumps
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -62,7 +61,13 @@ jobs:
       - name: Scan cmd/titan
         run: |
           cd avalanchego
+          set +e
           govulncheck ./cmd/titan/...
+          code=$?
+          if [[ $code -ne 0 ]]; then
+            echo "::warning title=govulncheck::Found vulnerabilities (expected go1.24.9 stdlib CVEs fixed in Go >= 1.25.10). Informational until the fork upgrades its Go toolchain."
+          fi
+          exit 0
 
   trivy:
     name: Trivy image scan

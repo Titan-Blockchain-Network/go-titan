@@ -8,6 +8,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential
+      - name: Build titan + avalanchego
+        run: |
+          cd avalanchego
+          ./scripts/build-titan.sh
+      - name: Verify binaries exist
+        run: |
+          test -f avalanchego/build/titan
+          test -f avalanchego/build/avalanchego
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: titan-binaries
+          path: |
+            avalanchego/build/titan
+            avalanchego/build/avalanchego
+          if-no-files-found: error
+
   test-titan-cli:
     name: Titan CLI tests
     runs-on: ubuntu-24.04
@@ -60,8 +88,9 @@ jobs:
           go test ./core/... -count=1 -run 'Titan|StateTransition|FeeDistribution|SplitCChain'
 
   smoke:
-    name: Smoke test (genesis + build)
+    name: Smoke test (genesis)
     runs-on: ubuntu-24.04
+    needs: [build, test-titan-cli]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -70,10 +99,17 @@ jobs:
           cache-dependency-path: avalanchego/go.sum
       - name: Install build deps (CGO + jq)
         run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
-      - name: Run smoke test
+      - name: Download prebuilt binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: titan-binaries
+          path: avalanchego/build
+      - name: Ensure binaries are executable
+        run: chmod +x avalanchego/build/titan avalanchego/build/avalanchego
+      - name: Run genesis smoke (reuse build + unit test jobs)
         run: |
           cd avalanchego
-          ./scripts/smoke-test.sh
+          ./scripts/smoke-test.sh --skip-tests --skip-build
 
   lint:
     name: golangci-lint
@@ -127,23 +163,3 @@ jobs:
         run: |
           cd avalanchego
           ./scripts/e2e-four-validators.sh
-
-  build:
-    name: Build binaries
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24.9"
-          cache-dependency-path: avalanchego/go.sum
-      - name: Install build deps (CGO)
-        run: sudo apt-get update -y && sudo apt-get install -y build-essential
-      - name: Build titan + avalanchego
-        run: |
-          cd avalanchego
-          ./scripts/build-titan.sh
-      - name: Verify binaries exist
-        run: |
-          test -f avalanchego/build/titan
-          test -f avalanchego/build/avalanchego
