@@ -207,7 +207,7 @@ func IsPrioritisedContractCall(chainID *big.Int, blockTime uint64, to *common.Ad
 func GetMaximumMintRequest(chainID *big.Int, blockTime uint64) *uint256.Int {
 	maxRequest := new(uint256.Int)
 	switch {
-	case chainID.Cmp(params.FlareChainID) == 0 || chainID.Cmp(params.CostwoChainID) == 0 || chainID.Cmp(params.LocalFlareChainID) == 0:
+	case chainID.Cmp(params.FlareChainID) == 0 || chainID.Cmp(params.CostwoChainID) == 0 || chainID.Cmp(params.LocalFlareChainID) == 0 || chainID.Cmp(params.TitanChainID) == 0:
 		maxRequest.SetFromDecimal("60000000000000000000000000") // we ignore error, the number fits into uint256
 	default: // Songbird, Coston
 		maxRequest.SetFromDecimal("50000000000000000000000000") // we ignore error, the number fits into uint256

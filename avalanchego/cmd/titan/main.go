@@ -121,7 +121,9 @@ func validatorMain(args []string) {
 	from := fs.String("from", "", "treasury privkey hex or @file (required)")
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "TITAN to stake")
 	days := fs.Int("duration-days", 14, "duration")
+	startOffset := fs.Duration("start-offset", 5*time.Minute, "delay before validator start time")
 	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
+	satellite := fs.Bool("satellite", false, "register as FTSO satellite oracle provider")
 	uri := fs.String("uri", "http://127.0.0.1:9650", "local node API for wallet txs (run on ATLAS)")
 	targetURI := fs.String("target-uri", "", "optional: fetch NodeID/BLS from another node (SSH tunnel); prefer --node-id on ATLAS")
 	nodeIDFlag := fs.String("node-id", "", "join node NodeID (required on ATLAS unless --target-uri set)")
@@ -145,6 +147,10 @@ func validatorMain(args []string) {
 	}
 	delegationFeeShares, err := parseDelegationFeePercent(*delegationFee)
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+	if err := validateSatelliteRegistration(*amount, *satellite); err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
@@ -239,11 +245,15 @@ func validatorMain(args []string) {
 		fmt.Printf("  Using NodeID: %s\n", nodeID)
 	}
 
-	start := time.Now().Add(5 * time.Minute).Unix()
-	end := time.Now().Add(time.Duration(*days)*24*time.Hour + 5*time.Minute).Unix()
+	start := time.Now().Add(*startOffset).Unix()
+	end := time.Now().Add(time.Duration(*days)*24*time.Hour + *startOffset).Unix()
 
-	fmt.Printf("Adding validator %s (stake %.0f TITAN, delegation fee %.2f%%)...\n",
-		nodeID, *amount, *delegationFee)
+	role := "validator"
+	if *satellite {
+		role = "satellite validator"
+	}
+	fmt.Printf("Adding %s %s (stake %.0f TITAN, delegation fee %.2f%%)...\n",
+		role, nodeID, *amount, *delegationFee)
 	tx, err := pw.IssueAddPermissionlessValidatorTx(
 		&txs.SubnetValidator{Validator: txs.Validator{
 			NodeID: nodeID, Start: uint64(start), End: uint64(end), Wght: amt,

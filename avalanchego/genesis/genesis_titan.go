@@ -58,5 +58,6 @@ var (
 				SupplyCap:          0 * units.MegaAvax,
 			},
 		},
+		EconomicsConfig: DefaultTitanNetworkEconomicsConfig(),
 	}
 )

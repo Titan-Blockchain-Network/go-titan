@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -46,5 +47,54 @@ func TestOriginHandlerSecurityHeaders(t *testing.T) {
 	}
 	if rec.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatal("missing frame deny header")
+	}
+}
+
+func TestOriginHandlerPathWhitelist(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "anchor.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		path string
+		want int
+	}{
+		{path: "/anchor.json", want: http.StatusOK},
+		{path: "/staker.key", want: http.StatusNotFound},
+		{path: "/genesis_titan.json", want: http.StatusNotFound},
+		{path: "/", want: http.StatusNotFound},
+	}
+	for i, tc := range cases {
+		handler := newOriginHTTPHandler(dir)
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		req.RemoteAddr = fmt.Sprintf("9.9.9.%d:1", i+1)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Fatalf("path %q: status = %d, want %d", tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestOriginHandlerRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "anchor.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	handler := newOriginHTTPHandler(dir)
+	addr := "10.0.0.1:9999"
+
+	var lastCode int
+	for i := 0; i < 35; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/anchor.json", nil)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		lastCode = rec.Code
+	}
+	if lastCode != http.StatusTooManyRequests {
+		t.Fatalf("expected rate limit after burst, last status = %d", lastCode)
 	}
 }

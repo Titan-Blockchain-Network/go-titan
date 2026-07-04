@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // provider onboard — bootstrapper funds a join node and registers it as validator.
@@ -40,6 +41,8 @@ func providerOnboardMain(args []string) {
 	amount := fs.Float64("amount", defaultValidatorStakeTitan, "tokens to stake for the provider")
 	days := fs.Int("duration-days", 14, "validator duration")
 	delegationFee := fs.Float64("delegation-fee", defaultDelegationFeePercent, "validator share of delegator rewards (percent)")
+	startOffset := fs.Duration("start-offset", 5*time.Minute, "delay before validator start time")
+	satellite := fs.Bool("satellite", false, "register as FTSO satellite oracle provider")
 	uri := fs.String("uri", "", "join node API (required)")
 	nodeID := fs.String("node-id", "", "optional NodeID if auto-detect fails")
 	pub := fs.String("bls-pub", "", "optional BLS public key")
@@ -56,23 +59,55 @@ func providerOnboardMain(args []string) {
 	}
 
 	fmt.Println("=== Provider onboarding (fund + register validator) ===")
-	validatorArgs := []string{
+	validatorMain(buildProviderValidatorArgs(providerOnboardParams{
+		from:          *from,
+		amount:        *amount,
+		days:          *days,
+		delegationFee: *delegationFee,
+		startOffset:   *startOffset,
+		satellite:     *satellite,
+		uri:           *uri,
+		nodeID:        *nodeID,
+		blsPub:        *pub,
+		blsPop:        *pop,
+	}))
+}
+
+type providerOnboardParams struct {
+	from          string
+	amount        float64
+	days          int
+	delegationFee float64
+	startOffset   time.Duration
+	satellite     bool
+	uri           string
+	nodeID        string
+	blsPub        string
+	blsPop        string
+}
+
+func buildProviderValidatorArgs(p providerOnboardParams) []string {
+	args := []string{
 		"add",
-		"--from", *from,
+		"--from", p.from,
 		"--uri", "http://127.0.0.1:9650",
-		"--target-uri", strings.TrimRight(*uri, "/"),
-		"--amount", strconv.FormatFloat(*amount, 'f', -1, 64),
-		"--duration-days", strconv.Itoa(*days),
-		"--delegation-fee", strconv.FormatFloat(*delegationFee, 'f', -1, 64),
+		"--target-uri", strings.TrimRight(p.uri, "/"),
+		"--amount", strconv.FormatFloat(p.amount, 'f', -1, 64),
+		"--duration-days", strconv.Itoa(p.days),
+		"--delegation-fee", strconv.FormatFloat(p.delegationFee, 'f', -1, 64),
+		"--start-offset", p.startOffset.String(),
 	}
-	if *nodeID != "" {
-		validatorArgs = append(validatorArgs, "--node-id", *nodeID)
+	if p.satellite {
+		args = append(args, "--satellite")
 	}
-	if *pub != "" {
-		validatorArgs = append(validatorArgs, "--bls-pub", *pub)
+	if p.nodeID != "" {
+		args = append(args, "--node-id", p.nodeID)
 	}
-	if *pop != "" {
-		validatorArgs = append(validatorArgs, "--bls-pop", *pop)
+	if p.blsPub != "" {
+		args = append(args, "--bls-pub", p.blsPub)
 	}
-	validatorMain(validatorArgs)
+	if p.blsPop != "" {
+		args = append(args, "--bls-pop", p.blsPop)
+	}
+	return args
 }

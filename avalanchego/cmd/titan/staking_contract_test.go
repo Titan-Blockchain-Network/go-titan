@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ava-labs/avalanchego/genesis"
 )
 
 func TestInjectStakingContracts(t *testing.T) {
@@ -14,8 +16,10 @@ func TestInjectStakingContracts(t *testing.T) {
 	if err := os.MkdirAll(contractsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"warp-messenger.hex", "distribution.hex"} {
+		if err := os.WriteFile(filepath.Join(contractsDir, name), []byte("0x60006000"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	origWD, _ := os.Getwd()
@@ -55,8 +59,10 @@ func TestDefaultCChainIncludesStakingAfterInject(t *testing.T) {
 	if err := os.MkdirAll(contractsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"warp-messenger.hex", "distribution.hex"} {
+		if err := os.WriteFile(filepath.Join(contractsDir, name), []byte("0x60006000"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	origWD, _ := os.Getwd()
@@ -82,5 +88,12 @@ func TestDefaultCChainIncludesStakingAfterInject(t *testing.T) {
 	acct := doc.Alloc[strings.ToLower(warpMessengerAddress)]
 	if acct.Code == "" {
 		t.Fatal("warp messenger code missing")
+	}
+	pool := doc.Alloc[strings.ToLower(distributionPoolAddress)]
+	if pool.Code == "" {
+		t.Fatal("distribution pool code missing")
+	}
+	if doc.Coinbase != genesis.FlareSystemCoinbaseAddress {
+		t.Fatalf("coinbase = %s, want %s", doc.Coinbase, genesis.FlareSystemCoinbaseAddress)
 	}
 }

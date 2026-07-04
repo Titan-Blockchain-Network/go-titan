@@ -89,6 +89,11 @@ fi
 DATA_DIR="${DATA_DIR:-/app/data}"
 mkdir -p "$DATA_DIR" "$DB_DIR" "$LOG_DIR"
 
+# Production: RESTRICT_API=1 binds HTTP to localhost only (no public :9650).
+if [ "${RESTRICT_API:-0}" = "1" ]; then
+	export HTTP_HOST="127.0.0.1"
+fi
+
 exec /app/build/avalanchego \
 	--http-host="$HTTP_HOST" \
 	--http-port="$HTTP_PORT" \

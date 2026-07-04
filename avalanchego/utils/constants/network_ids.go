@@ -27,7 +27,7 @@ const (
 	LocalFlareID uint32 = 162
 	SongbirdID   uint32 = 5
 	CostonID     uint32 = 7
-	TitanID      uint32 = 888
+	TitanID      uint32 = 424242
 
 	MainnetName    = "mainnet"
 	CascadeName    = "cascade"
@@ -40,7 +40,7 @@ const (
 	LocalFlareName = "localflare"
 	SongbirdName   = "songbird"
 	CostonName     = "coston"
-	TitanName      = "titan"
+	TitanName      = "testchain"
 
 	MainnetHRP    = "avax"
 	CascadeHRP    = "cascade"
@@ -54,7 +54,7 @@ const (
 	LocalFlareHRP = "localflare"
 	SongbirdHRP   = "songbird"
 	CostonHRP     = "coston"
-	TitanHRP      = "titan"
+	TitanHRP      = "testchain"
 )
 
 // Variables to be exported

@@ -9,7 +9,7 @@ services:
     container_name: titan-bootstrap
     restart: unless-stopped
     ports:
-      - "9650:9650"
+      # API (:9650) not published — RESTRICT_API binds it to container localhost only.
       - "9651:9651"
       - "9652:9652"
     environment:
@@ -19,6 +19,7 @@ services:
       BOOTSTRAP_IDS: ""
       AUTOCONFIGURE_PUBLIC_IP: "1"
       AUTOCONFIGURE_BOOTSTRAP: "0"
+      RESTRICT_API: "1"
       HTTP_ALLOWED_HOSTS: "*"
       LOG_LEVEL: info
     volumes:

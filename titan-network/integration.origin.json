@@ -1,0 +1,48 @@
+{
+    "allocations": [
+        {
+            "avaxAddr": "X-titan15428vq2uzwhm3taey9sr9x5vm6tk78ewnalta5",
+            "ethAddr": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "initialAmount": 0,
+            "unlockSchedule": [
+                {
+                    "amount": 1000000000,
+                    "locktime": 0
+                }
+            ]
+        },
+        {
+            "avaxAddr": "X-titan1vvh326ykgmj6e6cmr7zrar7unj7rj26ym4xjjq",
+            "ethAddr": "0x46c852B5f6e6D4aEb802596A70C389553EF54588",
+            "initialAmount": 0,
+            "unlockSchedule": [
+                {
+                    "amount": 20000000000,
+                    "locktime": 0
+                }
+            ]
+        }
+    ],
+    "cChainGenesis": "{\"config\":{\"chainId\":888,\"homesteadBlock\":0,\"daoForkBlock\":0,\"daoForkSupport\":true,\"eip150Block\":0,\"eip150Hash\":\"0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0\",\"eip155Block\":0,\"eip158Block\":0,\"byzantiumBlock\":0,\"constantinopleBlock\":0,\"petersburgBlock\":0,\"istanbulBlock\":0,\"muirGlacierBlock\":0,\"apricotPhase1BlockTimestamp\":0,\"apricotPhase2BlockTimestamp\":0},\"nonce\":\"0x0\",\"timestamp\":\"0x0\",\"extraData\":\"0x00\",\"gasLimit\":\"0x5f5e100\",\"difficulty\":\"0x0\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"coinbase\":\"0x0000000000000000000000000000000000000000\",\"alloc\":{\"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266\":{\"balance\":\"0x2b5e3af16b18800000\"},\"0x46c852B5f6e6D4aEb802596A70C389553EF54588\":{\"balance\":\"0x1158e460913d00000\"}},\"number\":\"0x0\",\"gasUsed\":\"0x0\",\"parentHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}",
+    "initialStakeDuration": 31536000,
+    "initialStakeDurationOffset": 5400,
+    "initialStakedFunds": [
+        "X-titan15428vq2uzwhm3taey9sr9x5vm6tk78ewnalta5"
+    ],
+    "initialStakers": [
+        {
+            "nodeID": "NodeID-DvJvi3HDFnpupwuvegZm2ZyaG8vGCeBZw",
+            "rewardAddress": "P-titan15428vq2uzwhm3taey9sr9x5vm6tk78ewnalta5",
+            "delegationFee": 50000,
+            "signer": {
+                "publicKey": "0xac1851aa36543e667e3c2fc7321c5e64b37c972888a4cc507e08ecbf6fb5a5112c62e248546e3a782612506b0b0a07fd",
+                "proofOfPossession": "0x8739402104a1ce56575ff32354008c69934234beadae3f501d1701dc874048922a77ac243c3f691d02796af3ade272840093117343fbf1250d300ac766812a6be2fb65c2e4368f987fdcf7fa2875e418683753e67659d5c2e1f09a3406fa23af"
+            }
+        }
+    ],
+    "message": "titan-integration",
+    "networkID": 888,
+    "startTime": 0,
+    "tokenTicker": "TITAN",
+    "blockchainName": "Titan"
+}

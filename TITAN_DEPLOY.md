@@ -17,7 +17,10 @@ Full reference: [avalanchego/cmd/titan/ECONOMICS.md](./avalanchego/cmd/titan/ECO
 
 - **Staking rewards:** protocol mints new TITAN (10–12% annual rate), split by stake weight and uptime (80% minimum).
 - **Delegation fees:** optional percent of delegator rewards, set at registration with `--delegation-fee` (default `0`).
-- **Not income:** P-chain tx fees and C-chain gas are burned, not paid to validators.
+- **C-chain fee share:** 50% of each transaction’s **base fee** accrues to the distribution pool at `0x1000000000000000000000000000000000000004`; remaining base fee and priority tips go to the fee sink (`0x…dEaD`). Check pool balance via C-chain RPC (`eth_getBalance`).
+- **Not income:** P-chain transaction fees (burned until P-chain fee share is enabled).
+
+**After upgrading** to a build with fee distribution or new genesis contracts, rebuild binaries, re-apply genesis if needed, and reset node data (`docker compose down -v` or wipe `db/`) so C-chain state matches the embedded genesis.
 
 **Locking**
 

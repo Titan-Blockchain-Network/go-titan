@@ -6,17 +6,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ava-labs/avalanchego/genesis"
 )
 
 const (
-	warpMessengerAddress = "0x1000000000000000000000000000000000000001"
-	warpMessengerHexFile = "titan-network/contracts/warp-messenger.hex"
+	warpMessengerAddress    = "0x1000000000000000000000000000000000000001"
+	distributionPoolAddress = "0x1000000000000000000000000000000000000004"
+	warpMessengerHexFile    = "titan-network/contracts/warp-messenger.hex"
+	distributionHexFile     = "titan-network/contracts/distribution.hex"
 )
 
-func loadWarpMessengerBytecode() (string, error) {
-	candidates := []string{warpMessengerHexFile}
+func loadContractBytecode(relPath, label string) (string, error) {
+	candidates := []string{relPath}
 	if root, err := findRepoRoot(); err == nil {
-		candidates = append(candidates, filepath.Join(root, warpMessengerHexFile))
+		candidates = append(candidates, filepath.Join(root, relPath))
 	}
 	for _, path := range candidates {
 		data, err := os.ReadFile(path)
@@ -28,11 +32,19 @@ func loadWarpMessengerBytecode() (string, error) {
 			return code, nil
 		}
 	}
-	return "", fmt.Errorf("warp messenger bytecode not found (expected %s)", warpMessengerHexFile)
+	return "", fmt.Errorf("%s bytecode not found (expected %s)", label, relPath)
 }
 
-// injectStakingContracts ensures the C-chain genesis alloc includes the Warp
-// Messenger predeploy required for Avalanche L1 staking / warp flows.
+func loadWarpMessengerBytecode() (string, error) {
+	return loadContractBytecode(warpMessengerHexFile, "warp messenger")
+}
+
+func loadDistributionBytecode() (string, error) {
+	return loadContractBytecode(distributionHexFile, "distribution pool")
+}
+
+// injectStakingContracts ensures the C-chain genesis alloc includes system
+// predeploys: Warp Messenger (staking/warp) and Distribution pool (fee share).
 func injectStakingContracts(cChainGenesisJSON string) (string, error) {
 	var doc cChainGenesisDoc
 	if err := json.Unmarshal([]byte(cChainGenesisJSON), &doc); err != nil {
@@ -41,16 +53,34 @@ func injectStakingContracts(cChainGenesisJSON string) (string, error) {
 	if doc.Alloc == nil {
 		doc.Alloc = make(map[string]cChainAccount)
 	}
-	key := strings.ToLower(warpMessengerAddress)
-	if existing, ok := doc.Alloc[key]; ok && existing.Code != "" {
-		return cChainGenesisJSON, nil
+	changed := false
+
+	if key := strings.ToLower(warpMessengerAddress); doc.Alloc[key].Code == "" {
+		code, err := loadWarpMessengerBytecode()
+		if err != nil {
+			return "", err
+		}
+		doc.Alloc[key] = cChainAccount{Balance: "0x0", Code: code}
+		changed = true
 	}
 
-	code, err := loadWarpMessengerBytecode()
-	if err != nil {
-		return "", err
+	if key := strings.ToLower(distributionPoolAddress); doc.Alloc[key].Code == "" {
+		code, err := loadDistributionBytecode()
+		if err != nil {
+			return "", err
+		}
+		doc.Alloc[key] = cChainAccount{Balance: "0x0", Code: code}
+		changed = true
 	}
-	doc.Alloc[key] = cChainAccount{Balance: "0x0", Code: code}
+
+	if doc.Coinbase == "" || strings.EqualFold(doc.Coinbase, "0x0000000000000000000000000000000000000000") {
+		doc.Coinbase = genesis.FlareSystemCoinbaseAddress
+		changed = true
+	}
+
+	if !changed {
+		return cChainGenesisJSON, nil
+	}
 
 	raw, err := json.Marshal(doc)
 	if err != nil {
@@ -64,6 +94,10 @@ func stakingContractPresent(cChainGenesisJSON string) bool {
 	if err := json.Unmarshal([]byte(cChainGenesisJSON), &doc); err != nil {
 		return false
 	}
-	acct, ok := doc.Alloc[strings.ToLower(warpMessengerAddress)]
-	return ok && acct.Code != ""
+	warp, ok := doc.Alloc[strings.ToLower(warpMessengerAddress)]
+	if !ok || warp.Code == "" {
+		return false
+	}
+	pool, ok := doc.Alloc[strings.ToLower(distributionPoolAddress)]
+	return ok && pool.Code != ""
 }

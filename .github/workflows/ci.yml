@@ -8,6 +8,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential
+      - name: Build titan + avalanchego
+        run: |
+          cd avalanchego
+          ./scripts/build-titan.sh
+      - name: Verify binaries exist
+        run: |
+          test -f avalanchego/build/titan
+          test -f avalanchego/build/avalanchego
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: titan-binaries
+          path: |
+            avalanchego/build/titan
+            avalanchego/build/avalanchego
+          if-no-files-found: error
+
   test-titan-cli:
     name: Titan CLI tests
     runs-on: ubuntu-24.04
@@ -31,6 +59,58 @@ jobs:
           path: avalanchego/test-results/latest.log
           if-no-files-found: ignore
 
+  test-genesis-economics:
+    name: Genesis economics tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Run genesis economics tests
+        run: |
+          cd avalanchego
+          go test ./genesis/... -count=1 -run Economics
+
+  test-coreth-titan:
+    name: Coreth Titan wiring tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: coreth/go.sum
+      - name: Run coreth Titan / StateTransitionParams tests
+        run: |
+          cd coreth
+          go test ./core/... -count=1 -run 'Titan|StateTransition|FeeDistribution|SplitCChain'
+
+  smoke:
+    name: Smoke test (genesis)
+    runs-on: ubuntu-24.04
+    needs: [build, test-titan-cli]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Download prebuilt binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: titan-binaries
+          path: avalanchego/build
+      - name: Ensure binaries are executable
+        run: chmod +x avalanchego/build/titan avalanchego/build/avalanchego
+      - name: Run genesis smoke (reuse build + unit test jobs)
+        run: |
+          cd avalanchego
+          ./scripts/smoke-test.sh --skip-tests --skip-build
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-24.04
@@ -39,26 +119,47 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
-      - uses: golangci/golangci-lint-action@v7
-        with:
-          version: v2.1.6
-          working-directory: avalanchego
-          args: --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
+          cache-dependency-path: avalanchego/go.sum
+      # Install via Go (avoids golangci-lint-action's deprecated Node 20 runtime).
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+      - name: Run golangci-lint
+        run: |
+          cd avalanchego
+          golangci-lint run --config .golangci-titan.yml --timeout=10m ./cmd/titan/...
 
-  build:
-    name: Build binaries
+  integration:
+    name: Live node integration (docker-local)
     runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
           cache-dependency-path: avalanchego/go.sum
-      - name: Build titan + avalanchego
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Run integration test
         run: |
           cd avalanchego
-          ./scripts/build-titan.sh
-      - name: Verify binaries exist
+          ./scripts/integration-test.sh
+
+  e2e-four-validators:
+    name: E2E four-validator network
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install build deps (CGO + jq)
+        run: sudo apt-get update -y && sudo apt-get install -y build-essential jq
+      - name: Run four-validator E2E
         run: |
-          test -f avalanchego/build/titan
-          test -f avalanchego/build/avalanchego
+          cd avalanchego
+          ./scripts/e2e-four-validators.sh

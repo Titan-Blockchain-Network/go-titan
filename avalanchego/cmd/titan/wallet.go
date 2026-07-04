@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ava-labs/avalanchego/ids"
 	"github.com/ava-labs/avalanchego/utils/constants"
 	"github.com/ava-labs/avalanchego/utils/crypto/secp256k1"
 	"github.com/ava-labs/avalanchego/utils/formatting/address"
@@ -54,7 +55,9 @@ func walletMain(args []string) {
 
   titan wallet addresses --from @master.key   # show C / P / X addresses for a private key
   titan wallet balances  --from @master.key --uri http://127.0.0.1:9650
-  titan wallet verify-export [--from @/root/master.key] [--uri http://127.0.0.1:9650]`)
+  titan wallet verify-export [--from @/root/master.key] [--uri http://127.0.0.1:9650]
+  titan wallet fund-p --from @wallet.key --amount 10 [--uri http://127.0.0.1:9650]
+      Move TITAN from C-chain to P-chain (for stake add / delegation).`)
 		return
 	}
 
@@ -65,10 +68,48 @@ func walletMain(args []string) {
 		walletBalancesMain(args[1:])
 	case "verify-export":
 		walletVerifyExportMain(args[1:])
+	case "fund-p":
+		walletFundPMain(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown wallet subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
+}
+
+func walletFundPMain(args []string) {
+	fs := flag.NewFlagSet("wallet fund-p", flag.ExitOnError)
+	from := fs.String("from", "", "private key hex or @file (required)")
+	amount := fs.Float64("amount", 0, "TITAN to move from C-chain to P-chain (required)")
+	uri := fs.String("uri", "http://127.0.0.1:9650", "node API")
+	fs.Parse(args)
+
+	if *from == "" || *amount <= 0 {
+		fmt.Fprintln(os.Stderr, "--from and --amount (>0) are required")
+		os.Exit(1)
+	}
+	priv, err := loadKey(*from)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bad key: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	kc := secp256k1fx.NewKeychain(priv)
+	w, err := primary.MakeWallet(ctx, *uri, kc, kc, primary.WalletConfig{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wallet connect failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	owner := &secp256k1fx.OutputOwners{Threshold: 1, Addrs: []ids.ShortID{priv.Address()}}
+	amt := uint64(*amount * float64(units.Avax))
+	if err := transferCToP(ctx, *uri, w.C(), w.P(), amt, owner); err != nil {
+		fmt.Fprintf(os.Stderr, "fund-p: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("P-chain funded.")
 }
 
 func walletVerifyExportMain(args []string) {

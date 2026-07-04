@@ -45,6 +45,7 @@ type TxFeeConfig struct {
 type Params struct {
 	StakingConfig
 	TxFeeConfig
+	EconomicsConfig NetworkEconomicsConfig `json:"economicsConfig,omitempty"`
 }
 
 func GetTxFeeConfig(networkID uint32) TxFeeConfig {

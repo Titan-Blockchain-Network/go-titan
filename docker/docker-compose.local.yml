@@ -9,6 +9,7 @@ services:
       dockerfile: Dockerfile
       args:
         AVALANCHEGO_COMMIT: ${AVALANCHEGO_COMMIT:-local}
+        TITAN_ORIGIN: ${TITAN_ORIGIN:-}
     container_name: titan-local
     restart: unless-stopped
     ports:

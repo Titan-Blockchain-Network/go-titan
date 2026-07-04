@@ -22,4 +22,7 @@ func TestDefaultCChainGenesis(t *testing.T) {
 	if doc.Config.ChainID != 424242 {
 		t.Fatalf("chainId = %d, want 424242", doc.Config.ChainID)
 	}
+	if doc.Coinbase != "0x0100000000000000000000000000000000000000" {
+		t.Fatalf("coinbase = %q, want Flare system coinbase", doc.Coinbase)
+	}
 }

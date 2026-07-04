@@ -18,8 +18,10 @@ func TestRunGenesisCreateNonInteractive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"warp-messenger.hex", "distribution.hex"} {
+		if err := os.WriteFile(filepath.Join(contractsDir, name), []byte("0x60006000"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	example := filepath.Join(networkDir, "origin.example.json")
 	if err := os.WriteFile(example, []byte(`{}`), 0o644); err != nil {
@@ -63,8 +65,10 @@ func TestRunGenesisApply(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"warp-messenger.hex", "distribution.hex"} {
+		if err := os.WriteFile(filepath.Join(contractsDir, name), []byte("0x60006000"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	networkIDs := `package constants
 
@@ -149,8 +153,10 @@ func TestRunGenesisApplyIdempotentWhenNetworkAlreadyConfigured(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(contractsDir, "warp-messenger.hex"), []byte("0x60006000"), 0o644); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"warp-messenger.hex", "distribution.hex"} {
+		if err := os.WriteFile(filepath.Join(contractsDir, name), []byte("0x60006000"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	networkIDs := `package constants

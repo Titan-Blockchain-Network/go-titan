@@ -2,9 +2,9 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   pull_request:
-    branches: [main]
+    branches: [main, "feature/**"]
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1"
@@ -13,6 +13,14 @@ permissions:
   contents: read
 
 jobs:
+  secret-scan:
+    name: Secret scan (tracked keys)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for committed private keys
+        run: ./avalanchego/scripts/check-secrets.sh
+
   gosec:
     name: gosec scan
     runs-on: ubuntu-24.04
@@ -24,10 +32,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.9"
-      - name: Run gosec
-        uses: securego/gosec@master
+      # Scope: cmd/titan only (operator CLI). Exclude avalanchego/coreth upstream —
+      # expand incrementally after triaging legacy findings in forked modules.
+      - name: Run gosec (HIGH severity, HIGH confidence)
+        uses: securego/gosec@v2.27.1
         with:
-          args: "-no-fail -fmt sarif -out gosec.sarif ./avalanchego/cmd/titan/..."
+          args: "-severity high -confidence high -fmt sarif -out gosec.sarif ./avalanchego/cmd/titan/..."
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v4
         if: >-
@@ -37,6 +47,28 @@ jobs:
         with:
           sarif_file: gosec.sarif
 
+  govulncheck:
+    name: govulncheck (informational)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.9"
+          cache-dependency-path: avalanchego/go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Scan cmd/titan
+        run: |
+          cd avalanchego
+          set +e
+          govulncheck ./cmd/titan/...
+          code=$?
+          if [[ $code -ne 0 ]]; then
+            echo "::warning title=govulncheck::Found vulnerabilities (expected go1.24.9 stdlib CVEs fixed in Go >= 1.25.10). Informational until the fork upgrades its Go toolchain."
+          fi
+          exit 0
+
   trivy:
     name: Trivy image scan
     runs-on: ubuntu-24.04
@@ -44,6 +76,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      # Policy: OS packages only (vuln-type: os). Fails CI on unfixed CRITICAL/HIGH in the
+      # base image. Library scan is intentionally omitted here — enable separately with
+      # vuln-type: library and exit-code: 0 for informational reporting if desired.
       - name: Build image for scanning
         run: docker build -t go-titan:scan -f Dockerfile .
       - name: Run Trivy (OS packages)
