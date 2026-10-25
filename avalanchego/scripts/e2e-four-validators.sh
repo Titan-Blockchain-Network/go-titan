@@ -21,7 +21,6 @@ REPO_ROOT="$(cd "$AVAGO_DIR/.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/docker/docker-compose.e2e.yml"
 E2E_KEYS="$REPO_ROOT/docker/e2e/keys"
 TREASURY_KEY="$REPO_ROOT/docker/integration/treasury.key"
-BOOTSTRAP_KEYS="$REPO_ROOT/docker/keys"
 
 KEEP=0
 for arg in "$@"; do
@@ -92,6 +91,13 @@ wait_bootstrapped() {
 
 cd "$AVAGO_DIR"
 
+# shellcheck source=integration-fixtures.sh
+source "$SCRIPT_DIR/integration-fixtures.sh"
+prepare_integration_fixtures
+
+log "Applying integration genesis..."
+./build/titan genesis apply --from "$TITAN_ORIGIN"
+
 log "Building titan + avalanchego (integration genesis)..."
 ./scripts/build-titan.sh
 
@@ -106,13 +112,6 @@ for i in 1 2 3; do
     ./build/titan keys generate --dir "$dir"
   fi
 done
-
-log "Verifying bootstrap keys match integration genesis..."
-BOOTSTRAP_ID="$(./build/titan keys show --dir "$BOOTSTRAP_KEYS" 2>/dev/null | awk '/^NodeID:/{print $2}')"
-if [[ "$BOOTSTRAP_ID" != "NodeID-DvJvi3HDFnpupwuvegZm2ZyaG8vGCeBZw" ]]; then
-  echo "bootstrap NodeID ($BOOTSTRAP_ID) does not match integration.origin.json" >&2
-  exit 1
-fi
 
 git_commit="local"
 if git -C "$REPO_ROOT" rev-parse HEAD >/dev/null 2>&1; then
