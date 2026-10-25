@@ -55,12 +55,12 @@ fi
 
 cd "$AVAGO_DIR"
 
-log "Verifying docker staking keys match integration genesis..."
-NODE_ID="$(./build/titan keys show --dir "$REPO_ROOT/docker/keys" 2>/dev/null | awk '/^NodeID:/{print $2}')"
-if [[ "$NODE_ID" != "NodeID-DvJvi3HDFnpupwuvegZm2ZyaG8vGCeBZw" ]]; then
-  echo "docker/keys NodeID ($NODE_ID) does not match integration.origin.json — update initialStakers" >&2
-  exit 1
-fi
+# shellcheck source=integration-fixtures.sh
+source "$SCRIPT_DIR/integration-fixtures.sh"
+prepare_integration_fixtures
+
+log "Applying integration genesis..."
+./build/titan genesis apply --from "$TITAN_ORIGIN"
 
 log "Building titan + avalanchego (embeds integration genesis)..."
 ./scripts/build-titan.sh
